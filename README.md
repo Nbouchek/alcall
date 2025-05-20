@@ -2,6 +2,69 @@
 
 A next-generation unified messaging platform that combines enterprise-grade communication capabilities with cutting-edge AI, AR/VR, and quantum-safe security features.
 
+---
+
+## 🚀 Why UnifiedChat? Unique Selling Points
+
+- **True Universal Messaging:** One inbox for WhatsApp, Instagram, Telegram, Signal, Slack, and more—send, receive, and search across all platforms natively.
+- **Quantum-Safe Security:** First-mover quantum-resistant encryption for all messages, files, and calls.
+- **AI-Driven Everything:** GPT-4/Claude 3 powered smart replies, moderation, translation, and workflow automation.
+- **Data-Driven & Self-Improving:** UnifiedChat continuously learns from aggregated, privacy-preserving usage data to optimize features, personalize experiences, and self-improve over time.
+- **Immersive Communication:** AR/VR meetings, 3D holographic messages, spatial audio, and neural interface support.
+- **Enterprise-Ready:** SSO, RBAC, compliance, audit logging, and advanced eDiscovery out of the box.
+- **Instagram Business Power:** Unified Instagram DMs, Stories, Reels, Shop, analytics, and scheduling—no other platform offers this breadth.
+- **Unlimited Scale:** 1B+ member channels, billions of users, 100B+ messages/day, and instant global sync.
+- **Zero-Trust & Zero-Knowledge:** End-to-end encryption, biometric auth, hardware key support, and zero-knowledge architecture.
+- **No Vendor Lock-In:** Open API, plugin system, and full data export—your data, your rules.
+- **Sustainability & Social Impact:** Carbon-aware deployment, accessibility-first design, and ethical AI governance.
+
+---
+
+## 💡 Billion-Dollar Expansion Features
+
+UnifiedChat is designed for category leadership and multi-billion dollar impact. The following next-generation features and strategies set us apart:
+
+- **AI Agent Marketplace:** Users can create, train, and deploy personal AI assistants; third-party AI bots and automations can be published, discovered, and monetized in an open marketplace.
+- **Creator Economy Tools:** Tipping, paid channels, paywalled content, NFT/collectible support, and in-app digital goods marketplace for creators and influencers.
+- **No-Code/Low-Code Automation:** Visual workflow and bot builders for business process automation, integrations, and custom automations—empowering non-developers.
+- **Decentralized Identity & Social Graph:** User-controlled, portable identity and connections (DID, Web5), enabling privacy, portability, and cross-platform social experiences.
+- **Metaverse Integration:** Avatars, virtual spaces, digital asset interoperability, and seamless connection to leading metaverse platforms.
+- **Data Monetization & User Data Vaults:** Users own, export, and monetize their data (data unions, privacy tokens, user-controlled data vaults).
+- **Hyper-Localization:** 100+ languages, local payment methods, region-specific compliance, and deep accessibility for all abilities.
+- **Universal Plugin/App Store:** A true app store for communication—extensions for productivity, games, education, and more, with developer revenue sharing.
+- **Open Protocols & Interoperability:** Support for Matrix, ActivityPub, and other open standards to connect with the wider ecosystem.
+- **Advanced Analytics & BI:** Predictive analytics, churn prediction, business intelligence dashboards, and actionable insights for users and enterprises.
+- **Developer Platform & Revenue Sharing:** APIs, SDKs, and a clear path for developers to build, distribute, and monetize on UnifiedChat.
+- **Regulatory Moats & Compliance:** Industry-specific compliance modules (HIPAA, PCI DSS, FERPA, FedRAMP), privacy-by-design, and proactive regulatory leadership.
+- **Data Network Effects & Adaptive Intelligence:** UnifiedChat leverages aggregated, privacy-preserving data to power adaptive AI, self-optimizing systems, and feedback-driven product evolution.
+- **Strategic Partnerships & Integrations:** Deep integrations with cloud, SaaS, fintech, IoT, wearables, and AR hardware.
+- **Community-Driven Development:** Open-source, transparency, and a thriving developer and user community.
+
+---
+
+## 🏆 UnifiedChat vs. Other Platforms
+
+| Feature/Platform         | UnifiedChat | WhatsApp | Telegram | Signal | Slack | Instagram |
+|-------------------------|:-----------:|:--------:|:--------:|:------:|:-----:|:---------:|
+| Multi-platform Inbox     |     ✅      |    ❌    |    ❌    |   ❌   |  ❌   |    ❌     |
+| Quantum-Safe Encryption  |     ✅      |    ❌    |    ❌    |   ❌   |  ❌   |    ❌     |
+| AI-Powered Automation   |     ✅      |    ❌    |    ❌    |   ❌   |  ❌   |    ❌     |
+| AR/VR Messaging         |     ✅      |    ❌    |    ❌    |   ❌   |  ❌   |    ❌     |
+| Instagram DMs/Stories   |     ✅      |    ❌    |    ❌    |   ❌   |  ❌   |    ✅     |
+| Creator Economy Tools   |     ✅      |    ❌    |    ❌    |   ❌   |  ❌   |   Partial  |
+| No-Code Automation      |     ✅      |    ❌    |    ❌    |   ❌   |  ❌   |    ❌     |
+| Decentralized Identity  |     ✅      |    ❌    |    ❌    |   ❌   |  ❌   |    ❌     |
+| Metaverse Integration   |     ✅      |    ❌    |    ❌    |   ❌   |  ❌   |    ❌     |
+| Data Monetization       |     ✅      |    ❌    |    ❌    |   ❌   |  ❌   |    ❌     |
+| Plugin/App Store        |     ✅      |    ❌    |    ✅    |   ❌   |  ✅   |    ❌     |
+| Open Protocols          |     ✅      |    ❌    |    ✅    |   ❌   |  ✅   |    ❌     |
+| Advanced Analytics/BI   |     ✅      |   Basic  |   Basic  |  Basic |  ✅   |   Basic   |
+| Developer Revenue       |     ✅      |    ❌    |    ❌    |   ❌   |  Partial|   ❌    |
+| Unlimited Group Size    |     ✅      |   1024   |  200,000 |  1,000 |  N/A  |   250     |
+| Sustainability Focus    |     ✅      |    ❌    |    ❌    |   ❌   |  ❌   |    ❌     |
+
+---
+
 [![Build Status](https://github.com/unified-chat/unified-chat/workflows/CI/badge.svg)](https://github.com/unified-chat/unified-chat/actions)
 [![Coverage Status](https://coveralls.io/repos/github/unified-chat/unified-chat/badge.svg?branch=main)](https://coveralls.io/github/unified-chat/unified-chat?branch=main)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -118,20 +181,26 @@ For detailed setup instructions, see the [Development Guidelines](#development-g
 UnifiedChat revolutionizes digital communication by providing:
 
 ### Core Capabilities
-- Cross-platform messaging unification (WhatsApp, Signal, Telegram, Slack, etc.)
-- Enterprise-grade security with quantum-safe encryption
-- Seamless payment processing and financial integrations
-- Advanced AI-powered assistance and automation
-- Multi-device support (up to 4 linked devices without phone connection)
-- Low data consumption optimized for limited connections
-- Support for up to 200,000+ members per group
-- Unlimited cloud storage with synchronized access
-- Comprehensive business features (catalogs, automated responses, verified profiles)
-- Mini-programs and extensible app platform
-- Advanced moderation and anti-spam capabilities
-- Self-destructing and ephemeral messages
-- Extensive sticker and animation support
-- QR code-based payments and sharing
+- **Cross-platform messaging unification** (WhatsApp, Signal, Telegram, Slack, **Instagram**, etc.)
+- **Enterprise-grade security** with quantum-safe encryption (industry first)
+- **Seamless payment processing** and financial integrations
+- **Advanced AI-powered assistance** and automation (best-in-class)
+- **Multi-device support** (up to 4 linked devices without phone connection)
+- **Low data consumption** optimized for limited connections
+- **Support for up to 1B+ members per group** (unprecedented scale)
+- **Unlimited cloud storage** with synchronized access
+- **Comprehensive business features** (catalogs, automated responses, verified profiles)
+- **Mini-programs and extensible app platform**
+- **Advanced moderation and anti-spam capabilities**
+- **Self-destructing and ephemeral messages**
+- **Extensive sticker and animation support**
+- **QR code-based payments and sharing**
+- **Universal plugin/app store** for communication, productivity, games, and more
+- **No-code/low-code automation** for workflows and bots
+- **Decentralized identity and social graph**
+- **Data monetization and user data vaults**
+- **Metaverse and virtual space integration**
+- **Hyper-localization and accessibility-first design**
 
 ### Advanced Features
 - **AI/ML Integration**
@@ -142,12 +211,17 @@ UnifiedChat revolutionizes digital communication by providing:
   - Anti-censorship tools
   - Advanced spam detection
   - Behavioral analysis
+  - **Personal AI agents and AI marketplace**
+  - **AI-generated content (images, video, docs)**
+  - **Real-time AI voice/video translation**
+  - **Adaptive AI and self-optimizing features** that learn from usage patterns and user feedback
 
 - **Immersive Experience**
-  - AR/VR meeting spaces
+  - AR/VR meeting spaces (industry-leading)
   - 3D holographic messages
   - Spatial audio for virtual rooms
-  - Neural interface compatibility
+  - Neural interface compatibility (future-ready)
+  - Avatars and metaverse integration
   - Custom themes and animations
   - Interactive stickers and effects
   - Together mode for group calls
@@ -161,9 +235,9 @@ UnifiedChat revolutionizes digital communication by providing:
   - Smart device control
   - Sensor data integration
 
-- **Enterprise Features**
+- **Enterprise & Industry Solutions**
   - SSO and RBAC integration
-  - Compliance management
+  - Compliance management (HIPAA, PCI DSS, FERPA, FedRAMP)
   - Audit logging
   - Data retention policies
   - E-discovery capabilities
@@ -171,6 +245,8 @@ UnifiedChat revolutionizes digital communication by providing:
   - Advanced eDiscovery
   - SCIM provisioning
   - Power Platform integration
+  - **No-code/low-code workflow automation**
+  - **Advanced analytics, BI dashboards, and predictive insights**
 
 - **Payment & Financial Features**
   - Multi-currency support
@@ -181,9 +257,16 @@ UnifiedChat revolutionizes digital communication by providing:
   - Digital wallet
   - Payment request system
   - Split bill functionality
+  - **In-app marketplace for digital goods and services**
+
+- **Creator Economy & Community**
+  - Tipping, paid channels, and paywalled content
+  - NFT/collectible support
+  - Affiliate and brand collaboration tools
+  - Community monetization (subscriptions, events, exclusive content)
 
 - **Privacy & Security**
-  - End-to-end encryption by default
+  - End-to-end encryption by default (zero-knowledge)
   - Biometric authentication
   - Hardware security key support
   - Privacy-preserving contact discovery
@@ -191,9 +274,11 @@ UnifiedChat revolutionizes digital communication by providing:
   - Anti-censorship tools
   - Secure key management
   - Zero-knowledge architecture
+  - User-controlled data vaults and privacy tokens
+  - Transparency and auditability for data and moderation
 
 - **Social & Community**
-  - Community channels up to 1B members
+  - Community channels up to 1B members (unmatched)
   - Social feeds and timelines
   - People nearby feature
   - Polls and surveys
@@ -201,6 +286,17 @@ UnifiedChat revolutionizes digital communication by providing:
   - Event organization
   - Public channels
   - Verified accounts
+  - Decentralized identity and portable social graph
+
+- **Instagram Integration**
+  - Unified Instagram Direct Messaging (DMs)
+  - Instagram Stories and Reels viewing, posting, and archiving
+  - Instagram Business Tools (analytics, engagement, catalog management)
+  - Instagram Shop and product tagging
+  - Instagram media sync and backup (photos, videos, stories)
+  - Social media scheduling and cross-posting (Instagram, WhatsApp, Telegram, etc.)
+  - Unified analytics dashboard including Instagram insights
+  - AI-powered content moderation for Instagram comments, DMs, and posts
 
 ## Advanced Performance Optimizations
 
@@ -490,6 +586,10 @@ unified-chat/
 
 ## Core Features and Task Verification
 
+> **MANDATORY FOR ALL FEATURES:**
+> 
+> **Every service feature MUST be highly tested (unit, integration, end-to-end, performance, and security tests) and MUST meet ALL requirements as specified in both `README.md` and `IMPLEMENTATION.md`. No feature is considered complete until it passes all tests, meets all requirements, and is fully documented and reviewed. This is a non-negotiable requirement for every feature and service.**
+
 Each feature implementation must follow this verification process:
 
 ### Task Completion Checklist
@@ -500,6 +600,7 @@ For each task/feature:
    - [ ] Documentation is complete and up-to-date
    - [ ] All tests are written and passing
    - [ ] Code review feedback is addressed
+   - [ ] **Feature is highly tested (unit, integration, e2e, performance, security) and meets ALL requirements in README.md and IMPLEMENTATION.md**
 
 2. ✅ **Testing Requirements**
    - [ ] Unit tests coverage meets minimum requirements
@@ -507,6 +608,7 @@ For each task/feature:
    - [ ] End-to-end tests pass
    - [ ] Performance benchmarks meet targets
    - [ ] Security tests pass
+   - [ ] **All tests are automated and included in CI/CD**
 
 3. ✅ **Demonstration Requirements**
    - [ ] Working demo video or live demonstration
@@ -753,7 +855,7 @@ Each feature requires demonstration of:
 Each integration requires:
 
 #### Platform Bridges
-- [ ] Connection demonstration
+- [ ] Connection demonstration (WhatsApp, Telegram, **Instagram**, etc.)
 - [ ] Message sync verification
 - [ ] Error handling examples
 - [ ] Performance metrics
@@ -772,6 +874,15 @@ Each feature requires:
 - [ ] Accuracy metrics
 - [ ] Performance benchmarks
 - [ ] Integration test results
+
+#### **Instagram Integration**
+- [ ] Instagram DM sync and messaging
+- [ ] Instagram Stories/Reels posting and viewing
+- [ ] Instagram Business Tools demo (analytics, shop, catalog)
+- [ ] Instagram media sync and backup
+- [ ] Social media scheduling and cross-posting
+- [ ] Unified analytics including Instagram
+- [ ] Content moderation for Instagram
 
 ## Testing Strategy & Quality Assurance
 
@@ -1425,6 +1536,21 @@ This project is licensed under the MIT License - see the LICENSE.md file for det
   # Verification
   curl -X POST /api/v1/platforms/telegram/send
   curl -X GET /api/v1/platforms/telegram/updates
+  ```
+
+- [ ] **Instagram Integration**
+  - [ ] Unified Instagram Direct Messaging (DMs)
+  - [ ] Instagram Stories and Reels viewing, posting, and archiving
+  - [ ] Instagram Business Tools (analytics, engagement, catalog management)
+  - [ ] Instagram Shop and product tagging
+  - [ ] Instagram media sync and backup (photos, videos, stories)
+  - [ ] Social media scheduling and cross-posting (Instagram, WhatsApp, Telegram, etc.)
+  - [ ] Unified analytics dashboard including Instagram insights
+  - [ ] AI-powered content moderation for Instagram comments, DMs, and posts
+  ```bash
+  # Verification
+  curl -X POST /api/v1/platforms/instagram/send
+  curl -X GET /api/v1/platforms/instagram/status
   ```
 
 #### 2. Payment Integration
@@ -2299,6 +2425,20 @@ integrations:
       - users
       - channels
     events_url: "/webhooks/slack"
+
+  instagram:
+    api_version: "v17.0"
+    features:
+      - direct_messages
+      - stories
+      - reels
+      - media
+      - business_tools
+      - shop
+      - analytics
+      - scheduling
+      - media_sync
+    webhook_url: "/webhooks/instagram"
 ```
 
 #### Payment Providers
@@ -4478,6 +4618,20 @@ pg_top -d unified_chat
 - [ ] Extension Framework Launch
 - [ ] Education Platform Integration
 - [ ] Research Collaboration Tools
+- [ ] **Instagram integration: DMs, Stories, Reels, Business Tools, Shop, Analytics, Scheduling**
+- [ ] **AI agent marketplace and personal AI assistants**
+- [ ] **Creator economy tools: tipping, paid channels, NFT support**
+- [ ] **No-code/low-code automation and workflow builder**
+- [ ] **Decentralized identity and social graph**
+- [ ] **Metaverse and avatar integration**
+- [ ] **User data vaults and data monetization**
+- [ ] **Universal plugin/app store**
+- [ ] **Open protocol and interoperability support**
+- [ ] **Advanced analytics and BI dashboards**
+- [ ] **Developer revenue sharing and SDKs**
+- [ ] **Regulatory compliance modules (HIPAA, PCI, FERPA, FedRAMP)**
+- [ ] **Strategic partnerships and integrations**
+- [ ] **Community-driven development and open-source expansion**
 
 ### Q3 2024
 - [ ] Edge computing rollout
@@ -4830,16 +4984,11 @@ extension_security:
 - Automated lead qualification
 - Customer feedback collection
 - Multi-department routing
+- **Instagram Business Tools integration (analytics, shop, catalog, engagement)**
+- **Instagram DM and Stories support for business accounts**
 
 ### Business Tools
-- Advanced analytics dashboard
-- Customer engagement metrics
-- Campaign management tools
-- Automated marketing features
-- Sales pipeline tracking
-- Inventory management
-- Order processing system
-- Payment reconciliation
+- Advanced analytics dashboard (including Instagram insights)
 
 ### Enterprise Integration
 - API-driven customization
@@ -4870,5 +5019,8 @@ extension_security:
 - Trend analysis
 - Predictive insights
 - Custom reporting
+
+### Unified Analytics
+- Unified analytics dashboard for all connected platforms, including Instagram
 
 ## Performance Goals
