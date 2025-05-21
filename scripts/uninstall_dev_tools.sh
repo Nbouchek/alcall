@@ -86,6 +86,7 @@ ALL_TOOLS=(
     "kind"
     "k9s"
     "argocd"
+    "conda"
 )
 
 # Function to check if a tool is installed
@@ -131,6 +132,9 @@ is_tool_installed() {
             ;;
         argocd)
             command -v argocd &>/dev/null
+            ;;
+        conda)
+            command -v conda &>/dev/null
             ;;
         *)
             return 1
@@ -357,6 +361,28 @@ uninstall_tool() {
                 log_error "Failed to uninstall ArgoCD"
                 return 1
             }
+            ;;
+            
+        conda)
+            # Uninstall Miniconda/Conda
+            if [ -d "$HOME/miniconda3" ]; then
+                log_info "Removing Miniconda installation..."
+                rm -rf "$HOME/miniconda3" || {
+                    log_error "Failed to remove Miniconda directory"
+                    return 1
+                }
+            fi
+            # Remove conda config and environments
+            rm -rf ~/.condarc ~/.conda ~/.continuum || true
+            # Remove conda from shell config files
+            for shellrc in ~/.bashrc ~/.zshrc ~/.bash_profile ~/.profile; do
+                if [ -f "$shellrc" ]; then
+                    sed -i.bak '/conda initialize/,+10d' "$shellrc" || true
+                    sed -i.bak '/miniconda3/d' "$shellrc" || true
+                fi
+            done
+            # Remove conda from PATH for current session
+            export PATH=$(echo "$PATH" | tr ':' '\n' | grep -v "$HOME/miniconda3" | paste -sd ':' -)
             ;;
             
         *)
