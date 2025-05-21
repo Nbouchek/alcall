@@ -50,6 +50,7 @@ REQUIRED_VERSIONS[istioctl]="1.20.0"
 REQUIRED_VERSIONS[kind]="0.20.0"
 REQUIRED_VERSIONS[k9s]="0.31.0"
 REQUIRED_VERSIONS[argocd]="2.10.0"
+REQUIRED_VERSIONS[conda]="24.1.2"
 
 # Installation state tracking
 declare -A INSTALLATION_STATUS
@@ -134,6 +135,7 @@ error_handler() {
 check_vulnerabilities() {
     local tool=$1
     log_info "Checking vulnerabilities for $tool..."
+    local vulnerabilities_fixed=false
     
     case $tool in
         node)
@@ -141,11 +143,20 @@ check_vulnerabilities() {
                 log_debug "Running npm audit..."
                 if ! npm audit &>/dev/null; then
                     log_warn "Vulnerabilities found in npm packages, attempting to fix..."
+                    # First try to fix without breaking changes
                     if npm audit fix &>/dev/null; then
-                        log_info "Fixed npm vulnerabilities"
+                        log_info "Fixed npm vulnerabilities (safe updates)"
+                        vulnerabilities_fixed=true
                     else
-                        log_warn "Could not automatically fix npm vulnerabilities"
-                        VULNERABLE_PACKAGES+=("npm")
+                        # If that fails, try with breaking changes
+                        log_warn "Safe updates failed, attempting to fix with breaking changes..."
+                        if npm audit fix --force &>/dev/null; then
+                            log_info "Fixed npm vulnerabilities (with breaking changes)"
+                            vulnerabilities_fixed=true
+                        else
+                            log_warn "Could not automatically fix npm vulnerabilities"
+                            VULNERABLE_PACKAGES+=("npm")
+                        fi
                     fi
                 fi
             fi
@@ -155,16 +166,27 @@ check_vulnerabilities() {
                 log_debug "Checking pip packages using pipx..."
                 # Use pipx-managed pip for checks
                 if ! pipx list | grep -q "package pip"; then
-                    log_warn "pip not installed via pipx"
-                    VULNERABLE_PACKAGES+=("pip")
+                    log_warn "pip not installed via pipx, attempting to install..."
+                    if pipx install pip; then
+                        log_info "Installed pip via pipx"
+                        vulnerabilities_fixed=true
+                    else
+                        log_warn "Failed to install pip via pipx"
+                        VULNERABLE_PACKAGES+=("pip")
+                    fi
                 else
                     local pip_version
                     pip_version=$(pipx list | grep "package pip" | awk '{print $3}' | tr -d '[:space:]')
                     local required_pip_version="25.1.1"
-                    # Use version_compare to check if pip_version < required_pip_version
                     if version_compare "$required_pip_version" "$pip_version"; then
                         log_warn "pip version $pip_version needs to be updated to $required_pip_version"
-                        VULNERABLE_PACKAGES+=("pip")
+                        if pipx upgrade pip; then
+                            log_info "Updated pip to latest version"
+                            vulnerabilities_fixed=true
+                        else
+                            log_warn "Failed to update pip"
+                            VULNERABLE_PACKAGES+=("pip")
+                        fi
                     else
                         log_info "pip is at the latest version ($pip_version)"
                     fi
@@ -172,19 +194,37 @@ check_vulnerabilities() {
                 
                 # Install safety if not present
                 if ! command_exists safety; then
+                    log_info "Installing safety for vulnerability checks..."
                     pipx install safety &>/dev/null || true
                 fi
                 
-                # Run safety check but don't fail if vulnerabilities are found
-                if safety check &>/dev/null; then
-                    log_info "No known vulnerabilities in Python packages"
+                # Run safety check and attempt to fix
+                if ! safety check &>/dev/null; then
+                    log_warn "Vulnerabilities found in Python packages, attempting to fix..."
+                    # Get list of vulnerable packages
+                    local vulnerable_pkgs=$(safety check --json | jq -r '.vulnerabilities[].package' 2>/dev/null)
+                    for pkg in $vulnerable_pkgs; do
+                        log_info "Attempting to fix vulnerability in $pkg..."
+                        if pipx upgrade "$pkg" &>/dev/null; then
+                            log_info "Successfully upgraded $pkg"
+                            vulnerabilities_fixed=true
+                        else
+                            log_warn "Failed to upgrade $pkg"
+                            VULNERABLE_PACKAGES+=("python:$pkg")
+                        fi
+                    done
                 else
-                    log_warn "Vulnerabilities found in Python packages"
-                    VULNERABLE_PACKAGES+=("pip")
+                    log_info "No known vulnerabilities in Python packages"
                 fi
             else
-                log_warn "pipx not found, skipping pip vulnerability check"
-                VULNERABLE_PACKAGES+=("pip")
+                log_warn "pipx not found, attempting to install..."
+                if python3 -m pip install --user pipx && python3 -m pipx ensurepath; then
+                    log_info "Installed pipx, please run the script again to check vulnerabilities"
+                    vulnerabilities_fixed=true
+                else
+                    log_warn "Failed to install pipx"
+                    VULNERABLE_PACKAGES+=("pipx")
+                fi
             fi
             ;;
         go)
@@ -196,12 +236,19 @@ check_vulnerabilities() {
                     if ! command_exists govulncheck; then
                         go install golang.org/x/vuln/cmd/govulncheck@latest &>/dev/null || true
                     fi
-                    # Run vulnerability check but don't fail if vulnerabilities are found
-                    if govulncheck ./... &>/dev/null; then
-                        log_info "No known vulnerabilities in Go packages"
+                    # Run vulnerability check and attempt to fix
+                    if ! govulncheck ./... &>/dev/null; then
+                        log_warn "Vulnerabilities found in Go packages, attempting to fix..."
+                        # Update all dependencies
+                        if go get -u ./... && go mod tidy; then
+                            log_info "Updated Go dependencies"
+                            vulnerabilities_fixed=true
+                        else
+                            log_warn "Failed to update Go dependencies"
+                            VULNERABLE_PACKAGES+=("go")
+                        fi
                     else
-                        log_warn "Vulnerabilities found in Go packages"
-                        VULNERABLE_PACKAGES+=("go")
+                        log_info "No known vulnerabilities in Go packages"
                     fi
                 else
                     log_info "No go.mod found, skipping Go vulnerability check."
@@ -217,12 +264,19 @@ check_vulnerabilities() {
                     if ! cargo audit --version &>/dev/null; then
                         cargo install cargo-audit &>/dev/null || true
                     fi
-                    # Run audit but don't fail if vulnerabilities are found
-                    if cargo audit &>/dev/null; then
-                        log_info "No known vulnerabilities in Rust packages"
+                    # Run audit and attempt to fix
+                    if ! cargo audit &>/dev/null; then
+                        log_warn "Vulnerabilities found in Rust packages, attempting to fix..."
+                        # Update all dependencies
+                        if cargo update && cargo audit fix; then
+                            log_info "Updated Rust dependencies"
+                            vulnerabilities_fixed=true
+                        else
+                            log_warn "Failed to update Rust dependencies"
+                            VULNERABLE_PACKAGES+=("cargo")
+                        fi
                     else
-                        log_warn "Vulnerabilities found in Rust packages"
-                        VULNERABLE_PACKAGES+=("cargo")
+                        log_info "No known vulnerabilities in Rust packages"
                     fi
                 else
                     log_info "No Cargo.lock found, skipping Rust vulnerability check."
@@ -233,13 +287,31 @@ check_vulnerabilities() {
             if command_exists docker; then
                 log_debug "Checking Docker images..."
                 if ! docker scan --version &>/dev/null; then
-                    log_warn "Docker scan not available, skipping vulnerability check"
+                    log_warn "Docker scan not available, attempting to install..."
+                    if docker plugin install --grant-all-permissions docker/scan &>/dev/null; then
+                        log_info "Installed Docker scan plugin"
+                        vulnerabilities_fixed=true
+                    else
+                        log_warn "Failed to install Docker scan plugin"
+                        VULNERABLE_PACKAGES+=("docker:scan")
+                    fi
                 else
                     while read -r image; do
                         if [ -n "$image" ]; then
                             if ! docker scan "$image" &>/dev/null; then
                                 log_warn "Vulnerabilities found in Docker image: $image"
-                                VULNERABLE_PACKAGES+=("docker:$image")
+                                log_info "Attempting to update image..."
+                                # Extract image name and tag
+                                local image_name=${image%:*}
+                                local image_tag=${image#*:}
+                                # Pull latest version of the image
+                                if docker pull "$image_name:latest" &>/dev/null; then
+                                    log_info "Updated $image to latest version"
+                                    vulnerabilities_fixed=true
+                                else
+                                    log_warn "Failed to update $image"
+                                    VULNERABLE_PACKAGES+=("docker:$image")
+                                fi
                             fi
                         fi
                     done < <(docker images --format "{{.Repository}}:{{.Tag}}" 2>/dev/null || true)
@@ -248,8 +320,16 @@ check_vulnerabilities() {
             ;;
     esac
     
-    # Don't fail the script due to vulnerabilities
-    return 0
+    # Return status based on whether vulnerabilities were fixed
+    if $vulnerabilities_fixed; then
+        log_info "Successfully fixed vulnerabilities for $tool"
+        return 0
+    elif [ ${#VULNERABLE_PACKAGES[@]} -gt 0 ]; then
+        log_warn "Some vulnerabilities could not be automatically fixed for $tool"
+        return 1
+    else
+        return 0
+    fi
 }
 
 show_spinner() {
@@ -782,9 +862,21 @@ install_rust() {
     
     if [ $? -eq 0 ]; then
         # Source the cargo environment
-        source "$HOME/.cargo/env"
-        log_info "✓ Rust installed successfully"
-        return 0
+        if [ -f "$HOME/.cargo/env" ]; then
+            log_info "Updating PATH with Rust environment..."
+            source "$HOME/.cargo/env"
+            log_info "✓ Rust installed successfully"
+            log_info "Note: To ensure Rust is available in all terminal sessions, either:"
+            log_info "  1. Restart your terminal"
+            log_info "  2. Or run: . \"$HOME/.cargo/env\" in your current session"
+            log_info "  3. Or add the following line to your shell's rc file (.bashrc, .zshrc, etc.):"
+            log_info "     source \"$HOME/.cargo/env\""
+            return 0
+        else
+            log_error "Rust installation succeeded but cargo environment file not found"
+            FAILED_INSTALLATIONS+=("rust")
+            return 1
+        fi
     else
         log_error "Failed to install Rust"
         FAILED_INSTALLATIONS+=("rust")
@@ -1195,7 +1287,155 @@ install_docker_desktop() {
     return 0
 }
 
-# Update the main function's Docker installation case
+# Add Miniconda to required versions
+REQUIRED_VERSIONS[conda]="24.1.2"
+
+# Add new function for Miniconda installation
+install_miniconda() {
+    log_info "Installing Miniconda..."
+    if ! check_network; then
+        log_error "Cannot install Miniconda - no internet connection"
+        FAILED_INSTALLATIONS+=("conda")
+        return 1
+    fi
+
+    # Check if conda is already installed
+    if command_exists conda; then
+        local conda_version
+        conda_version=$(conda --version | cut -d' ' -f2)
+        if version_compare "${REQUIRED_VERSIONS[conda]}" "$conda_version"; then
+            log_info "Updating Miniconda from version $conda_version..."
+            conda update -n base -c defaults conda -y || {
+                log_error "Failed to update Miniconda"
+                FAILED_INSTALLATIONS+=("conda")
+                return 1
+            }
+        else
+            log_info "Miniconda is already installed and up to date (version: $conda_version)"
+            return 0
+        fi
+    else
+        # Download and install Miniconda
+        local miniconda_installer
+        if [[ "$(uname -m)" == "arm64" ]]; then
+            miniconda_installer="Miniconda3-latest-MacOSX-arm64.sh"
+        else
+            miniconda_installer="Miniconda3-latest-MacOSX-x86_64.sh"
+        fi
+
+        log_info "Downloading Miniconda installer..."
+        curl -O "https://repo.anaconda.com/miniconda/$miniconda_installer" || {
+            log_error "Failed to download Miniconda installer"
+            FAILED_INSTALLATIONS+=("conda")
+            return 1
+        }
+
+        # Install Miniconda with Python 3.11 in base environment
+        log_info "Installing Miniconda..."
+        bash "$miniconda_installer" -b -p "$HOME/miniconda3" -f || {
+            log_error "Failed to install Miniconda"
+            FAILED_INSTALLATIONS+=("conda")
+            rm -f "$miniconda_installer"
+            return 1
+        }
+
+        # Clean up installer
+        rm -f "$miniconda_installer"
+
+        # Initialize conda for shell
+        log_info "Initializing Miniconda..."
+        "$HOME/miniconda3/bin/conda" init zsh || {
+            log_error "Failed to initialize Miniconda"
+            FAILED_INSTALLATIONS+=("conda")
+            return 1
+        }
+
+        # Add conda to PATH for current session
+        export PATH="$HOME/miniconda3/bin:$PATH"
+
+        # Update base environment packages
+        log_info "Updating base environment packages..."
+        "$HOME/miniconda3/bin/conda" install -n base -y -c conda-forge \
+            python=3.11 \
+            pip \
+            ipython \
+            jupyter \
+            black \
+            flake8 \
+            mypy \
+            pytest \
+            pytest-cov \
+            safety || {
+            log_warn "Some base packages could not be installed, but Miniconda is functional"
+        }
+
+        log_info "✓ Miniconda installed successfully"
+        log_info "Note: To start using Miniconda, either:"
+        log_info "  1. Restart your terminal"
+        log_info "  2. Or run: source ~/.zshrc"
+        log_info "  3. Then verify installation with: conda --version"
+    fi
+
+    # Configure conda
+    log_info "Configuring Miniconda..."
+    conda config --set auto_activate_base false || true  # Don't auto-activate base environment
+    conda config --set env_prompt '({name})' || true    # Simpler environment prompt
+    conda config --set changeps1 true || true           # Show environment in prompt
+    conda config --set notify_outdated_conda true || true  # Notify about conda updates
+
+    # Add common channels
+    conda config --add channels conda-forge || true
+    conda config --set channel_priority flexible || true
+
+    return 0
+}
+
+# Add function to create a new conda environment
+create_conda_env() {
+    local env_name=$1
+    local python_version=${2:-3.11}
+    local requirements_file=$3
+
+    log_info "Creating conda environment: $env_name with Python $python_version"
+    
+    # Create the environment
+    if ! conda create -n "$env_name" python="$python_version" -y; then
+        log_error "Failed to create conda environment: $env_name"
+        return 1
+    fi
+
+    # Activate the environment
+    source "$(conda info --base)/etc/profile.d/conda.sh"
+    conda activate "$env_name"
+
+    # Install pip in the environment
+    conda install pip -y
+
+    # If requirements file is provided, install from it
+    if [ -n "$requirements_file" ] && [ -f "$requirements_file" ]; then
+        log_info "Installing requirements from $requirements_file"
+        pip install -r "$requirements_file"
+    fi
+
+    # Install common development packages
+    conda install -y -c conda-forge \
+        ipython \
+        jupyter \
+        black \
+        flake8 \
+        mypy \
+        pytest \
+        pytest-cov \
+        safety
+
+    log_info "✓ Conda environment '$env_name' created successfully"
+    log_info "To activate this environment, run: conda activate $env_name"
+    
+    # Deactivate the environment
+    conda deactivate
+}
+
+# Update the main function to include Miniconda installation
 main() {
     # Set up error handling
     trap 'error_handler ${LINENO} $?' ERR
@@ -1237,6 +1477,7 @@ main() {
             python3) version_cmd="python3 --version" version_pattern="cut -d ' ' -f2" ;;
             kubectl) version_cmd="kubectl version --client --output=json" version_pattern="jq -r '.clientVersion.gitVersion' | cut -d 'v' -f2" ;;
             helm) version_cmd="helm version --short" version_pattern="cut -d '+' -f1 | cut -d 'v' -f2" ;;
+            conda) version_cmd="conda --version" version_pattern="cut -d ' ' -f2" ;;
             *) continue ;;
         esac
         
@@ -1323,6 +1564,7 @@ main() {
                 python3) brew install python@3.11 || { FAILED_INSTALLATIONS+=("python3"); continue; } ;;
                 kubectl) brew install kubectl || { FAILED_INSTALLATIONS+=("kubectl"); continue; } ;;
                 helm) brew install helm || { FAILED_INSTALLATIONS+=("helm"); continue; } ;;
+                conda) install_miniconda || continue ;;
                 *) 
                     log_error "Unknown tool: $tool"
                     FAILED_INSTALLATIONS+=("$tool")
@@ -1366,6 +1608,7 @@ main() {
                 python3) brew upgrade python@3.11 || { FAILED_INSTALLATIONS+=("python3"); continue; } ;;
                 kubectl) brew upgrade kubectl || { FAILED_INSTALLATIONS+=("kubectl"); continue; } ;;
                 helm) brew upgrade helm || { FAILED_INSTALLATIONS+=("helm"); continue; } ;;
+                conda) install_miniconda || continue ;;
                 *) 
                     log_error "Unknown tool: $tool"
                     FAILED_INSTALLATIONS+=("$tool")
@@ -1437,6 +1680,19 @@ case "${1:-}" in
         show_log_help
         exit 0
         ;;
+esac
+
+# Add conda environment management commands
+case "${1:-}" in
+    --create-env)
+        if [ -z "$2" ]; then
+            echo "Usage: $0 --create-env <env_name> [python_version] [requirements_file]"
+            exit 1
+        fi
+        create_conda_env "$2" "${3:-3.11}" "${4:-}"
+        exit 0
+        ;;
+    # ... existing cases ...
 esac
 
 # Execute main function if no special commands
