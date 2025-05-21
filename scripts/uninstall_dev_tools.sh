@@ -87,6 +87,7 @@ ALL_TOOLS=(
     "k9s"
     "argocd"
     "conda"
+    "cursor"
 )
 
 # Function to check if a tool is installed
@@ -134,7 +135,10 @@ is_tool_installed() {
             command -v argocd &>/dev/null
             ;;
         conda)
-            command -v conda &>/dev/null
+            command -v conda &>/dev/null || [ -d "$HOME/miniconda3" ]
+            ;;
+        cursor)
+            [ -d "/Applications/Cursor.app" ]
             ;;
         *)
             return 1
@@ -167,10 +171,125 @@ get_tool_version() {
         helm)
             helm version --short 2>/dev/null | cut -d '+' -f1 | cut -d 'v' -f2 || echo "unknown"
             ;;
+        cursor)
+            if [ -d "$HOME/Library/Application Support/Cursor" ]; then
+                echo "installed"
+            else
+                echo "unknown"
+            fi
+            ;;
         *)
             echo "unknown"
             ;;
     esac
+}
+
+# Function to clean up Cursor extensions
+cleanup_cursor_extensions() {
+    local cursor_dir="$HOME/Library/Application Support/Cursor"
+    if [ -d "$cursor_dir" ]; then
+        log_info "Cleaning up Cursor extensions..."
+        if [ -d "$cursor_dir/extensions" ]; then
+            rm -rf "$cursor_dir/extensions" || {
+                log_error "Failed to remove Cursor extensions"
+                return 1
+            }
+        fi
+        if [ -d "$cursor_dir/User" ]; then
+            rm -rf "$cursor_dir/User" || {
+                log_error "Failed to remove Cursor user data"
+                return 1
+            }
+        fi
+    fi
+}
+
+# Function to clean up Git hooks
+cleanup_git_hooks() {
+    if [ -d ".git/hooks" ]; then
+        log_info "Cleaning up Git hooks..."
+        rm -f .git/hooks/pre-commit || true
+    fi
+}
+
+# Function to clean up pipx packages
+cleanup_pipx() {
+    if command -v pipx &>/dev/null; then
+        log_info "Cleaning up pipx packages..."
+        pipx list --short | cut -d' ' -f1 | xargs -I{} pipx uninstall {} || true
+        pipx uninstall pipx || true
+    fi
+}
+
+# Function to clean up cargo packages
+cleanup_cargo() {
+    if command -v cargo &>/dev/null; then
+        log_info "Cleaning up cargo packages..."
+        cargo install --list | grep -v '^[a-z]' | cut -d' ' -f1 | xargs -I{} cargo uninstall {} || true
+    fi
+}
+
+# Function to clean up npm packages
+cleanup_npm() {
+    if command -v npm &>/dev/null; then
+        log_info "Cleaning up npm packages..."
+        npm list -g --depth=0 | awk 'NR>1 {print $2}' | xargs -I{} npm uninstall -g {} || true
+    fi
+}
+
+# Function to clean up Docker resources
+cleanup_docker() {
+    if command -v docker &>/dev/null; then
+        log_info "Cleaning up Docker resources..."
+        # Stop all containers
+        docker stop $(docker ps -aq) 2>/dev/null || true
+        # Remove all containers
+        docker rm $(docker ps -aq) 2>/dev/null || true
+        # Remove all images
+        docker rmi $(docker images -q) 2>/dev/null || true
+        # Remove all volumes
+        docker volume rm $(docker volume ls -q) 2>/dev/null || true
+        # Remove all networks
+        docker network prune -f 2>/dev/null || true
+        # Remove all build cache
+        docker builder prune -f 2>/dev/null || true
+    fi
+}
+
+# Function to clean up Helm repositories
+cleanup_helm() {
+    if command -v helm &>/dev/null; then
+        log_info "Cleaning up Helm repositories..."
+        helm repo list | awk 'NR>1 {print $1}' | xargs -I{} helm repo remove {} || true
+    fi
+}
+
+# Function to clean up kubectl contexts
+cleanup_kubectl() {
+    if command -v kubectl &>/dev/null; then
+        log_info "Cleaning up kubectl contexts..."
+        kubectl config delete-context $(kubectl config get-contexts -o name) 2>/dev/null || true
+        kubectl config delete-cluster $(kubectl config get-clusters | grep -v NAME) 2>/dev/null || true
+        kubectl config delete-user $(kubectl config get-users | grep -v NAME) 2>/dev/null || true
+    fi
+}
+
+# Function to clean up Python virtual environments
+cleanup_python_envs() {
+    if command -v conda &>/dev/null; then
+        log_info "Cleaning up conda environments..."
+        conda env list | grep -v '^#' | awk '{print $1}' | xargs -I{} conda env remove -n {} || true
+    fi
+    # Remove any remaining virtual environments in common locations
+    find ~ -type d -name "venv" -o -name ".venv" -o -name "env" -o -name ".env" | xargs rm -rf 2>/dev/null || true
+}
+
+# Function to clean up Rust toolchains
+cleanup_rust_toolchains() {
+    if command -v rustup &>/dev/null; then
+        log_info "Cleaning up Rust toolchains..."
+        rustup toolchain list | grep -v default | cut -d' ' -f1 | xargs -I{} rustup toolchain uninstall {} || true
+    fi
 }
 
 # Function to uninstall a tool
@@ -194,6 +313,9 @@ uninstall_tool() {
     
     case $tool in
         docker)
+            # Clean up Docker resources first
+            cleanup_docker
+            
             if [[ "$(uname -s)" == "Darwin" ]]; then
                 # Stop Docker Desktop
                 log_info "Stopping Docker Desktop..."
@@ -245,17 +367,14 @@ uninstall_tool() {
             ;;
             
         node)
+            # Clean up npm packages first
+            cleanup_npm
+            
             # Remove Node.js and npm
             brew uninstall node || {
                 log_error "Failed to uninstall Node.js"
                 return 1
             }
-            
-            # Remove global npm packages
-            if command -v npm &>/dev/null; then
-                log_info "Removing global npm packages..."
-                npm list -g --depth=0 | awk 'NR>1 {print $2}' | xargs -I{} npm uninstall -g {} || true
-            fi
             
             # Remove npm cache and config
             rm -rf ~/.npm ~/.npmrc || true
@@ -273,6 +392,12 @@ uninstall_tool() {
             ;;
             
         rust)
+            # Clean up Rust toolchains first
+            cleanup_rust_toolchains
+            
+            # Clean up cargo packages
+            cleanup_cargo
+            
             # Remove Rust using rustup
             if command -v rustup &>/dev/null; then
                 rustup self uninstall -y || {
@@ -286,6 +411,12 @@ uninstall_tool() {
             ;;
             
         python3)
+            # Clean up Python environments first
+            cleanup_python_envs
+            
+            # Clean up pipx packages
+            cleanup_pipx
+            
             # Remove Python
             brew uninstall python@3.11 || {
                 log_error "Failed to uninstall Python"
@@ -303,6 +434,9 @@ uninstall_tool() {
             ;;
             
         kubectl)
+            # Clean up kubectl contexts first
+            cleanup_kubectl
+            
             brew uninstall kubectl || {
                 log_error "Failed to uninstall kubectl"
                 return 1
@@ -313,6 +447,9 @@ uninstall_tool() {
             ;;
             
         helm)
+            # Clean up Helm repositories first
+            cleanup_helm
+            
             brew uninstall helm || {
                 log_error "Failed to uninstall Helm"
                 return 1
@@ -364,6 +501,9 @@ uninstall_tool() {
             ;;
             
         conda)
+            # Clean up conda environments first
+            cleanup_python_envs
+            
             # Uninstall Miniconda/Conda
             if [ -d "$HOME/miniconda3" ]; then
                 log_info "Removing Miniconda installation..."
@@ -385,18 +525,33 @@ uninstall_tool() {
             export PATH=$(echo "$PATH" | tr ':' '\n' | grep -v "$HOME/miniconda3" | paste -sd ':' -)
             ;;
             
+        cursor)
+            # Clean up Cursor extensions and data only
+            cleanup_cursor_extensions
+            
+            # Remove Cursor cache
+            rm -rf "$HOME/Library/Caches/Cursor" || true
+            rm -rf "$HOME/Library/Logs/Cursor" || true
+            
+            # Note: We're not removing the Cursor app itself
+            log_info "Cursor IDE application was preserved. Only extensions and data were removed."
+            # Consider it successful since we only want to clean extensions
+            SUCCESSFUL_UNINSTALLS+=("$tool")
+            return 0
+            ;;
+            
         *)
             log_error "Unknown tool: $tool"
             return 1
             ;;
     esac
     
-    # Verify uninstallation
-    if is_tool_installed "$tool"; then
+    # Verify uninstallation (skip for cursor since we want to keep it installed)
+    if [ "$tool" != "cursor" ] && is_tool_installed "$tool"; then
         log_error "Failed to uninstall $tool completely"
         FAILED_UNINSTALLS+=("$tool")
         return 1
-    else
+    elif [ "$tool" != "cursor" ]; then
         log_info "Successfully uninstalled $tool"
         SUCCESSFUL_UNINSTALLS+=("$tool")
         return 0
@@ -513,6 +668,9 @@ main() {
         fi
     fi
     
+    # Clean up Git hooks if they exist
+    cleanup_git_hooks
+    
     # Uninstall each tool
     for tool in "${tools_to_uninstall[@]}"; do
         uninstall_tool "$tool"
@@ -546,4 +704,4 @@ cleanup() {
 trap cleanup EXIT
 
 # Run main function
-main 
+main "$@" 
