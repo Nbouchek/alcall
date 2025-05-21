@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# Source the logging utility
+source "$(dirname "$0")/logging_utils.sh"
+
 # init_repo.sh
 # This script initializes the repository structure for the UnifiedChat platform
 # following the specifications in IMPLEMENTATION.md
@@ -83,22 +86,22 @@ check_git_repo() {
 
 # Function to create directory structure
 create_directory_structure() {
-    log "$LOG_LEVEL_INFO" "Creating directory structure..."
+    log_info "Creating directory structure..."
     
     for dir in "${REPO_STRUCTURE[@]}"; do
         local full_path="${ROOT_DIR}/${dir}"
         if [ ! -d "$full_path" ]; then
             mkdir -p "$full_path"
-            log "$LOG_LEVEL_SUCCESS" "Created directory: $dir"
+            log_success "Created directory: $dir"
         else
-            log "$LOG_LEVEL_INFO" "Directory already exists: $dir"
+            log_info "Directory already exists: $dir"
         fi
     done
 }
 
 # Function to create template files
 create_template_files() {
-    log "$LOG_LEVEL_INFO" "Creating template files..."
+    log_info "Creating template files..."
     
     for template in "${TEMPLATE_FILES[@]}"; do
         local full_path="${ROOT_DIR}/${template}"
@@ -111,16 +114,16 @@ create_template_files() {
         # Create template file if it doesn't exist
         if [ ! -f "$full_path" ]; then
             touch "$full_path"
-            log "$LOG_LEVEL_SUCCESS" "Created template file: $template"
+            log_success "Created template file: $template"
         else
-            log "$LOG_LEVEL_INFO" "Template file already exists: $template"
+            log_info "Template file already exists: $template"
         fi
     done
 }
 
 # Function to create basic README files
 create_readme_files() {
-    log "$LOG_LEVEL_INFO" "Creating README files..."
+    log_info "Creating README files..."
     
     local readme_dirs=(
         "services"
@@ -136,16 +139,16 @@ create_readme_files() {
         if [ ! -f "$readme_path" ]; then
             echo "# ${dir^} Directory" > "$readme_path"
             echo "This directory contains the ${dir} components of the UnifiedChat platform." >> "$readme_path"
-            log "$LOG_LEVEL_SUCCESS" "Created README: $dir/README.md"
+            log_success "Created README: $dir/README.md"
         else
-            log "$LOG_LEVEL_INFO" "README already exists: $dir/README.md"
+            log_info "README already exists: $dir/README.md"
         fi
     done
 }
 
 # Function to create .gitignore
 create_gitignore() {
-    log "$LOG_LEVEL_INFO" "Creating .gitignore file..."
+    log_info "Creating .gitignore file..."
     
     local gitignore_path="${ROOT_DIR}/.gitignore"
     if [ ! -f "$gitignore_path" ]; then
@@ -197,15 +200,15 @@ coverage/
 .DS_Store
 Thumbs.db
 EOL
-        log "$LOG_LEVEL_SUCCESS" "Created .gitignore file"
+        log_success "Created .gitignore file"
     else
-        log "$LOG_LEVEL_INFO" ".gitignore file already exists"
+        log_info ".gitignore file already exists"
     fi
 }
 
 # Function to initialize git hooks
 init_git_hooks() {
-    log "$LOG_LEVEL_INFO" "Initializing git hooks..."
+    log_info "Initializing git hooks..."
     
     local hooks_dir="${ROOT_DIR}/.git/hooks"
     local pre_commit_hook="${hooks_dir}/pre-commit"
@@ -231,15 +234,15 @@ echo "Running security checks..."
 # Add your security check commands here
 EOL
         chmod +x "$pre_commit_hook"
-        log "$LOG_LEVEL_SUCCESS" "Created pre-commit hook"
+        log_success "Created pre-commit hook"
     else
-        log "$LOG_LEVEL_INFO" "pre-commit hook already exists"
+        log_info "pre-commit hook already exists"
     fi
 }
 
 # Main function
 main() {
-    log "$LOG_LEVEL_INFO" "Starting repository initialization..."
+    log_summary "Repository initialization" "Started"
     
     # Clear log file if it exists
     > "$LOG_FILE"
@@ -262,8 +265,11 @@ main() {
     # Initialize git hooks
     init_git_hooks
     
-    log "$LOG_LEVEL_SUCCESS" "Repository initialization completed successfully!"
-    log "$LOG_LEVEL_INFO" "Log file created at: $LOG_FILE"
+    if [ $? -eq 0 ]; then
+        log_summary "Repository initialization" "Completed successfully"
+    else
+        log_summary "Repository initialization" "Failed"
+    fi
 }
 
 # Run main function

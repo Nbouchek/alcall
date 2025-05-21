@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# Source the logging utility
+source "$(dirname "$0")/logging_utils.sh"
+
 # configure_ide.sh
 # This script installs required Cursor IDE extensions and prints instructions for configuring recommended IDE settings.
 # Extensions: ms-kubernetes-tools.vscode-kubernetes-tools, golang.go, dbaeumer.vscode-eslint, esbenp.prettier-vscode
@@ -19,9 +22,9 @@ CURSOR_EXTENSIONS=(
 install_cursor_extensions() {
     for extension in "${CURSOR_EXTENSIONS[@]}"; do
         if cursor extensions | grep -q "$extension"; then
-            echo "✓ $extension already installed"
+            log_info "$extension already installed"
         else
-            echo "Installing $extension..."
+            log_info "Installing $extension..."
             cursor extensions install "$extension"
         fi
     done
@@ -29,16 +32,18 @@ install_cursor_extensions() {
 
 # Print instructions for configuring IDE settings (IDE configuration only)
 configure_ide_settings() {
-    echo ""
-    echo "To enable recommended settings, add the following to your settings.json in Cursor:"
-    echo '  "editor.formatOnSave": true,'
-    echo '  "editor.codeActionsOnSave.source.fixAll": true'
-    echo ""
-    echo "You can open settings.json from Cursor: Preferences > Settings > Open Settings (JSON)"
+    log_info ""
+    log_info "To enable recommended settings, add the following to your settings.json in Cursor:"
+    log_info '  "editor.formatOnSave": true,'
+    log_info '  "editor.codeActionsOnSave.source.fixAll": true'
+    log_info ""
+    log_info "You can open settings.json from Cursor: Preferences > Settings > Open Settings (JSON)"
 }
 
 # Main (IDE configuration only)
 install_cursor_extensions
 configure_ide_settings
+
+log_summary "IDE configuration" "Completed successfully"
 
 echo "IDE configuration complete." 

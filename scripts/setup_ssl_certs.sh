@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# Source the logging utility
+source "$(dirname "$0")/logging_utils.sh"
+
 # setup_ssl_certs.sh
 # Configures development SSL certificates (self-signed) and sets up a local CA (using functions) for development use.
 # Usage: ./scripts/setup_ssl_certs.sh
@@ -72,4 +75,19 @@ verify_ssl_certs() {
 if ! verify_ssl_certs; then
   log_error "Verification of SSL certificates failed."
   exit 1
-fi 
+fi
+
+# Update the main function to use log_summary
+main() {
+    log_summary "SSL certificates setup" "Started"
+    
+    # ... existing setup steps ...
+    
+    if [ $? -eq 0 ]; then
+        log_summary "SSL certificates setup" "Completed successfully"
+    else
+        log_summary "SSL certificates setup" "Failed"
+    fi
+}
+
+# ... rest of the script ... 

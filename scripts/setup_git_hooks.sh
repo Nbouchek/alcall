@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# Source the logging utility
+source "$(dirname "$0")/logging_utils.sh"
+
 # setup_git_hooks.sh
 # Sets up a pre-commit git hook (using functions) for code formatting, linting, testing, and security checks.
 # Supports Go, Node.js, and Python projects.
@@ -103,4 +106,19 @@ EOF
 if ! setup_pre_commit_hook; then
   log_error "Failed to set up pre-commit hook."
   exit 1
-fi 
+fi
+
+# Update the main function to use log_summary
+main() {
+    log_summary "Git hooks setup" "Started"
+    
+    # ... existing setup steps ...
+    
+    if [ $? -eq 0 ]; then
+        log_summary "Git hooks setup" "Completed successfully"
+    else
+        log_summary "Git hooks setup" "Failed"
+    fi
+}
+
+# ... rest of the script ... 
