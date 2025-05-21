@@ -713,9 +713,9 @@ verify_docker_desktop() {
             return 1
         fi
         
-        # Check if Docker Desktop is running
-        if ! docker info >/dev/null 2>&1; then
-            log_error "Docker Desktop is not running. Please start Docker Desktop."
+        # Ensure Docker is running
+        if ! ensure_docker_running; then
+            log_error "Failed to start Docker Desktop. Please start it manually."
             return 1
         fi
         
@@ -759,11 +759,11 @@ verify_installations() {
     # Define version commands and patterns for each tool
     local -A verification_results
     
-    # Run verifications in parallel
-    {
-        verify_docker_desktop
-        verification_results[docker]=$?
-    } &
+    # First ensure Docker is running since other tools might depend on it
+    verify_docker_desktop
+    verification_results[docker]=$?
+    
+    # Run other verifications in parallel
     {
         verify_node_lts
         verification_results[node]=$?
