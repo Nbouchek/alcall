@@ -18,22 +18,27 @@ get_script_name() {
 
 # Setup logging for the current script
 setup_logging() {
-    local script_name=$(get_script_name)
-    local LOG_BASE_DIR="$PWD/logs"
-    local LOG_DIR="$LOG_BASE_DIR"
-    local CURRENT_DATE=$(date +%Y%m%d)
-    local LOG_FILE="$LOG_DIR/${script_name}_${CURRENT_DATE}.log"
-    local LATEST_LOG_LINK="$LOG_DIR/${script_name}_latest.log"
-    local MAX_LOG_DAYS=7
+    script_name=$(get_script_name)
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[1]}")" && pwd)"
+    root_dir="$(dirname "$script_dir")"
+    LOG_BASE_DIR="${root_dir}/logs"
+    LOG_DIR="$LOG_BASE_DIR"
+    CURRENT_DATE=$(date +%Y%m%d)
+    LOG_FILE="$LOG_DIR/${script_name}_${CURRENT_DATE}.log"
+    LATEST_LOG_LINK="$LOG_DIR/${script_name}_latest.log"
+    MAX_LOG_DAYS=7
 
     # Create logging directory if it doesn't exist
-    mkdir -p "$LOG_DIR"
+    mkdir -p "$LOG_DIR" || {
+        echo "Error: Failed to create log directory: $LOG_DIR" >&2
+        return 1
+    }
     
     # Rotate old logs
-    find "$LOG_DIR" -name "${script_name}_*.log" -type f -mtime +$MAX_LOG_DAYS -delete
+    find "$LOG_DIR" -name "${script_name}_*.log" -type f -mtime +$MAX_LOG_DAYS -delete 2>/dev/null || true
     
     # Update latest log symlink
-    ln -sf "$LOG_FILE" "$LATEST_LOG_LINK"
+    ln -sf "$LOG_FILE" "$LATEST_LOG_LINK" 2>/dev/null || true
     
     # Add log header
     {
@@ -44,11 +49,17 @@ setup_logging() {
         echo "Directory: $PWD"
         echo "==================================================="
         echo ""
-    } > "$LOG_FILE"
+    } > "$LOG_FILE" || {
+        echo "Error: Failed to create log file: $LOG_FILE" >&2
+        return 1
+    }
 
     # Create a summary file for the current run
-    local SUMMARY_FILE="$LOG_DIR/${script_name}_summary_${CURRENT_DATE}.txt"
-    touch "$SUMMARY_FILE"
+    SUMMARY_FILE="$LOG_DIR/${script_name}_summary_${CURRENT_DATE}.txt"
+    touch "$SUMMARY_FILE" || {
+        echo "Error: Failed to create summary file: $SUMMARY_FILE" >&2
+        return 1
+    }
     
     # Export variables for use in the script
     export LOG_FILE
@@ -77,8 +88,10 @@ log() {
             ;;
     esac
     
-    # Append to log file without color codes
-    echo "[$timestamp] [$level] $message" >> "$LOG_FILE"
+    # Append to log file without color codes if LOG_FILE is set
+    if [ -n "${LOG_FILE:-}" ] && [ -w "${LOG_FILE:-}" ]; then
+        echo "[$timestamp] [$level] $message" >> "$LOG_FILE"
+    fi
 }
 
 # Convenience logging functions
@@ -102,37 +115,47 @@ log_debug() {
 log_summary() {
     local message=$1
     local status=$2
-    echo "$(date '+%Y-%m-%d %H:%M:%S') - $message: $status" >> "$SUMMARY_FILE"
+    if [ -n "${SUMMARY_FILE:-}" ] && [ -w "${SUMMARY_FILE:-}" ]; then
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - $message: $status" >> "$SUMMARY_FILE"
+    fi
 }
 
 # Function to compress old logs
 compress_old_logs() {
     local script_name=$(get_script_name)
     local compress_after_days=1
-    find "$LOG_DIR" -name "${script_name}_*.log" -type f -mtime +$compress_after_days ! -name "*.gz" -exec gzip {} \;
+    if [ -n "${LOG_DIR:-}" ] && [ -d "${LOG_DIR:-}" ]; then
+        find "$LOG_DIR" -name "${script_name}_*.log" -type f -mtime +$compress_after_days ! -name "*.gz" -exec gzip {} \; 2>/dev/null || true
+    fi
 }
 
 # Add log viewing function
 view_logs() {
     local script_name=$(get_script_name)
-    local latest_log="$LOG_DIR/${script_name}_latest.log"
-    if [ -f "$latest_log" ]; then
-        less "$latest_log"
+    if [ -n "${LOG_DIR:-}" ] && [ -d "${LOG_DIR:-}" ]; then
+        local latest_log="$LOG_DIR/${script_name}_latest.log"
+        if [ -f "$latest_log" ]; then
+            less "$latest_log"
+        else
+            echo "No logs found for $script_name"
+        fi
     else
-        echo "No logs found for $script_name"
+        echo "Log directory not found"
     fi
 }
 
 # Add log cleanup function
 cleanup_logs() {
     local script_name=$(get_script_name)
-    # Keep only last MAX_LOG_DAYS days of logs
-    find "$LOG_DIR" -name "${script_name}_*.log*" -type f -mtime +$MAX_LOG_DAYS -delete
-    find "$LOG_DIR" -name "${script_name}_summary_*.txt" -type f -mtime +$MAX_LOG_DAYS -delete
-    
-    # Remove empty log files
-    find "$LOG_DIR" -name "${script_name}_*.log" -type f -empty -delete
-    find "$LOG_DIR" -name "${script_name}_*.txt" -type f -empty -delete
+    if [ -n "${LOG_DIR:-}" ] && [ -d "${LOG_DIR:-}" ]; then
+        # Keep only last MAX_LOG_DAYS days of logs
+        find "$LOG_DIR" -name "${script_name}_*.log*" -type f -mtime +${MAX_LOG_DAYS:-7} -delete 2>/dev/null || true
+        find "$LOG_DIR" -name "${script_name}_summary_*.txt" -type f -mtime +${MAX_LOG_DAYS:-7} -delete 2>/dev/null || true
+        
+        # Remove empty log files
+        find "$LOG_DIR" -name "${script_name}_*.log" -type f -empty -delete 2>/dev/null || true
+        find "$LOG_DIR" -name "${script_name}_*.txt" -type f -empty -delete 2>/dev/null || true
+    fi
 }
 
 # Function to create a cleanup trap

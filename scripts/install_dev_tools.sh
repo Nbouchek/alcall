@@ -27,6 +27,14 @@ set -o pipefail  # Ensure pipeline errors are caught
 
 # Source the logging utility
 source "$(dirname "$0")/logging_utils.sh"
+# Explicitly call setup_logging to ensure log variables are set in the main shell
+declare -f setup_logging >/dev/null && setup_logging
+
+# Debug print statements to diagnose logging issues
+echo "[DEBUG] LOG_FILE: ${LOG_FILE:-unset}"
+echo "[DEBUG] SUMMARY_FILE: ${SUMMARY_FILE:-unset}"
+echo "[DEBUG] LOG_DIR: ${LOG_DIR:-unset}"
+echo "[DEBUG] PWD: $(pwd)"
 
 # Tool versions required
 declare -A REQUIRED_VERSIONS
@@ -88,7 +96,7 @@ cleanup() {
         echo ""
         echo "Exit code: $exit_code"
         echo "==================================================="
-    } >> "$SUMMARY_FILE"
+    } >> "${SUMMARY_FILE:-/dev/null}"
     
     # Compress old logs
     compress_old_logs
@@ -97,8 +105,18 @@ cleanup() {
     cleanup_logs
     
     log_info "Cleanup completed with exit code: $exit_code"
-    log_info "Log file: $LOG_FILE"
-    log_info "Summary file: $SUMMARY_FILE"
+    
+    # Print log and summary file paths if set and exist
+    if [ -n "${LOG_FILE:-}" ] && [ -f "$LOG_FILE" ]; then
+        echo "[INFO] Log file: $LOG_FILE"
+    else
+        echo "[WARN] Log file not found or not set."
+    fi
+    if [ -n "${SUMMARY_FILE:-}" ] && [ -f "$SUMMARY_FILE" ]; then
+        echo "[INFO] Summary file: $SUMMARY_FILE"
+    else
+        echo "[WARN] Summary file not found or not set."
+    fi
     
     if [ $exit_code -ne 0 ]; then
         log_warn "Cleanup encountered a non-zero exit code ($exit_code) – exiting with 0."
@@ -954,7 +972,230 @@ install_docker() {
     return 0
 }
 
-# Update main function to handle errors better
+install_kubectl() {
+    log_info "Installing kubectl..."
+    if ! check_network; then
+        log_error "Cannot install kubectl - no internet connection"
+        FAILED_INSTALLATIONS+=("kubectl")
+        return 1
+    fi
+    brew install kubectl
+    if [ $? -eq 0 ]; then
+        log_info "✓ kubectl installed successfully"
+        return 0
+    else
+        log_error "Failed to install kubectl"
+        FAILED_INSTALLATIONS+=("kubectl")
+        return 1
+    fi
+}
+
+install_helm() {
+    log_info "Installing Helm..."
+    if ! check_network; then
+        log_error "Cannot install Helm - no internet connection"
+        FAILED_INSTALLATIONS+=("helm")
+        return 1
+    fi
+    brew install helm
+    if [ $? -eq 0 ]; then
+        log_info "✓ Helm installed successfully"
+        return 0
+    else
+        log_error "Failed to install Helm"
+        FAILED_INSTALLATIONS+=("helm")
+        return 1
+    fi
+}
+
+install_go() {
+    log_info "Installing Go..."
+    if ! check_network; then
+        log_error "Cannot install Go - no internet connection"
+        FAILED_INSTALLATIONS+=("go")
+        return 1
+    fi
+    brew install go
+    if [ $? -eq 0 ]; then
+        log_info "✓ Go installed successfully"
+        return 0
+    else
+        log_error "Failed to install Go"
+        FAILED_INSTALLATIONS+=("go")
+        return 1
+    fi
+}
+
+install_node() {
+    log_info "Installing Node.js..."
+    if ! check_network; then
+        log_error "Cannot install Node.js - no internet connection"
+        FAILED_INSTALLATIONS+=("node")
+        return 1
+    fi
+    brew install node
+    if [ $? -eq 0 ]; then
+        log_info "✓ Node.js installed successfully"
+        return 0
+    else
+        log_error "Failed to install Node.js"
+        FAILED_INSTALLATIONS+=("node")
+        return 1
+    fi
+}
+
+# Add new function for Docker Desktop installation
+install_docker_desktop() {
+    log_info "Installing Docker Desktop for Mac..."
+    
+    # Check if Docker Desktop is already installed via Homebrew
+    if brew list --cask docker &>/dev/null; then
+        log_info "Docker Desktop is already installed via Homebrew"
+        if ! open -Ra Docker &>/dev/null; then
+            log_info "Docker Desktop is not running. Starting it..."
+            open -a Docker
+            # Wait for Docker to start
+            local attempts=0
+            while ! docker info &>/dev/null && [ $attempts -lt 30 ]; do
+                sleep 1
+                ((attempts++))
+            done
+            if [ $attempts -eq 30 ]; then
+                log_error "Docker Desktop failed to start within 30 seconds"
+                return 1
+            fi
+        fi
+        return 0
+    fi
+    
+    # Remove any existing Docker installation and binaries
+    log_info "Cleaning up existing Docker installation..."
+    if [ -d "/Applications/Docker.app" ]; then
+        log_info "Removing existing Docker.app..."
+        rm -rf "/Applications/Docker.app"
+    fi
+    
+    # Remove conflicting binaries
+    if [ -f "/usr/local/bin/compose-bridge" ]; then
+        log_info "Removing conflicting compose-bridge binary..."
+        sudo rm -f "/usr/local/bin/compose-bridge"
+    fi
+    
+    # Remove any existing Docker binaries
+    for binary in docker docker-compose docker-credential-desktop docker-credential-ecr-login docker-credential-osxkeychain; do
+        if [ -f "/usr/local/bin/$binary" ]; then
+            log_info "Removing existing $binary binary..."
+            sudo rm -f "/usr/local/bin/$binary"
+        fi
+    done
+    
+    # Clean up Homebrew Docker installation
+    log_info "Cleaning up Homebrew Docker installation..."
+    brew uninstall --cask docker --force 2>/dev/null || true
+    brew cleanup
+    
+    # Install Docker Desktop via Homebrew
+    log_info "Installing Docker Desktop via Homebrew..."
+    if ! brew install --cask docker; then
+        log_error "Failed to install Docker Desktop via Homebrew"
+        return 1
+    fi
+    
+    # Start Docker Desktop
+    log_info "Starting Docker Desktop..."
+    open -a Docker
+    
+    # Wait for Docker to start and be ready
+    log_info "Waiting for Docker Desktop to start (this may take a few minutes on first run)..."
+    log_info "If you see the Docker Desktop setup wizard, please complete it."
+    log_info "The script will wait for Docker to be ready..."
+    
+    local attempts=0
+    local setup_wizard_shown=false
+    local last_status=""
+    
+    while ! docker info &>/dev/null && [ $attempts -lt 180 ]; do
+        sleep 2
+        ((attempts++))
+        
+        # Check for setup wizard
+        if ! $setup_wizard_shown && pgrep -f "Docker Desktop.*Setup" &>/dev/null; then
+            log_info "Docker Desktop setup wizard detected. Please complete the setup in the wizard window."
+            setup_wizard_shown=true
+            last_status="setup_wizard"
+        fi
+        
+        # Check Docker Desktop process
+        if ! pgrep -x "Docker Desktop" &>/dev/null; then
+            if [ "$last_status" != "process_missing" ]; then
+                log_warn "Docker Desktop process not found. Checking if it needs to be started..."
+                open -a Docker
+                last_status="process_missing"
+            fi
+        fi
+        
+        # Check Docker daemon
+        if docker info &>/dev/null; then
+            if [ "$last_status" != "daemon_ready" ]; then
+                log_info "Docker daemon is responding!"
+                last_status="daemon_ready"
+            fi
+        fi
+        
+        # Progress updates
+        if [ $((attempts % 15)) -eq 0 ]; then
+            case "$last_status" in
+                "setup_wizard")
+                    log_info "Still waiting for Docker Desktop setup to complete... ($attempts seconds)"
+                    log_info "Please complete the setup wizard if you haven't already."
+                    ;;
+                "process_missing")
+                    log_info "Docker Desktop process not found. Attempting to start it again... ($attempts seconds)"
+                    ;;
+                "daemon_ready")
+                    log_info "Docker daemon is responding, waiting for full initialization... ($attempts seconds)"
+                    ;;
+                *)
+                    log_info "Waiting for Docker Desktop to be ready... ($attempts seconds)"
+                    log_info "If you see the Docker Desktop setup wizard, please complete it."
+                    ;;
+            esac
+        fi
+    done
+    
+    if [ $attempts -eq 180 ]; then
+        log_error "Docker Desktop failed to start within 6 minutes"
+        log_error "Please check if Docker Desktop is running and complete any setup if needed"
+        return 1
+    fi
+    
+    # Verify Docker is working
+    if ! docker info &>/dev/null; then
+        log_error "Docker Desktop is not responding after installation"
+        return 1
+    fi
+    
+    # Verify Docker Compose
+    if ! docker compose version &>/dev/null; then
+        log_warn "Docker Compose not working properly, attempting to fix..."
+        brew unlink docker-compose 2>/dev/null || true
+        brew install docker-compose
+    fi
+    
+    # Final verification
+    log_info "Running final Docker verification..."
+    if docker run --rm hello-world &>/dev/null; then
+        log_info "Docker is working correctly!"
+    else
+        log_warn "Docker installation completed but hello-world test failed"
+        log_warn "This might indicate a networking or permission issue"
+    fi
+    
+    log_info "Docker Desktop installed and started successfully"
+    return 0
+}
+
+# Update the main function's Docker installation case
 main() {
     # Set up error handling
     trap 'error_handler ${LINENO} $?' ERR
@@ -975,6 +1216,9 @@ main() {
         log_error "No internet connection available. Please check your network and try again."
         exit 1
     fi
+    
+    # Update Homebrew first
+    brew_update_if_needed
     
     # Create arrays for tools that need installation and those that are already installed
     local -a tools_to_install=()
@@ -997,28 +1241,30 @@ main() {
         esac
         
         # Check dependency status
-        if ! check_dependency_status "$tool" "$version_cmd" "$version_pattern"; then
-            case $? in
-                1)  # Needs update
-                    tools_to_update+=("$tool")
-                    log_info "! $tool needs to be updated"
-                    ;;
-                2)  # Not installed
-                    tools_to_install+=("$tool")
-                    log_info "- $tool needs to be installed"
-                    ;;
-                *)  # Unknown error
-                    tools_failed+=("$tool")
-                    log_error "Failed to check status for $tool"
-                    ;;
-            esac
-        else
-            tools_installed+=("$tool")
-            local version
-            version=$(eval "$version_cmd" 2>/dev/null | eval "$version_pattern" || echo "unknown")
-            version=${version#v}
-            log_info "✓ $tool already installed with version $version (required: ${REQUIRED_VERSIONS[$tool]})"
-        fi
+        check_dependency_status "$tool" "$version_cmd" "$version_pattern"
+        local status=$?
+        
+        case $status in
+            0)  # Up to date
+                tools_installed+=("$tool")
+                local version
+                version=$(eval "$version_cmd" 2>/dev/null | eval "$version_pattern" || echo "unknown")
+                version=${version#v}
+                log_info "✓ $tool already installed with version $version (required: ${REQUIRED_VERSIONS[$tool]})"
+                ;;
+            1)  # Needs update
+                tools_to_update+=("$tool")
+                log_info "! $tool needs to be updated"
+                ;;
+            2)  # Not installed
+                tools_to_install+=("$tool")
+                log_info "- $tool needs to be installed"
+                ;;
+            *)  # Unknown error
+                tools_failed+=("$tool")
+                log_error "Failed to check status for $tool"
+                ;;
+        esac
     done
     
     # Report status
@@ -1043,56 +1289,47 @@ main() {
         printf '  - %s\n' "${tools_failed[@]}"
     fi
     
-    # Only proceed with installations if needed
-    if [ ${#tools_to_install[@]} -eq 0 ] && [ ${#tools_to_update[@]} -eq 0 ]; then
-        if [ ${#tools_failed[@]} -eq 0 ]; then
-            log_info "All required tools are already installed and up to date!"
-            log_info "Running vulnerability checks on installed tools..."
-            
-            # Check vulnerabilities for installed tools
-            for tool in "${tools_installed[@]}"; do
-                check_vulnerabilities "$tool"
-            done
-            
-            # Set up Git hooks if not already set up
-            if [ ! -f .git/hooks/pre-commit ]; then
-                setup_git_hooks
-            fi
-            
-            # Final verification
-            verify_installations
-            exit $?
-        else
-            log_error "Some tools failed status check. Please review the errors above."
-            exit 1
-        fi
-    fi
-    
     # Install missing tools first
     if [ ${#tools_to_install[@]} -gt 0 ]; then
         log_info "Installing missing tools..."
         for tool in "${tools_to_install[@]}"; do
             log_info "Installing $tool..."
             case $tool in
-                docker) install_docker ;;
-                node) install_node ;;
-                go) install_go ;;
-                rust) install_rust ;;
-                python) install_python ;;
-                kubectl) install_kubectl ;;
-                helm) install_helm ;;
+                docker)
+                    if [[ "$(uname -s)" == "Darwin" ]]; then
+                        if ! install_docker_desktop; then
+                            log_error "Failed to install Docker Desktop"
+                            FAILED_INSTALLATIONS+=("docker")
+                            continue
+                        fi
+                    else
+                        brew install docker || {
+                            log_error "Failed to install Docker"
+                            FAILED_INSTALLATIONS+=("docker")
+                            continue
+                        }
+                    fi
+                    ;;
+                node) brew install node || { FAILED_INSTALLATIONS+=("node"); continue; } ;;
+                go) brew install go || { FAILED_INSTALLATIONS+=("go"); continue; } ;;
+                rustc) 
+                    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y || {
+                        log_error "Failed to install Rust"
+                        FAILED_INSTALLATIONS+=("rustc")
+                        continue
+                    }
+                    source "$HOME/.cargo/env"
+                    ;;
+                python3) brew install python@3.11 || { FAILED_INSTALLATIONS+=("python3"); continue; } ;;
+                kubectl) brew install kubectl || { FAILED_INSTALLATIONS+=("kubectl"); continue; } ;;
+                helm) brew install helm || { FAILED_INSTALLATIONS+=("helm"); continue; } ;;
                 *) 
                     log_error "Unknown tool: $tool"
                     FAILED_INSTALLATIONS+=("$tool")
                     continue
                     ;;
             esac
-            if [ $? -eq 0 ]; then
-                log_info "✓ Successfully installed $tool"
-            else
-                log_error "Failed to install $tool"
-                FAILED_INSTALLATIONS+=("$tool")
-            fi
+            log_info "✓ Successfully installed $tool"
         done
     fi
     
@@ -1102,27 +1339,57 @@ main() {
         for tool in "${tools_to_update[@]}"; do
             log_info "Updating $tool..."
             case $tool in
-                docker) install_docker ;;
-                node) install_node ;;
-                go) install_go ;;
-                rust) install_rust ;;
-                python) install_python ;;
-                kubectl) install_kubectl ;;
-                helm) install_helm ;;
+                docker)
+                    if [[ "$(uname -s)" == "Darwin" ]]; then
+                        if ! install_docker_desktop; then
+                            log_error "Failed to update Docker Desktop"
+                            FAILED_INSTALLATIONS+=("docker")
+                            continue
+                        fi
+                    else
+                        brew upgrade docker || {
+                            log_error "Failed to update Docker"
+                            FAILED_INSTALLATIONS+=("docker")
+                            continue
+                        }
+                    fi
+                    ;;
+                node) brew upgrade node || { FAILED_INSTALLATIONS+=("node"); continue; } ;;
+                go) brew upgrade go || { FAILED_INSTALLATIONS+=("go"); continue; } ;;
+                rustc) 
+                    rustup update || {
+                        log_error "Failed to update Rust"
+                        FAILED_INSTALLATIONS+=("rustc")
+                        continue
+                    }
+                    ;;
+                python3) brew upgrade python@3.11 || { FAILED_INSTALLATIONS+=("python3"); continue; } ;;
+                kubectl) brew upgrade kubectl || { FAILED_INSTALLATIONS+=("kubectl"); continue; } ;;
+                helm) brew upgrade helm || { FAILED_INSTALLATIONS+=("helm"); continue; } ;;
                 *) 
                     log_error "Unknown tool: $tool"
                     FAILED_INSTALLATIONS+=("$tool")
                     continue
                     ;;
             esac
-            if [ $? -eq 0 ]; then
-                log_info "✓ Successfully updated $tool"
-            else
-                log_error "Failed to update $tool"
-                FAILED_INSTALLATIONS+=("$tool")
-            fi
+            log_info "✓ Successfully updated $tool"
         done
     fi
+    
+    # Run vulnerability checks on installed tools
+    log_info "Running vulnerability checks on installed tools..."
+    for tool in "${tools_installed[@]}"; do
+        check_vulnerabilities "$tool"
+    done
+    
+    # Set up Git hooks if not already set up
+    if [ ! -f .git/hooks/pre-commit ]; then
+        setup_git_hooks
+    fi
+    
+    # Final verification
+    verify_installations
+    local verify_status=$?
     
     # Final status report
     log_info "=== Installation Summary ==="
@@ -1130,8 +1397,11 @@ main() {
         log_warn "Failed installations/updates:"
         printf '  - %s\n' "${FAILED_INSTALLATIONS[@]}"
         exit 1
+    elif [ $verify_status -ne 0 ]; then
+        log_error "Some tools failed verification"
+        exit 1
     else
-        log_info "All tools successfully installed/updated!"
+        log_info "All tools successfully installed/updated and verified!"
         exit 0
     fi
 }
@@ -1170,4 +1440,29 @@ case "${1:-}" in
 esac
 
 # Execute main function if no special commands
-main 
+main
+
+# At the end of the script, print the log and summary file paths if they are set and exist
+if [ -n "${LOG_FILE:-}" ] && [ -f "$LOG_FILE" ]; then
+    echo "[INFO] Log file: $LOG_FILE"
+else
+    echo "[WARN] Log file not found or not set."
+fi
+
+if [ -n "${SUMMARY_FILE:-}" ] && [ -f "$SUMMARY_FILE" ]; then
+    echo "[INFO] Summary file: $SUMMARY_FILE"
+else
+    echo "[WARN] Summary file not found or not set."
+fi
+
+# Fix cleanup logic: check for unset or empty variables before using them
+cleanup_logs_safe() {
+    if declare -f cleanup_logs > /dev/null; then
+        cleanup_logs || true
+    fi
+    if declare -f compress_old_logs > /dev/null; then
+        compress_old_logs || true
+    fi
+}
+
+trap cleanup_logs_safe EXIT 
