@@ -13,7 +13,13 @@ NC='\033[0m' # No Color
 
 # Get script name without path and extension
 get_script_name() {
-    basename "${BASH_SOURCE[1]}" .sh
+    # Get the actual script name from the command line
+    if [ -n "${0:-}" ]; then
+        basename "$0" .sh
+    else
+        # Fallback to the direct caller
+        basename "${BASH_SOURCE[1]}" .sh
+    fi
 }
 
 # Setup logging for the current script
@@ -40,26 +46,44 @@ setup_logging() {
     # Update latest log symlink
     ln -sf "$LOG_FILE" "$LATEST_LOG_LINK" 2>/dev/null || true
     
-    # Add log header
-    {
-        echo "==================================================="
-        echo "Log for $script_name - $(date '+%Y-%m-%d %H:%M:%S')"
-        echo "System: $(uname -a)"
-        echo "User: $USER"
-        echo "Directory: $PWD"
-        echo "==================================================="
-        echo ""
-    } > "$LOG_FILE" || {
-        echo "Error: Failed to create log file: $LOG_FILE" >&2
-        return 1
-    }
+    # Add log header if file doesn't exist, otherwise add a separator
+    if [ ! -f "$LOG_FILE" ]; then
+        {
+            echo "==================================================="
+            echo "Log for $script_name - $(date '+%Y-%m-%d %H:%M:%S')"
+            echo "System: $(uname -a)"
+            echo "User: $USER"
+            echo "Directory: $PWD"
+            echo "==================================================="
+            echo ""
+        } > "$LOG_FILE" || {
+            echo "Error: Failed to create log file: $LOG_FILE" >&2
+            return 1
+        }
+    else
+        {
+            echo ""
+            echo "==================================================="
+            echo "New run started at $(date '+%Y-%m-%d %H:%M:%S')"
+            echo "Directory: $PWD"
+            echo "==================================================="
+            echo ""
+        } >> "$LOG_FILE" || {
+            echo "Error: Failed to append to log file: $LOG_FILE" >&2
+            return 1
+        }
+    fi
 
-    # Create a summary file for the current run
+    # Create or append to summary file
     SUMMARY_FILE="$LOG_DIR/${script_name}_summary_${CURRENT_DATE}.txt"
-    touch "$SUMMARY_FILE" || {
-        echo "Error: Failed to create summary file: $SUMMARY_FILE" >&2
-        return 1
-    }
+    if [ ! -f "$SUMMARY_FILE" ]; then
+        touch "$SUMMARY_FILE" || {
+            echo "Error: Failed to create summary file: $SUMMARY_FILE" >&2
+            return 1
+        }
+    else
+        echo "" >> "$SUMMARY_FILE"
+    fi
     
     # Export variables for use in the script
     export LOG_FILE

@@ -1435,6 +1435,32 @@ create_conda_env() {
     conda deactivate
 }
 
+# Function to upgrade outdated Homebrew packages
+upgrade_homebrew_packages() {
+    log_info "Checking for outdated Homebrew packages..."
+    local outdated_packages
+    outdated_packages=$(brew outdated --quiet)
+    
+    if [ -n "$outdated_packages" ]; then
+        log_info "Found outdated packages:"
+        echo "$outdated_packages" | while read -r package; do
+            log_info "  - $package"
+        done
+        
+        log_info "Upgrading outdated packages..."
+        if brew upgrade; then
+            log_info "Successfully upgraded all outdated packages"
+            return 0
+        else
+            log_warn "Failed to upgrade some packages"
+            return 1
+        fi
+    else
+        log_info "No outdated packages found"
+        return 0
+    fi
+}
+
 # Update the main function to include Miniconda installation
 main() {
     # Set up error handling
@@ -1457,8 +1483,14 @@ main() {
         exit 1
     fi
     
-    # Update Homebrew first
-    brew_update_if_needed
+    # Update Homebrew and upgrade packages
+    log_info "Updating Homebrew..."
+    if brew update; then
+        log_info "Homebrew updated successfully"
+        upgrade_homebrew_packages
+    else
+        log_warn "Failed to update Homebrew"
+    fi
     
     # Create arrays for tools that need installation and those that are already installed
     local -a tools_to_install=()
