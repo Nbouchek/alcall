@@ -39,13 +39,13 @@ setup_logging() {
         echo "Error: Failed to create log directory: $LOG_DIR" >&2
         return 1
     }
-    
+
     # Rotate old logs
     find "$LOG_DIR" -name "${script_name}_*.log" -type f -mtime +$MAX_LOG_DAYS -delete 2>/dev/null || true
-    
+
     # Update latest log symlink
     ln -sf "$LOG_FILE" "$LATEST_LOG_LINK" 2>/dev/null || true
-    
+
     # Add log header if file doesn't exist, otherwise add a separator
     if [ ! -f "$LOG_FILE" ]; then
         {
@@ -84,7 +84,7 @@ setup_logging() {
     else
         echo "" >> "$SUMMARY_FILE"
     fi
-    
+
     # Export variables for use in the script
     export LOG_FILE
     export SUMMARY_FILE
@@ -99,19 +99,19 @@ log() {
     local message="$*"
     local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
     local log_entry="[$timestamp] [$level] $message"
-    
+
     # Use different colors for different log levels
     case $level in
         INFO)  echo -e "${GREEN}$log_entry${NC}" ;;
         WARN)  echo -e "${YELLOW}$log_entry${NC}" ;;
         ERROR) echo -e "${RED}$log_entry${NC}" ;;
-        DEBUG) 
+        DEBUG)
             if [ "${DEBUG_MODE:-false}" = "true" ]; then
                 echo -e "${BLUE}$log_entry${NC}"
             fi
             ;;
     esac
-    
+
     # Append to log file without color codes if LOG_FILE is set
     if [ -n "${LOG_FILE:-}" ] && [ -w "${LOG_FILE:-}" ]; then
         echo "[$timestamp] [$level] $message" >> "$LOG_FILE"
@@ -121,6 +121,10 @@ log() {
 # Convenience logging functions
 log_info() {
     log "INFO" "$*"
+}
+
+log_success() {
+    log "SUCCESS" "$*"
 }
 
 log_warn() {
@@ -175,7 +179,7 @@ cleanup_logs() {
         # Keep only last MAX_LOG_DAYS days of logs
         find "$LOG_DIR" -name "${script_name}_*.log*" -type f -mtime +${MAX_LOG_DAYS:-7} -delete 2>/dev/null || true
         find "$LOG_DIR" -name "${script_name}_summary_*.txt" -type f -mtime +${MAX_LOG_DAYS:-7} -delete 2>/dev/null || true
-        
+
         # Remove empty log files
         find "$LOG_DIR" -name "${script_name}_*.log" -type f -empty -delete 2>/dev/null || true
         find "$LOG_DIR" -name "${script_name}_*.txt" -type f -empty -delete 2>/dev/null || true
@@ -191,4 +195,4 @@ setup_logging_cleanup() {
 if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
     setup_logging
     setup_logging_cleanup
-fi 
+fi

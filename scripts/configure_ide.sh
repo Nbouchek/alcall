@@ -3,84 +3,174 @@
 # Source the logging utility
 source "$(dirname "$0")/logging_utils.sh"
 
-# configure_ide.sh
-# This script installs required Cursor IDE extensions and configures recommended IDE settings.
-# Extensions: ms-kubernetes-tools.vscode-kubernetes-tools, golang.go, dbaeumer.vscode-eslint, esbenp.prettier-vscode
+# configure_ide.sh - Installs and configures Cursor IDE with required extensions and settings
 # Usage: ./configure_ide.sh
 
 set -e
 
-# List of required Cursor extensions
+# Required extensions
 CURSOR_EXTENSIONS=(
     "ms-kubernetes-tools.vscode-kubernetes-tools"
     "golang.go"
     "dbaeumer.vscode-eslint"
     "esbenp.prettier-vscode"
+    "ms-python.python"
+    "ms-python.vscode-pylance"
+    "ms-python.debugpy"
+    "eamodio.gitlens"
+    "github.copilot"
+    "github.copilot-chat"
+    "ms-azuretools.vscode-docker"
+    "rust-lang.rust-analyzer"
 )
 
-# Function to install Cursor extensions
-install_cursor_extensions() {
+# IDE settings
+IDE_SETTINGS='{
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave.source.fixAll": true,
+    "python.linting.enabled": true,
+    "python.linting.pylintEnabled": true,
+    "python.formatting.provider": "black",
+    "editor.rulers": [88, 100],
+    "files.trimTrailingWhitespace": true,
+    "files.insertFinalNewline": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.python",
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": true
+        }
+    },
+    "[javascript]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
+    "[typescript]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    }
+}'
+
+# Utility functions
+command_exists() { command -v "$1" >/dev/null 2>&1; }
+
+# Install and configure extensions
+install_extensions() {
+    log_info "Installing required extensions..."
     for extension in "${CURSOR_EXTENSIONS[@]}"; do
-        if cursor extensions | grep -q "$extension"; then
-            log_info "$extension already installed"
-        else
-            log_info "Installing $extension..."
-            cursor extensions install "$extension"
-        fi
+        log_info "Installing $extension..."
+        cursor extensions install "$extension" || log_warning "Failed to install $extension (might already be installed)"
     done
+
+    # Give extensions time to install
+    log_info "Waiting for extensions to complete installation..."
+    sleep 5
 }
 
-# Function to configure IDE settings
-configure_ide_settings() {
+# Configure IDE settings
+configure_settings() {
     local settings_dir="$HOME/Library/Application Support/Cursor/User"
     local settings_file="$settings_dir/settings.json"
-    local temp_file=$(mktemp)
 
-    # Create settings directory if it doesn't exist
+    # Install jq if needed
+    if ! command_exists jq; then
+        log_info "Installing jq..."
+        brew install jq || { log_error "Failed to install jq"; return 1; }
+    fi
+
+    # Create settings directory and file
     mkdir -p "$settings_dir"
-
-    # Read existing settings if file exists
     if [ -f "$settings_file" ]; then
-        cat "$settings_file" > "$temp_file"
+        # Merge with existing settings
+        jq -s '.[0] * .[1]' "$settings_file" <(echo "$IDE_SETTINGS") > "${settings_file}.tmp" &&
+        mv "${settings_file}.tmp" "$settings_file"
     else
-        echo "{}" > "$temp_file"
+        echo "$IDE_SETTINGS" > "$settings_file"
     fi
-
-    # Update settings using jq
-    if ! command -v jq &> /dev/null; then
-        log_info "Installing jq for JSON processing..."
-        brew install jq
-    fi
-
-    # Update settings while preserving existing ones
-    jq '. + {
-        "editor.formatOnSave": true,
-        "editor.codeActionsOnSave.source.fixAll": true
-    }' "$temp_file" > "$settings_file"
-
-    rm "$temp_file"
-    log_info "IDE settings configured successfully"
 }
 
-# Verify settings were applied
-verify_settings() {
+# Verify installation and configuration
+verify_setup() {
+    local failed_checks=0
     local settings_file="$HOME/Library/Application Support/Cursor/User/settings.json"
+
+    # Verify Cursor installation
+    if ! command_exists cursor; then
+        log_error "Cursor not found in PATH"
+        ((failed_checks++))
+    fi
+
+    # Verify settings
     if [ -f "$settings_file" ]; then
-        if jq -e '.editor.formatOnSave == true and .editor.codeActionsOnSave.source.fixAll == true' "$settings_file" > /dev/null; then
-            log_info "✓ Settings verified successfully"
+        if ! jq -e '."editor.formatOnSave" == true and ."editor.codeActionsOnSave".source.fixAll == true and ."python.linting.enabled" == true' "$settings_file" > /dev/null; then
+            log_error "Settings not properly configured"
+            ((failed_checks++))
         else
-            log_warn "Settings may not have been applied correctly. Please check manually."
+            log_success "Settings verified successfully"
         fi
     else
-        log_warn "Settings file not found. Please check manually."
+        log_error "Settings file not found"
+        ((failed_checks++))
+    fi
+
+    # Verify Python environment
+    if ! python3 -c "import sys" >/dev/null 2>&1; then
+        log_error "Python environment not properly configured"
+        ((failed_checks++))
+    else
+        log_success "Python environment verified"
+    fi
+
+    # Verify Git
+    if ! command_exists git; then
+        log_error "Git not found in PATH"
+        ((failed_checks++))
+    else
+        log_success "Git verified"
+    fi
+
+    # Verify extensions by checking their installation directories
+    local extensions_dir="$HOME/.cursor/extensions"
+    if [ -d "$extensions_dir" ]; then
+        local missing_extensions=()
+        for ext in "${CURSOR_EXTENSIONS[@]}"; do
+            if ! find "$extensions_dir" -maxdepth 1 -type d -name "*${ext}*" | grep -q .; then
+                missing_extensions+=("$ext")
+            fi
+        done
+
+        if [ ${#missing_extensions[@]} -gt 0 ]; then
+            log_warning "Some extensions may not be fully installed:"
+            for ext in "${missing_extensions[@]}"; do
+                log_warning "  - $ext"
+            done
+            ((failed_checks++))
+        else
+            log_success "Extensions installation verified"
+        fi
+    else
+        log_error "Extensions directory not found"
+        ((failed_checks++))
+    fi
+
+    # Return status
+    if [ $failed_checks -eq 0 ]; then
+        log_success "All verifications passed"
+        return 0
+    else
+        log_warning "Verification completed with $failed_checks failed checks"
+        return 1
     fi
 }
 
 # Main
-log_info "Starting IDE configuration..."
-install_cursor_extensions
-configure_ide_settings
-verify_settings
+main() {
+    log_info "Starting IDE configuration..."
 
-log_summary "IDE configuration" "Completed successfully"
-echo "IDE configuration complete." 
+    install_extensions
+    configure_settings
+    verify_setup
+
+    log_summary "IDE configuration" "Completed"
+}
+
+main "$@"
