@@ -52,3 +52,10 @@ token
 /trust
 /ca
 /certs
+ca/ca.crt
+ca/ca.key
+ca/ca.srl
+certs/dev.crt
+certs/dev.csr
+certs/dev.key
+trust/ca.crt
