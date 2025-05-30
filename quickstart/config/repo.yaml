@@ -1,0 +1,349 @@
+# Repository Configuration
+
+# Repository settings
+repository:
+  name: "unified-chat"
+  description: "A unified chat platform that integrates multiple messaging services"
+  visibility: "private"
+  default_branch: "main"
+  protected_branches:
+    main:
+      required_status_checks:
+        strict: true
+        contexts:
+          - "test"
+          - "lint"
+          - "security"
+      enforce_admins: true
+      required_pull_request_reviews:
+        dismissal_restrictions: {}
+        dismiss_stale_reviews: true
+        require_code_owner_reviews: true
+        required_approving_review_count: 2
+      restrictions: null
+    develop:
+      required_status_checks:
+        strict: true
+        contexts:
+          - "test"
+          - "lint"
+      enforce_admins: true
+      required_pull_request_reviews:
+        dismissal_restrictions: {}
+        dismiss_stale_reviews: true
+        require_code_owner_reviews: true
+        required_approving_review_count: 1
+      restrictions: null
+
+# Branch naming conventions
+branch_naming:
+  feature: "feature/*"
+  bugfix: "bugfix/*"
+  hotfix: "hotfix/*"
+  release: "release/*"
+  develop: "develop"
+
+# Commit message conventions
+commit_conventions:
+  types:
+    - "feat"
+    - "fix"
+    - "docs"
+    - "style"
+    - "refactor"
+    - "test"
+    - "chore"
+  scope: true
+  subject_case: "lower"
+  subject_end: "."
+  body_required: false
+  body_case: "lower"
+  body_end: "."
+  footer_required: false
+
+# Issue templates
+issue_templates:
+  bug_report:
+    name: "Bug report"
+    about: "Create a report to help us improve"
+    title: "[BUG] "
+    labels: ["bug"]
+    body:
+      - type: "markdown"
+        attributes:
+          value: |
+            Thanks for taking the time to fill out this bug report!
+      - type: "input"
+        id: "environment"
+        attributes:
+          label: "Environment"
+          description: "Please provide your environment details"
+          placeholder: "e.g., macOS 12.0, Chrome 100.0"
+        validations:
+          required: true
+      - type: "textarea"
+        id: "description"
+        attributes:
+          label: "Bug Description"
+          description: "Please provide a clear and concise description of the bug"
+          placeholder: "What happened?"
+        validations:
+          required: true
+      - type: "textarea"
+        id: "reproduction"
+        attributes:
+          label: "Steps to Reproduce"
+          description: "Please provide steps to reproduce the bug"
+          placeholder: |
+            1. Go to '...'
+            2. Click on '....'
+            3. See error
+        validations:
+          required: true
+      - type: "textarea"
+        id: "expected"
+        attributes:
+          label: "Expected Behavior"
+          description: "What did you expect to happen?"
+          placeholder: "A clear and concise description of what you expected to happen"
+        validations:
+          required: true
+      - type: "textarea"
+        id: "screenshots"
+        attributes:
+          label: "Screenshots"
+          description: "If applicable, add screenshots to help explain your problem"
+          placeholder: "Add screenshots here"
+      - type: "textarea"
+        id: "additional"
+        attributes:
+          label: "Additional Context"
+          description: "Add any other context about the problem here"
+          placeholder: "Add any other context about the problem here"
+
+  feature_request:
+    name: "Feature request"
+    about: "Suggest an idea for this project"
+    title: "[FEATURE] "
+    labels: ["enhancement"]
+    body:
+      - type: "markdown"
+        attributes:
+          value: |
+            Thanks for taking the time to suggest a new feature!
+      - type: "textarea"
+        id: "problem"
+        attributes:
+          label: "Problem Statement"
+          description: "Is your feature request related to a problem? Please describe"
+          placeholder: "A clear and concise description of what the problem is"
+        validations:
+          required: true
+      - type: "textarea"
+        id: "solution"
+        attributes:
+          label: "Proposed Solution"
+          description: "Describe the solution you'd like"
+          placeholder: "A clear and concise description of what you want to happen"
+        validations:
+          required: true
+      - type: "textarea"
+        id: "alternatives"
+        attributes:
+          label: "Alternatives"
+          description: "Describe any alternatives you've considered"
+          placeholder: "A clear and concise description of any alternative solutions or features you've considered"
+      - type: "textarea"
+        id: "additional"
+        attributes:
+          label: "Additional Context"
+          description: "Add any other context or screenshots about the feature request here"
+          placeholder: "Add any other context or screenshots about the feature request here"
+
+# Pull request templates
+pull_request_templates:
+  feature:
+    name: "Feature Pull Request"
+    body:
+      - type: "markdown"
+        attributes:
+          value: |
+            Thanks for taking the time to submit a pull request!
+      - type: "textarea"
+        id: "description"
+        attributes:
+          label: "Description"
+          description: "Please include a summary of the change and which issue is fixed"
+          placeholder: "Please include a summary of the change and which issue is fixed"
+        validations:
+          required: true
+      - type: "dropdown"
+        id: "type"
+        attributes:
+          label: "Type of Change"
+          description: "Please select the type of change"
+          options:
+            - "New feature (non-breaking change which adds functionality)"
+            - "Bug fix (non-breaking change which fixes an issue)"
+            - "Breaking change (fix or feature that would cause existing functionality to not work as expected)"
+            - "This change requires a documentation update"
+        validations:
+          required: true
+      - type: "checkboxes"
+        id: "checklist"
+        attributes:
+          label: "Checklist"
+          description: "Please review and check the following items"
+          options:
+            - label: "My code follows the style guidelines of this project"
+              required: true
+            - label: "I have performed a self-review of my own code"
+              required: true
+            - label: "I have commented my code, particularly in hard-to-understand areas"
+              required: true
+            - label: "I have made corresponding changes to the documentation"
+              required: true
+            - label: "My changes generate no new warnings"
+              required: true
+            - label: "I have added tests that prove my fix is effective or that my feature works"
+              required: true
+            - label: "New and existing unit tests pass locally with my changes"
+              required: true
+
+# Code owners
+code_owners:
+  default_owners:
+    - "@project-leads"
+  paths:
+    - path: "/services/auth-service/*"
+      owners: ["@auth-team"]
+    - path: "/services/message-service/*"
+      owners: ["@message-team"]
+    - path: "/services/realtime-service/*"
+      owners: ["@realtime-team"]
+    - path: "/services/user-service/*"
+      owners: ["@user-team"]
+    - path: "/services/payment-service/*"
+      owners: ["@payment-team"]
+    - path: "/services/ai-service/*"
+      owners: ["@ai-team"]
+    - path: "/services/gateway-service/*"
+      owners: ["@gateway-team"]
+    - path: "/infrastructure/*"
+      owners: ["@infra-team"]
+    - path: "/docs/*"
+      owners: ["@docs-team"]
+    - path: "/.github/*"
+      owners: ["@security-team"]
+    - path: "/security/*"
+      owners: ["@security-team"]
+
+# Labels
+labels:
+  - name: "bug"
+    color: "d73a4a"
+    description: "Something isn't working"
+  - name: "documentation"
+    color: "0075ca"
+    description: "Improvements or updates to documentation"
+  - name: "enhancement"
+    color: "a2eeef"
+    description: "New feature or request"
+  - name: "good first issue"
+    color: "7057ff"
+    description: "Good for newcomers"
+  - name: "help wanted"
+    color: "008672"
+    description: "Extra attention is needed"
+  - name: "invalid"
+    color: "e4e669"
+    description: "Something's wrong"
+  - name: "question"
+    color: "d876e3"
+    description: "Further information is requested"
+  - name: "wontfix"
+    color: "ffffff"
+    description: "This will not be worked on"
+
+# Milestones
+milestones:
+  - title: "v1.0.0"
+    description: "Initial release with core features"
+    due_date: "2024-12-31"
+  - title: "v1.1.0"
+    description: "First feature update"
+    due_date: "2025-03-31"
+  - title: "v1.2.0"
+    description: "Second feature update"
+    due_date: "2025-06-30"
+
+# Projects
+projects:
+  - name: "UnifiedChat Development"
+    description: "Main development project"
+    columns:
+      - name: "To Do"
+        cards: []
+      - name: "In Progress"
+        cards: []
+      - name: "In Review"
+        cards: []
+      - name: "Done"
+        cards: []
+  - name: "UnifiedChat Documentation"
+    description: "Documentation project"
+    columns:
+      - name: "To Do"
+        cards: []
+      - name: "In Progress"
+        cards: []
+      - name: "In Review"
+        cards: []
+      - name: "Done"
+        cards: []
+
+# Inserted block for project folder structure (inserted after "repository" block)
+directories:
+  main:
+    - "services"
+    - "web"
+    - "mobile"
+    - "desktop"
+    - "infra"
+    - "docs"
+  services:
+    - name: "auth-service"
+      path: "services/auth-service"
+      subdirectories:
+        - "src"
+        - "tests"
+    - name: "message-service"
+      path: "services/message-service"
+      subdirectories:
+        - "src"
+        - "tests"
+    - name: "realtime-service"
+      path: "services/realtime-service"
+      subdirectories:
+        - "src"
+        - "tests"
+    - name: "user-service"
+      path: "services/user-service"
+      subdirectories:
+        - "src"
+        - "tests"
+    - name: "payment-service"
+      path: "services/payment-service"
+      subdirectories:
+        - "src"
+        - "tests"
+    - name: "ai-service"
+      path: "services/ai-service"
+      subdirectories:
+        - "src"
+        - "tests"
+    - name: "gateway-service"
+      path: "services/gateway-service"
+      subdirectories:
+        - "src"
+        - "tests"

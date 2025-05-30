@@ -1,0 +1,284 @@
+# Infrastructure Configuration
+
+# Cloud provider settings
+cloud_provider: "aws" # Options: aws, azure, gcp
+region: "us-west-2"
+project_name: "unified-chat"
+
+# Required tools and their versions
+tools:
+  terraform:
+    version: "1.5.7"
+    install_command: "brew install terraform"
+  kubectl:
+    version: "1.33.1"
+    install_command: "brew install kubectl"
+  helm:
+    version: "3.18.0"
+    install_command: "brew install helm"
+  awscli:
+    version: "2.15.0"
+    install_command: "brew install awscli"
+
+# Environment settings
+environments:
+  dev:
+    name: development
+    domain: dev.unified-chat.com
+    kubernetes:
+      version: "1.24"
+      node_count: 3
+      node_type: t3.medium
+    database:
+      instance_type: db.t3.medium
+      storage: 100
+    redis:
+      instance_type: cache.t3.medium
+      nodes: 2
+    monitoring:
+      retention: 15d
+      storage: 50
+
+  staging:
+    name: staging
+    domain: staging.unified-chat.com
+    kubernetes:
+      version: "1.24"
+      node_count: 5
+      node_type: t3.large
+    database:
+      instance_type: db.t3.large
+      storage: 200
+    redis:
+      instance_type: cache.t3.large
+      nodes: 3
+    monitoring:
+      retention: 30d
+      storage: 100
+
+  prod:
+    name: production
+    domain: unified-chat.com
+    kubernetes:
+      version: "1.24"
+      node_count: 10
+      node_type: t3.xlarge
+    database:
+      instance_type: db.t3.xlarge
+      storage: 500
+    redis:
+      instance_type: cache.t3.xlarge
+      nodes: 5
+    monitoring:
+      retention: 90d
+      storage: 200
+
+# Network configuration
+network:
+  vpc:
+    cidr: 10.0.0.0/16
+    subnets:
+      public:
+        - cidr: 10.0.1.0/24
+          az: us-west-2a
+        - cidr: 10.0.2.0/24
+          az: us-west-2b
+        - cidr: 10.0.3.0/24
+          az: us-west-2c
+      private:
+        - cidr: 10.0.11.0/24
+          az: us-west-2a
+        - cidr: 10.0.12.0/24
+          az: us-west-2b
+        - cidr: 10.0.13.0/24
+          az: us-west-2c
+      database:
+        - cidr: 10.0.21.0/24
+          az: us-west-2a
+        - cidr: 10.0.22.0/24
+          az: us-west-2b
+        - cidr: 10.0.23.0/24
+          az: us-west-2c
+
+# Kubernetes configuration
+kubernetes:
+  cluster:
+    name: unified-chat-cluster
+    version: "1.24"
+    addons:
+      - name: aws-load-balancer-controller
+        version: v2.4.0
+      - name: external-dns
+        version: v0.12.0
+      - name: cert-manager
+        version: v1.8.0
+      - name: metrics-server
+        version: v0.6.1
+  node_groups:
+    - name: general
+      instance_type: t3.medium
+      min_size: 3
+      max_size: 10
+      desired_size: 3
+      labels:
+        node-role.kubernetes.io/general: "true"
+    - name: monitoring
+      instance_type: t3.large
+      min_size: 2
+      max_size: 5
+      desired_size: 2
+      labels:
+        node-role.kubernetes.io/monitoring: "true"
+  namespaces:
+    - name: unified-chat
+      labels:
+        name: unified-chat
+        environment: production
+    - name: monitoring
+      labels:
+        name: monitoring
+        environment: production
+    - name: logging
+      labels:
+        name: logging
+        environment: production
+
+# Database configuration
+database:
+  engine: postgres
+  version: "14"
+  port: 5432
+  backup:
+    retention: 7
+    window: "03:00-04:00"
+  maintenance:
+    window: "sun:04:00-sun:05:00"
+  parameters:
+    max_connections: 1000
+    shared_buffers: 4GB
+    effective_cache_size: 12GB
+    maintenance_work_mem: 1GB
+    checkpoint_completion_target: 0.9
+    wal_buffers: 16MB
+    default_statistics_target: 100
+    random_page_cost: 1.1
+    effective_io_concurrency: 200
+    work_mem: 16MB
+    min_wal_size: 1GB
+    max_wal_size: 4GB
+
+# Redis configuration
+redis:
+  engine: redis
+  version: "7.0"
+  port: 6379
+  backup:
+    retention: 7
+    window: "02:00-03:00"
+  maintenance:
+    window: "sat:03:00-sat:04:00"
+  parameters:
+    maxmemory-policy: volatile-lru
+    maxmemory: 2gb
+    timeout: 0
+    tcp-keepalive: 300
+
+# Monitoring configuration
+monitoring:
+  prometheus:
+    retention: 15d
+    storage:
+      type: gp2
+      size: 50Gi
+    resources:
+      requests:
+        cpu: 300m
+        memory: 400Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
+    rules:
+      - name: kubernetes
+        groups:
+          - name: kubernetes
+            rules:
+              - alert: HighCPUUsage
+                expr: 'sum(rate(container_cpu_usage_seconds_total{namespace!=""}[5m])) by (namespace) > 0.8'
+                for: 5m
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "High CPU usage in namespace {{ $labels.namespace }}"
+              - alert: HighMemoryUsage
+                expr: 'sum(container_memory_usage_bytes{namespace!=""}) by (namespace) / sum(kube_node_status_allocatable_memory_bytes) > 0.8'
+                for: 5m
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "High memory usage in namespace {{ $labels.namespace }}"
+
+  grafana:
+    admin_password: "${GRAFANA_ADMIN_PASSWORD}"
+    persistence:
+      type: gp2
+      size: 10Gi
+    resources:
+      requests:
+        cpu: 200m
+        memory: 200Mi
+      limits:
+        cpu: 300m
+        memory: 500Mi
+    dashboards:
+      - name: Kubernetes Overview
+        uid: kubernetes-overview
+        title: Kubernetes Overview
+      - name: Service Overview
+        uid: service-overview
+        title: Service Overview
+      - name: Database Overview
+        uid: database-overview
+        title: Database Overview
+
+  logging:
+    elasticsearch:
+      replicas: 3
+      storage:
+        type: gp2
+        size: 100Gi
+      resources:
+        requests:
+          cpu: 500m
+          memory: 1Gi
+        limits:
+          cpu: 1000m
+          memory: 2Gi
+    kibana:
+      replicas: 2
+      storage:
+        type: gp2
+        size: 10Gi
+      resources:
+        requests:
+          cpu: 200m
+          memory: 500Mi
+        limits:
+          cpu: 300m
+          memory: 1Gi
+
+# Terraform configuration
+terraform:
+  backend:
+    bucket: unified-chat-terraform-state
+    key: terraform.tfstate
+    region: us-west-2
+    dynamodb_table: terraform-state-lock
+  modules:
+    - name: vpc
+      source: ./modules/vpc
+    - name: eks
+      source: ./modules/eks
+    - name: rds
+      source: ./modules/rds
+    - name: elasticache
+      source: ./modules/elasticache

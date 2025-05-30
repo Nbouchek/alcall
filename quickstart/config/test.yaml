@@ -1,0 +1,105 @@
+# Test configuration for integration tests
+
+# Required tools and their minimum versions
+tools:
+  yq:
+    version: "4.45.4"
+    install_command: "brew install yq"
+  git:
+    version: "2.39.5"
+    install_command: "brew install git"
+  gh:
+    version: "2.73.0"
+    install_command: "brew install gh"
+  docker:
+    version: "28.1.1"
+    install_command: "brew install --cask docker"
+  kubectl:
+    version: "1.33.1"
+    install_command: "brew install kubectl"
+  helm:
+    version: "3.18.0"
+    install_command: "brew install helm"
+  terraform:
+    version: "1.5.7"
+    install_command: "brew install terraform"
+  node:
+    version: "23.11.0"
+    install_command: "brew install node"
+  python3:
+    version: "3.10.17"
+    install_command: "brew install python@3.12"
+  go:
+    version: "1.23.0"
+    install_command: "brew install go@1.23"
+
+# Directories to verify
+directories:
+  - services
+  - web
+  - mobile
+  - desktop
+  - infrastructure
+  - documentation
+  - .github
+  - .github/workflows
+  - .github/actions
+  - .github/environments
+  - .github/ISSUE_TEMPLATE
+  - infrastructure/terraform
+  - infrastructure/kubernetes
+  - infrastructure/monitoring
+  - infrastructure/terraform/modules
+  - infrastructure/terraform/environments
+  - infrastructure/kubernetes/base
+  - infrastructure/kubernetes/overlays
+  - infrastructure/monitoring/prometheus
+  - infrastructure/monitoring/grafana
+  - infrastructure/monitoring/alertmanager
+
+# Test timeouts (in seconds)
+timeouts:
+  setup: 300
+  verify: 60
+  monitor_interval: 5
+
+# Test retries
+retries:
+  max_attempts: 3
+  delay_between_attempts: 10
+
+# Test report settings
+report:
+  format: markdown
+  include_logs: true
+  include_timestamps: true
+  include_environment: true
+  include_versions: true
+
+# Test environment requirements
+environment:
+  min_memory: "8G"
+  min_disk_space: "10G"
+  required_ports:
+    - 80
+    - 443
+    - 3000
+    - 5432
+    - 6379
+    - 8080
+    - 9090
+    - 9093
+
+# Test notifications
+notifications:
+  on_failure: true
+  on_success: true
+  channels:
+    - name: "console"
+      type: "stdout"
+    - name: "log_file"
+      type: "file"
+      path: "logs/test/notifications.log"
+    - name: "github"
+      type: "github"
+      event: "check_run"

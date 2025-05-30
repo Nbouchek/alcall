@@ -1,0 +1,22 @@
+# Log cleanup configuration
+retention:
+  days:
+    dev-env: 7 # Development environment logs
+    repo: 30 # Repository operation logs
+    infra: 90 # Infrastructure logs
+    cicd: 30 # CI/CD pipeline logs
+
+# Log directory settings
+directories:
+  base_path: "logs" # Base path for all logs
+  subdirectories:
+    - dev-env
+    - repo
+    - infra
+    - cicd
+
+# Cleanup settings
+cleanup:
+  run_frequency: "daily" # How often to run cleanup
+  max_cleanup_logs: 30 # How many cleanup logs to keep
+  dry_run: false # Set to true to preview changes without deleting

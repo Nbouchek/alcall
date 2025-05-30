@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: unified-chat
+  labels:
+    name: unified-chat
+    environment: production

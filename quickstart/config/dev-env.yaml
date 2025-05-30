@@ -1,0 +1,203 @@
+# Development Environment Configuration
+
+# Required tools and their minimum versions
+tools:
+  docker:
+    version: "4.36.0"
+    install_command: "brew install docker"
+  node:
+    version: "22.0.0"
+    install_command: "brew install node@22"
+  go:
+    version: "1.23.0"
+    install_command: "brew install go@1.23"
+  rustc:
+    version: "1.84.0"
+    install_command: "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
+  cargo:
+    version: "1.84.0"
+    install_command: "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
+  python3:
+    version: "3.12.0"
+    install_command: "brew install python@3.12"
+  kubectl:
+    version: "1.31.0"
+    install_command: "brew install kubectl"
+  helm:
+    version: "3.16.0"
+    install_command: "brew install helm"
+  gh:
+    version: "2.0.0"
+    install_command: "brew install gh"
+
+# Development directories
+directories:
+  base_path: "~/Dev/github/alcall"
+  services:
+    - name: "auth-service"
+      path: "services/auth-service"
+    - name: "message-service"
+      path: "services/message-service"
+    - name: "realtime-service"
+      path: "services/realtime-service"
+    - name: "user-service"
+      path: "services/user-service"
+    - name: "payment-service"
+      path: "services/payment-service"
+    - name: "ai-service"
+      path: "services/ai-service"
+    - name: "gateway-service"
+      path: "services/gateway-service"
+  web:
+    path: "web/frontend"
+  mobile:
+    path: "mobile/flutter"
+  desktop:
+    path: "desktop/tauri"
+  infrastructure:
+    path: "infrastructure"
+  documentation:
+    path: "docs"
+
+# IDE settings
+ide:
+  cursor:
+    settings_path: "~/.cursor/settings/settings.json"
+    settings:
+      editor:
+        formatOnSave: true
+        tabSize: 2
+        insertSpaces: true
+        wordWrap: "on"
+      files:
+        trimTrailingWhitespace: true
+        insertFinalNewline: true
+      typescript:
+        format:
+          semicolons: "insert"
+          singleQuote: true
+      javascript:
+        format:
+          semicolons: "insert"
+          singleQuote: true
+      go:
+        format:
+          tool: "gofmt"
+      rust:
+        format:
+          tool: "rustfmt"
+      python:
+        format:
+          tool: "black"
+    extensions:
+      - id: "ms-kubernetes-tools.vscode-kubernetes-tools"
+        name: "Kubernetes"
+      - id: "golang.go"
+        name: "Go"
+      - id: "dbaeumer.vscode-eslint"
+        name: "ESLint"
+      - id: "esbenp.prettier-vscode"
+        name: "Prettier"
+
+# Git hooks
+git_hooks:
+  pre_commit:
+    path: ".git/hooks/pre-commit"
+    commands:
+      - name: "Run linters"
+        command: |
+          npm run lint
+          go vet ./...
+          cargo clippy
+          flake8 .
+      - name: "Run tests"
+        command: |
+          npm test
+          go test ./...
+          cargo test
+          pytest
+      - name: "Format code"
+        command: |
+          npm run format
+          go fmt ./...
+          cargo fmt
+          black .
+
+# SSL certificates
+ssl:
+  ca:
+    path: "~/.unified-chat/ca"
+    key: "ca.key"
+    cert: "ca.crt"
+  certs:
+    path: "~/.unified-chat/certs"
+    domains:
+      - "localhost"
+      - "*.localhost"
+      - "unified-chat.local"
+      - "*.unified-chat.local"
+    validity_days: 365
+
+# Development ports
+ports:
+  auth_service: 8080
+  message_service: 8081
+  realtime_service: 8082
+  user_service: 8083
+  payment_service: 8084
+  ai_service: 8085
+  gateway_service: 8086
+  postgres: 5432
+  redis: 6379
+
+# Database configuration
+database:
+  postgres:
+    host: "localhost"
+    port: 5432
+    user: "postgres"
+    password: "postgres"
+    name: "unified_chat"
+  redis:
+    host: "localhost"
+    port: 6379
+    password: ""
+
+# Logging configuration
+logging:
+  path: "logs"
+  level: "INFO"
+  retention: 7
+
+# Monitoring configuration
+monitoring:
+  enabled: true
+  prometheus:
+    port: 9090
+  grafana:
+    port: 3000
+  jaeger:
+    port: 16686
+
+# Security configuration
+security:
+  jwt:
+    secret: "dev-secret-key"
+    expiration: "24h"
+  cors:
+    allowed_origins:
+      - "http://localhost:3000"
+      - "http://localhost:8080"
+    allowed_methods:
+      - "GET"
+      - "POST"
+      - "PUT"
+      - "DELETE"
+      - "OPTIONS"
+    allowed_headers:
+      - "Content-Type"
+      - "Authorization"
+    exposed_headers:
+      - "X-Total-Count"
+    allow_credentials: true
+    max_age: "24h"

@@ -1,0 +1,370 @@
+# CI/CD Configuration
+
+# Pipeline settings
+pipeline:
+  name: "unified-chat-pipeline"
+  version: "1.0"
+  trigger:
+    branches:
+      - "main"
+      - "develop"
+      - "feature/*"
+      - "bugfix/*"
+      - "hotfix/*"
+    tags:
+      - "v*"
+    paths:
+      include:
+        - "services/**"
+        - "web/**"
+        - "mobile/**"
+        - "desktop/**"
+        - "infrastructure/**"
+      exclude:
+        - "docs/**"
+        - "*.md"
+        - "*.txt"
+
+# Build configuration
+build:
+  docker:
+    registry: ghcr.io
+    organization: unified-chat
+    cache: true
+    buildx: true
+    platforms:
+      - linux/amd64
+      - linux/arm64
+  services:
+    auth-service:
+      language: go
+      version: "1.23"
+      build_command: "go build -o bin/auth-service ./services/auth-service"
+      test_command: "go test ./services/auth-service/..."
+      docker:
+        image: "alcall/auth-service"
+        context: "./services/auth-service"
+        dockerfile: "Dockerfile"
+
+    message-service:
+      language: go
+      version: "1.23"
+      build_command: "go build -o bin/message-service ./services/message-service"
+      test_command: "go test ./services/message-service/..."
+      docker:
+        image: "alcall/message-service"
+        context: "./services/message-service"
+        dockerfile: "Dockerfile"
+
+    realtime-service:
+      language: go
+      version: "1.23"
+      build_command: "go build -o bin/realtime-service ./services/realtime-service"
+      test_command: "go test ./services/realtime-service/..."
+      docker:
+        image: "alcall/realtime-service"
+        context: "./services/realtime-service"
+        dockerfile: "Dockerfile"
+
+    user-service:
+      language: go
+      version: "1.23"
+      build_command: "go build -o bin/user-service ./services/user-service"
+      test_command: "go test ./services/user-service/..."
+      docker:
+        image: "alcall/user-service"
+        context: "./services/user-service"
+        dockerfile: "Dockerfile"
+
+    payment-service:
+      language: go
+      version: "1.23"
+      build_command: "go build -o bin/payment-service ./services/payment-service"
+      test_command: "go test ./services/payment-service/..."
+      docker:
+        image: "alcall/payment-service"
+        context: "./services/payment-service"
+        dockerfile: "Dockerfile"
+
+    ai-service:
+      language: python
+      version: "3.13"
+      build_command: "pip install -r services/ai-service/requirements.txt"
+      test_command: "pytest services/ai-service/tests/"
+      docker:
+        image: "alcall/ai-service"
+        context: "./services/ai-service"
+        dockerfile: "Dockerfile"
+
+    gateway-service:
+      language: go
+      version: "1.23"
+      build_command: "go build -o bin/gateway-service ./services/gateway-service"
+      test_command: "go test ./services/gateway-service/..."
+      docker:
+        image: "alcall/gateway-service"
+        context: "./services/gateway-service"
+        dockerfile: "Dockerfile"
+
+    frontend:
+      language: node
+      version: "23"
+      build_command: "npm ci && npm run build"
+      test_command: "npm test"
+      docker:
+        image: "alcall/frontend"
+        context: "./web/frontend"
+        dockerfile: "Dockerfile"
+
+    mobile:
+      language: flutter
+      version: "3.19"
+      build_command: "flutter build apk --release"
+      test_command: "flutter test"
+      docker:
+        image: "alcall/mobile"
+        context: "./mobile/flutter"
+        dockerfile: "Dockerfile"
+
+    desktop:
+      language: rust
+      version: "1.87"
+      build_command: "cargo build --release"
+      test_command: "cargo test"
+      docker:
+        image: "alcall/desktop"
+        context: "./desktop/tauri"
+        dockerfile: "Dockerfile"
+
+# Test configuration
+test:
+  unit:
+    timeout: 10m
+    retries: 2
+    parallel: true
+    coverage:
+      threshold: 80
+      report: true
+  integration:
+    timeout: 30m
+    retries: 2
+    parallel: false
+    coverage:
+      threshold: 70
+      report: true
+  e2e:
+    timeout: 1h
+    retries: 1
+    parallel: false
+    browser:
+      - chrome
+      - firefox
+    coverage:
+      threshold: 60
+      report: true
+
+# Security scanning
+security:
+  sast:
+    tools:
+      - name: snyk
+        version: "latest"
+        language: all
+        config: ".snyk"
+      - name: gosec
+        version: "latest"
+        language: go
+        config: ".gosec.yaml"
+      - name: bandit
+        version: "latest"
+        language: python
+        config: ".bandit"
+      - name: eslint
+        version: "latest"
+        language: javascript
+        config: ".eslintrc.js"
+
+  container:
+    tools:
+      - name: trivy
+        version: "latest"
+        severity: ["CRITICAL", "HIGH"]
+        ignore_unfixed: true
+      - name: docker-scan
+        version: "latest"
+        severity: ["CRITICAL", "HIGH"]
+
+# Deployment configuration
+deployment:
+  environments:
+    development:
+      branch: develop
+      cloud_provider: aws
+      region: us-west-2
+      resources:
+        requests:
+          cpu: "100m"
+          memory: "128Mi"
+        limits:
+          cpu: "200m"
+          memory: "256Mi"
+      replicas: 1
+
+    staging:
+      branch: staging
+      cloud_provider: aws
+      region: us-west-2
+      resources:
+        requests:
+          cpu: "200m"
+          memory: "256Mi"
+        limits:
+          cpu: "500m"
+          memory: "512Mi"
+      replicas: 2
+
+    production:
+      branch: main
+      cloud_provider: aws
+      region: us-west-2
+      resources:
+        requests:
+          cpu: "500m"
+          memory: "512Mi"
+        limits:
+          cpu: "1000m"
+          memory: "1Gi"
+      replicas: 3
+
+# Release configuration
+release:
+  changelog:
+    enabled: true
+    format: "keepachangelog"
+    categories:
+      - "Added"
+      - "Changed"
+      - "Deprecated"
+      - "Removed"
+      - "Fixed"
+      - "Security"
+
+  versioning:
+    strategy: "semver"
+    prefix: "v"
+    prerelease: false
+
+# Notification configuration
+notifications:
+  slack:
+    channels:
+      - name: "#releases"
+        events: ["release_created", "release_published"]
+      - name: "#deployments"
+        events:
+          ["deployment_started", "deployment_completed", "deployment_failed"]
+  email:
+    recipients:
+      - "devops@alcall.com"
+      - "security@alcall.com"
+    events: ["security_alert", "deployment_failed"]
+  github:
+    events: ["release_created", "release_published", "deployment_status"]
+
+# GitHub Actions workflows
+workflows:
+  main:
+    name: CI/CD Pipeline
+    on:
+      push:
+        branches:
+          - main
+          - develop
+          - staging
+      pull_request:
+        branches:
+          - main
+          - develop
+          - staging
+    jobs:
+      - name: build-and-test
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v4
+          - name: Build and Test
+            run: |
+              ./quickstart/scripts/cicd/build.sh
+              ./quickstart/scripts/cicd/test.sh
+      - name: security-scan
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v4
+          - name: Security Scan
+            run: ./quickstart/scripts/cicd/security.sh
+      - name: deploy
+        needs: [build-and-test, security-scan]
+        runs-on: ubuntu-latest
+        if: github.ref == 'refs/heads/main'
+        steps:
+          - uses: actions/checkout@v4
+          - name: Deploy
+            run: ./quickstart/scripts/cicd/deploy.sh
+  pull_request:
+    name: Pull Request Checks
+    on:
+      pull_request:
+        branches:
+          - main
+          - develop
+          - staging
+    jobs:
+      - name: validate
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v4
+          - name: Validate Changes
+            run: ./quickstart/scripts/cicd/validate.sh
+  release:
+    name: Release
+    on:
+      push:
+        tags:
+          - "v*"
+    jobs:
+      - name: create-release
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v4
+          - name: Create Release
+            run: ./quickstart/scripts/cicd/release.sh
+
+# Cache configuration
+cache:
+  docker:
+    enabled: true
+    key: "docker-{{ .Branch }}-{{ .Commit }}"
+    paths:
+      - "~/.docker"
+  npm:
+    enabled: true
+    key: "npm-{{ .Branch }}-{{ .Commit }}"
+    paths:
+      - "node_modules"
+  go:
+    enabled: true
+    key: "go-{{ .Branch }}-{{ .Commit }}"
+    paths:
+      - "go/pkg/mod"
+      - "go/bin"
+
+# Artifact storage
+artifacts:
+  type: "s3"
+  bucket: "unified-chat-artifacts"
+  prefix: "{{ .Branch }}/{{ .Commit }}"
+  retention:
+    days: 30
+    keep_latest: 10
+  encryption:
+    enabled: true
+    type: "aws:kms"

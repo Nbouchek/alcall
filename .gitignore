@@ -1,0 +1,8 @@
+# Ignore the .cursor directory
+.cursor/
+.cursor/rules
+.cursor/rules/alcall.mdc
+
+logs/*
+*.log
+
