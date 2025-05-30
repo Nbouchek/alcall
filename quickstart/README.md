@@ -77,6 +77,8 @@ This guide provides a streamlined approach to setting up and running the Unified
    # - JWT_SECRET=your-secret-key
    ```
 
+   **Note:** The integration script now automatically creates a `.env` file with best-practice placeholders if it does not exist. You should review and update the generated `.env` file with your actual secrets and configuration values.
+
 5. **Start Development Services**
 
    ```bash

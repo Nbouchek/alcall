@@ -1,9 +1,0 @@
-infrastructure:
-  provider: local
-  terraform:
-    path: infrastructure/terraform
-  kubernetes:
-    path: infrastructure/kubernetes
-  monitoring:
-    path: infrastructure/monitoring
-  # Add additional configuration as needed, but do not change the directory structure.
