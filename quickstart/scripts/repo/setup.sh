@@ -341,6 +341,183 @@ else
     git checkout develop || log "WARN" "Could not switch to develop branch"
 fi
 
+# Create service subdirectories (src, tests)
+SERVICES=(auth-service message-service realtime-service user-service payment-service ai-service gateway-service)
+for svc in "${SERVICES[@]}"; do
+  for sub in src tests; do
+    dir="services/$svc/$sub"
+    if [ ! -d "$dir" ]; then
+      mkdir -p "$dir"
+      log "INFO" "Created directory: $dir"
+    else
+      log "INFO" "Directory already exists: $dir"
+    fi
+  done
+done
+
+# Create key files if missing
+# LICENSE (MIT)
+if [ ! -f LICENSE ]; then
+  cat > LICENSE <<'EOF'
+MIT License
+
+Copyright (c) $(date +%Y) UnifiedChat
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+EOF
+  log "INFO" "Created LICENSE (MIT)"
+else
+  log "INFO" "LICENSE already exists"
+fi
+
+# CODE_OF_CONDUCT.md
+if [ ! -f CODE_OF_CONDUCT.md ]; then
+  cat > CODE_OF_CONDUCT.md <<'EOF'
+# Contributor Covenant Code of Conduct
+
+## Our Pledge
+
+We as members, contributors, and leaders pledge to make participation in our
+community a harassment-free experience for everyone, regardless of age, body
+size, visible or invisible disability, ethnicity, sex characteristics, gender
+identity and expression, level of experience, education, socio-economic status,
+nationality, personal appearance, race, religion, or sexual identity
+and orientation.
+
+We pledge to act and interact in ways that contribute to an open, welcoming,
+diverse, inclusive, and healthy community.
+
+## Our Standards
+
+Examples of behavior that contributes to a positive environment for our
+community include:
+
+- Demonstrating empathy and kindness toward other people
+- Being respectful of differing opinions, viewpoints, and experiences
+- Giving and gracefully accepting constructive feedback
+- Accepting responsibility and apologizing to those affected by our mistakes,
+  and learning from the experience
+- Focusing on what is best not just for us as individuals, but for the
+  overall community
+
+Examples of unacceptable behavior include:
+
+- The use of sexualized language or imagery, and sexual attention or advances
+  of any kind
+- Trolling, insulting or derogatory comments, and personal or political attacks
+- Public or private harassment
+- Publishing others' private information, such as a physical or email address,
+  without their explicit permission
+- Other conduct which could reasonably be considered inappropriate in a
+  professional setting
+
+## Enforcement Responsibilities
+
+Community leaders are responsible for clarifying and enforcing our standards of
+acceptable behavior and will take appropriate and fair corrective action in
+response to any behavior that they deem inappropriate, threatening, offensive,
+or harmful.
+
+## Scope
+
+This Code of Conduct applies within all community spaces, and also applies when
+an individual is officially representing the community in public spaces.
+
+## Enforcement
+
+Instances of abusive, harassing, or otherwise unacceptable behavior may be
+reported to the community leaders responsible for enforcement at
+[INSERT CONTACT EMAIL].
+All complaints will be reviewed and investigated promptly and fairly.
+
+All community leaders are obligated to respect the privacy and security of the
+reporter of any incident.
+
+## Attribution
+
+This Code of Conduct is adapted from the [Contributor Covenant][homepage],
+version 2.1, available at
+https://www.contributor-covenant.org/version/2/1/code_of_conduct.html.
+
+[homepage]: https://www.contributor-covenant.org
+EOF
+  log "INFO" "Created CODE_OF_CONDUCT.md"
+else
+  log "INFO" "CODE_OF_CONDUCT.md already exists"
+fi
+
+# SECURITY.md
+if [ ! -f SECURITY.md ]; then
+  cat > SECURITY.md <<'EOF'
+# Security Policy
+
+## Reporting a Vulnerability
+
+If you discover a security vulnerability, please report it by emailing [INSERT SECURITY CONTACT EMAIL].
+We will respond as quickly as possible to your report. Please do not disclose security issues publicly until they have been addressed.
+
+## Supported Versions
+
+We will address security issues in the latest release. Older versions may not be supported.
+EOF
+  log "INFO" "Created SECURITY.md"
+else
+  log "INFO" "SECURITY.md already exists"
+fi
+
+# CHANGELOG.md
+if [ ! -f CHANGELOG.md ]; then
+  cat > CHANGELOG.md <<'EOF'
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+## [Unreleased]
+- Initial project structure
+EOF
+  log "INFO" "Created CHANGELOG.md"
+else
+  log "INFO" "CHANGELOG.md already exists"
+fi
+
+# Create release/0.1.0 branch if no release/* branch exists
+if ! git branch -r | grep -q 'origin/release/'; then
+  if git show-ref --verify --quiet refs/heads/main; then
+    git checkout main
+  elif git show-ref --verify --quiet refs/heads/develop; then
+    git checkout develop
+  fi
+  git checkout -b release/0.1.0 || log "WARN" "release/0.1.0 branch already exists"
+  git push origin release/0.1.0 || log "WARN" "Could not push release/0.1.0 to origin"
+  log "INFO" "Created release/0.1.0 branch"
+else
+  log "INFO" "At least one release/* branch already exists"
+fi
+
+# Apply branch protection rules (call apply_branch_protection.sh if exists)
+if [ -f "$PROJECT_ROOT/scripts/repo/apply_branch_protection.sh" ]; then
+  bash "$PROJECT_ROOT/scripts/repo/apply_branch_protection.sh"
+  log "INFO" "Applied branch protection rules"
+else
+  log "WARN" "apply_branch_protection.sh not found, skipping branch protection setup"
+fi
+
 echo -e "${GREEN}Repository setup completed successfully!${NC}"
 log "INFO" "Repository setup completed successfully"
 echo -e "${YELLOW}Next steps:${NC}"

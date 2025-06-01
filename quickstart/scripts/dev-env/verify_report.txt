@@ -1,0 +1,11 @@
+Development Environment Verification Report
+Generated: Sat May 31 21:48:05 BST 2025
+----------------------------------------
+Errors:
+[2025-05-31 21:48:03] [ERROR] Missing or incorrect setting: .editor.codeActionsOnSave["source.fixAll"] (should be true)
+[2025-05-31 21:48:03] [ERROR] Missing or incorrect IDE settings: .editor.codeActionsOnSave["source.fixAll"]
+[2025-05-31 21:48:05] [ERROR] Security scan failed
+\nWarnings:
+[2025-05-31 21:47:52] [WARN] Could not determine network speed. Skipping check.
+\nFull log: /Users/nacer/Dev/github/alcall/logs/dev-env/dev_env_verify_20250531_214729.log
+\nVerification completed at Sat May 31 21:48:05 BST 2025

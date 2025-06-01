@@ -1,0 +1,11 @@
+# CODEOWNERS for UnifiedChat
+/services/auth-service/ @core-team
+/services/message-service/ @core-team
+/services/realtime-service/ @core-team
+/services/user-service/ @core-team
+/services/payment-service/ @core-team
+/services/ai-service/ @ai-team
+/services/gateway-service/ @core-team
+/infrastructure/ @infra-team
+/docs/ @docs-team
+.github/ @security-team

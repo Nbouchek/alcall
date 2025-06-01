@@ -1,0 +1,30 @@
+Repository Setup Verification Report
+Generated: Sun Jun  1 19:05:38 BST 2025
+----------------------------------------
+Errors:
+[2025-06-01 19:05:36] [ERROR] Required directory services/auth-service/src not found
+[2025-06-01 19:05:36] [ERROR] Required directory services/auth-service/tests not found
+[2025-06-01 19:05:36] [ERROR] Required directory services/message-service/src not found
+[2025-06-01 19:05:36] [ERROR] Required directory services/message-service/tests not found
+[2025-06-01 19:05:36] [ERROR] Required directory services/realtime-service/src not found
+[2025-06-01 19:05:36] [ERROR] Required directory services/realtime-service/tests not found
+[2025-06-01 19:05:36] [ERROR] Required directory services/user-service/src not found
+[2025-06-01 19:05:36] [ERROR] Required directory services/user-service/tests not found
+[2025-06-01 19:05:36] [ERROR] Required directory services/payment-service/src not found
+[2025-06-01 19:05:36] [ERROR] Required directory services/payment-service/tests not found
+[2025-06-01 19:05:36] [ERROR] Required directory services/ai-service/src not found
+[2025-06-01 19:05:36] [ERROR] Required directory services/ai-service/tests not found
+[2025-06-01 19:05:36] [ERROR] Required directory services/gateway-service/src not found
+[2025-06-01 19:05:36] [ERROR] Required directory services/gateway-service/tests not found
+[2025-06-01 19:05:36] [ERROR] Required file LICENSE not found
+[2025-06-01 19:05:36] [ERROR] Required file CODE_OF_CONDUCT.md not found
+[2025-06-01 19:05:36] [ERROR] Required file SECURITY.md not found
+[2025-06-01 19:05:36] [ERROR] Required file CHANGELOG.md not found
+[2025-06-01 19:05:37] [ERROR] No release/* branch found
+[2025-06-01 19:05:37] [ERROR] Branch main: required_signatures not enabled
+[2025-06-01 19:05:37] [ERROR] Branch main: required_linear_history not enabled
+[2025-06-01 19:05:38] [ERROR] Branch develop: required_signatures not enabled
+[2025-06-01 19:05:38] [ERROR] Branch develop: required_linear_history not enabled
+No warnings found.
+\nFull log: /Users/nacer/Dev/github/alcall/logs/repo/repo_verify_20250601_190536.log
+\nVerification completed at Sun Jun  1 19:05:38 BST 2025

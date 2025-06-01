@@ -244,3 +244,49 @@ For issues or questions:
 - [CICD Documentation](../cicd/README.md)
 - [Development Environment Documentation](../dev-env/README.md)
 - [Repository Documentation](../repo/README.md)
+
+# Local Infrastructure Setup
+
+## Prerequisites
+
+- Docker
+- kind
+- kubectl
+- helm
+
+## Steps
+
+1. **Create the local Kubernetes cluster with Istio, namespaces, storage, and network policies:**
+
+   ```bash
+   ./setup_kind_cluster.sh
+   ```
+
+2. **Deploy monitoring and logging (Prometheus, Grafana, ELK):**
+
+   ```bash
+   ./setup_monitoring_logging.sh
+   ```
+
+3. **Access Grafana:**
+
+   - Get the admin password:
+     ```bash
+     kubectl get secret --namespace monitoring-dev prometheus-grafana -o jsonpath="{.data.admin-password}" | base64 --decode; echo
+     ```
+   - Port-forward:
+     ```bash
+     kubectl port-forward svc/prometheus-grafana -n monitoring-dev 3000:80
+     ```
+   - Open [http://localhost:3000](http://localhost:3000)
+
+4. **Access Kibana:**
+   - Port-forward:
+     ```bash
+     kubectl port-forward svc/kibana-kibana -n logging-dev 5601:5601
+     ```
+   - Open [http://localhost:5601](http://localhost:5601)
+
+---
+
+For cloud (staging/prod) infrastructure, see `infrastructure/terraform/` and the main project README.

@@ -29,6 +29,12 @@ tools:
   gh:
     version: "2.0.0"
     install_command: "brew install gh"
+  trivy:
+    version: "0.50.0"
+    install_command: "brew install aquasecurity/trivy/trivy"
+  docker-credential-helper:
+    version: "0.6.4"
+    install_command: "brew install docker-credential-helper"
 
 # Development directories
 directories:
