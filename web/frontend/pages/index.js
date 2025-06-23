@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import Head from "next/head";
 import axios from "axios";
+import AudioCall from "../components/AudioCall";
 
 const AUTH_API_BASE_URL =
   process.env.NEXT_PUBLIC_AUTH_API_URL ||
@@ -177,19 +178,28 @@ export default function Home() {
                 <span className="text-xs text-gray-400">(Direct Message)</span>
               )}
             </div>
-            {isLoggedIn && (
-              <button
-                onClick={() => {
-                  localStorage.removeItem("token");
-                  setIsLoggedIn(false);
-                  setUser(null);
-                  setMessages([]);
-                }}
-                className="text-xs text-red-500 hover:text-red-700 border border-red-200 px-3 py-1 rounded transition"
-              >
-                Logout
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {isLoggedIn && (
+                <AudioCall
+                  user={user}
+                  selectedReceiver={selectedReceiver}
+                  onCallEnd={() => {}}
+                />
+              )}
+              {isLoggedIn && (
+                <button
+                  onClick={() => {
+                    localStorage.removeItem("token");
+                    setIsLoggedIn(false);
+                    setUser(null);
+                    setMessages([]);
+                  }}
+                  className="text-xs text-red-500 hover:text-red-700 border border-red-200 px-3 py-1 rounded transition"
+                >
+                  Logout
+                </button>
+              )}
+            </div>
           </header>
           {/* Login Form */}
           {!isLoggedIn && (
