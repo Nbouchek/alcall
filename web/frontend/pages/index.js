@@ -16,6 +16,7 @@ export default function Home() {
   const [newMessage, setNewMessage] = useState("");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [selectedReceiver, setSelectedReceiver] = useState(4); // Default to Linda
+  const [audioServiceStatus, setAudioServiceStatus] = useState("checking");
   const [users] = useState([
     { id: 1, username: "admin" },
     { id: 4, username: "Linda" },
@@ -33,6 +34,28 @@ export default function Home() {
   });
 
   const chatEndRef = useRef(null);
+
+  // Check audio service status
+  const checkAudioService = async () => {
+    const AUDIO_SERVICE_URL =
+      process.env.NEXT_PUBLIC_AUDIO_API_URL ||
+      "https://unifiedchat-audio-service.onrender.com";
+    try {
+      const response = await fetch(`${AUDIO_SERVICE_URL}/health`);
+      if (response.ok) {
+        setAudioServiceStatus("available");
+      } else {
+        setAudioServiceStatus("unavailable");
+      }
+    } catch (error) {
+      console.log("Audio service not available:", error);
+      setAudioServiceStatus("unavailable");
+    }
+  };
+
+  useEffect(() => {
+    checkAudioService();
+  }, []);
 
   const login = async (e) => {
     e.preventDefault();
@@ -145,23 +168,55 @@ export default function Home() {
               {users
                 .filter((u) => u.id !== user?.id)
                 .map((u) => (
-                  <button
-                    key={u.id}
-                    onClick={() => setSelectedReceiver(u.id)}
-                    className={`w-full text-left px-3 py-2 rounded-lg mb-2 transition-colors duration-150 ${
-                      selectedReceiver === u.id
-                        ? "bg-blue-100 text-blue-800 font-semibold"
-                        : "hover:bg-gray-100 text-gray-700"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span>@{u.username}</span>
-                      <div className="flex items-center gap-1">
-                        {/* Call indicator - you can add logic here to show when user is in call */}
-                        <div className="w-2 h-2 rounded-full bg-gray-300"></div>
+                  <div key={u.id} className="flex items-center gap-2 mb-2">
+                    <button
+                      onClick={() => setSelectedReceiver(u.id)}
+                      className={`flex-1 text-left px-3 py-2 rounded-lg transition-colors duration-150 ${
+                        selectedReceiver === u.id
+                          ? "bg-blue-100 text-blue-800 font-semibold"
+                          : "hover:bg-gray-100 text-gray-700"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span>@{u.username}</span>
+                        <div className="flex items-center gap-1">
+                          {/* Call indicator - you can add logic here to show when user is in call */}
+                          <div className="w-2 h-2 rounded-full bg-gray-300"></div>
+                        </div>
                       </div>
-                    </div>
-                  </button>
+                    </button>
+                    {/* Call button for each user */}
+                    <button
+                      onClick={() => {
+                        setSelectedReceiver(u.id);
+                        // Trigger call for this specific user
+                        setTimeout(() => {
+                          const callButton = document.querySelector(
+                            '.audio-call-container button[title="Start audio call"]'
+                          );
+                          if (callButton) {
+                            callButton.click();
+                          }
+                        }, 100);
+                      }}
+                      className="bg-green-500 hover:bg-green-600 text-white p-2 rounded-lg transition"
+                      title={`Call ${u.username}`}
+                    >
+                      <svg
+                        className="w-3 h-3"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+                        />
+                      </svg>
+                    </button>
+                  </div>
                 ))}
             </div>
             <div className="p-4 border-t text-xs text-gray-400">
@@ -184,15 +239,70 @@ export default function Home() {
                 <span className="text-xs text-gray-400">(Direct Message)</span>
               )}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
+              {/* Prominent Call Button */}
               {isLoggedIn && (
-                <AudioCall
-                  user={user}
-                  selectedReceiver={selectedReceiver}
-                  onCallEnd={() => {}}
-                  getUserName={getUserName}
-                />
+                <button
+                  onClick={() => {
+                    if (audioServiceStatus === "available") {
+                      // Trigger call from AudioCall component
+                      const callButton = document.querySelector(
+                        '.audio-call-container button[title="Start audio call"]'
+                      );
+                      if (callButton) {
+                        callButton.click();
+                      } else {
+                        alert(
+                          "Audio call feature is loading... Please wait a moment and try again."
+                        );
+                      }
+                    } else {
+                      alert(
+                        "Audio service is not available. Please check if the audio service is deployed."
+                      );
+                    }
+                  }}
+                  className={`px-4 py-2 rounded-lg transition flex items-center gap-2 font-medium ${
+                    audioServiceStatus === "available"
+                      ? "bg-green-500 hover:bg-green-600 text-white"
+                      : "bg-gray-400 text-gray-600 cursor-not-allowed"
+                  }`}
+                  title={
+                    audioServiceStatus === "available"
+                      ? "Start audio call"
+                      : "Audio service unavailable"
+                  }
+                  disabled={audioServiceStatus !== "available"}
+                >
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+                    />
+                  </svg>
+                  {audioServiceStatus === "checking" ? "..." : "Call"}
+                </button>
               )}
+
+              {/* Audio Call Component (hidden but functional) */}
+              {isLoggedIn && (
+                <div className="hidden">
+                  <AudioCall
+                    user={user}
+                    selectedReceiver={selectedReceiver}
+                    onCallEnd={() => {}}
+                    getUserName={getUserName}
+                  />
+                </div>
+              )}
+
               {isLoggedIn && (
                 <button
                   onClick={() => {
