@@ -36,5 +36,5 @@ unified-chat/
       ├── architecture/     # Architecture decisions
       └── development/      # Development guides
 
-Always write follow the highest standards.
+Always write code that follows the highest standards.
 YOU MUST ALWAYS keep your project well-documented.

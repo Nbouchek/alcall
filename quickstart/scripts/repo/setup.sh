@@ -214,8 +214,8 @@ ALLOWED_DIRS=(
   "docs/development"
 )
 for dir in "${ALLOWED_DIRS[@]}"; do
-  mkdir -p "$dir"
-  log "INFO" "Created directory: $dir"
+      mkdir -p "$dir"
+      log "INFO" "Created directory: $dir"
 done
 
 # Create documentation files (if defined in config)
