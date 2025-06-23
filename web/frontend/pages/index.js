@@ -23,6 +23,7 @@ export default function Home() {
     { id: 7, username: "Ahmed" },
     { id: 8, username: "Hamid" },
     { id: 9, username: "Mueen" },
+    { id: 10, username: "Nacer" },
   ]);
 
   const [loginForm, setLoginForm] = useState({
