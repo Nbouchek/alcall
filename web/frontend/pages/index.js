@@ -25,12 +25,14 @@ export default function Home() {
 
   const login = async (e) => {
     e.preventDefault();
+    console.log("Login button clicked", loginForm);
     try {
       const response = await axios.post(`${API_BASE_URL}/login`, loginForm);
       localStorage.setItem("token", response.data.token);
       setUser(response.data.user);
       setIsLoggedIn(true);
     } catch (error) {
+      console.error("Login error:", error);
       alert("Login failed: " + (error.response?.data?.error || error.message));
     }
   };
