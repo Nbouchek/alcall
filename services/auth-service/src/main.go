@@ -2,6 +2,7 @@ package main
 
 import (
     "log"
+    "os"
     "time"
     "github.com/gin-gonic/gin"
     "github.com/golang-jwt/jwt/v5"
@@ -77,6 +78,12 @@ func login(c *gin.Context) {
     // Check if user exists and password matches
     if userData, exists := users[req.Username]; exists {
         if userData["password"] == req.Password {
+            // Get JWT secret from environment variable
+            jwtSecret := os.Getenv("JWT_SECRET")
+            if jwtSecret == "" {
+                jwtSecret = "your-secret-key" // fallback for development
+            }
+
             // Generate JWT token
             token := jwt.NewWithClaims(jwt.SigningMethodHS256, Claims{
                 UserID:   uint(userData["id"].(int)),
@@ -87,7 +94,7 @@ func login(c *gin.Context) {
                 },
             })
 
-            tokenString, err := token.SignedString([]byte("your-secret-key"))
+            tokenString, err := token.SignedString([]byte(jwtSecret))
             if err != nil {
                 c.JSON(500, gin.H{"error": "Failed to generate token"})
                 return
@@ -125,8 +132,14 @@ func verifyToken(c *gin.Context) {
         tokenString = tokenString[7:]
     }
 
+    // Get JWT secret from environment variable
+    jwtSecret := os.Getenv("JWT_SECRET")
+    if jwtSecret == "" {
+        jwtSecret = "your-secret-key" // fallback for development
+    }
+
     token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
-        return []byte("your-secret-key"), nil
+        return []byte(jwtSecret), nil
     })
 
     if err != nil || !token.Valid {
