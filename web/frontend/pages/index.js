@@ -14,15 +14,15 @@ export default function Home() {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [selectedReceiver, setSelectedReceiver] = useState(2); // Default to user 2
+  const [selectedReceiver, setSelectedReceiver] = useState(4); // Default to Linda
   const [users] = useState([
     { id: 1, username: "admin" },
-    { id: 2, username: "user2" },
-    { id: 3, username: "user3" },
     { id: 4, username: "Linda" },
     { id: 5, username: "Hana" },
     { id: 6, username: "Adam" },
     { id: 7, username: "Ahmed" },
+    { id: 8, username: "Hamid" },
+    { id: 9, username: "Mueen" },
   ]);
 
   const [loginForm, setLoginForm] = useState({
