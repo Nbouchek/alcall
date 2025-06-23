@@ -24,7 +24,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: NEXT_PUBLIC_API_URL
-        value: https://unifiedchat-api.onrender.com
+        value: https://unifiedchat-auth.onrender.com
     routes:
       - type: rewrite
         source: /
@@ -103,7 +103,7 @@ cat > RENDER_DEPLOYMENT.md << 'EOF'
 Add these environment variables:
 ```
 NODE_ENV=production
-NEXT_PUBLIC_API_URL=https://your-auth-service-url.onrender.com
+NEXT_PUBLIC_API_URL=https://unifiedchat-auth.onrender.com
 ```
 
 ### Step 5: Deploy
