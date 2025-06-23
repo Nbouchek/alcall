@@ -456,33 +456,34 @@ const AudioCall = ({ user, selectedReceiver, onCallEnd, getUserName }) => {
         </div>
       )}
 
-      {/* Call Status Bar */}
+      {/* Floating Call Bar (Slack-style, bottom) */}
       {isCallActive && (
-        <div className="fixed top-0 left-0 right-0 bg-green-500 text-white py-2 px-4 z-40 flex items-center justify-between">
+        <div className="fixed left-1/2 bottom-6 transform -translate-x-1/2 bg-white shadow-2xl rounded-full px-6 py-3 flex items-center gap-6 z-50 border border-gray-200 animate-fade-in">
           <div className="flex items-center gap-3">
-            <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
-            <span className="font-medium">
-              Call with{" "}
+            <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+            <span className="font-semibold text-gray-800">
+              Huddle with{" "}
               {getUserName
                 ? getUserName(selectedReceiver)
                 : `User ${selectedReceiver}`}
             </span>
-            <span className="text-sm opacity-90">
+            <span className="text-sm text-gray-500">
               {formatDuration(callDuration)}
             </span>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={toggleMute}
-              className={`p-2 rounded-full transition ${
+              className={`p-2 rounded-full transition border ${
                 isMuted
-                  ? "bg-red-500 hover:bg-red-600"
-                  : "bg-white bg-opacity-20 hover:bg-opacity-30"
+                  ? "bg-red-100 border-red-300 text-red-600"
+                  : "bg-gray-100 border-gray-300 text-gray-700"
               }`}
+              title={isMuted ? "Unmute" : "Mute"}
             >
               {isMuted ? (
                 <svg
-                  className="w-4 h-4"
+                  className="w-5 h-5"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -502,7 +503,7 @@ const AudioCall = ({ user, selectedReceiver, onCallEnd, getUserName }) => {
                 </svg>
               ) : (
                 <svg
-                  className="w-4 h-4"
+                  className="w-5 h-5"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -518,10 +519,11 @@ const AudioCall = ({ user, selectedReceiver, onCallEnd, getUserName }) => {
             </button>
             <button
               onClick={endCall}
-              className="bg-red-500 hover:bg-red-600 p-2 rounded-full transition"
+              className="bg-red-500 hover:bg-red-600 text-white p-2 rounded-full transition shadow-lg"
+              title="End Huddle"
             >
               <svg
-                className="w-4 h-4"
+                className="w-5 h-5"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -530,7 +532,7 @@ const AudioCall = ({ user, selectedReceiver, onCallEnd, getUserName }) => {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+                  d="M6 18L18 6M6 6l12 12"
                 />
               </svg>
             </button>
@@ -538,27 +540,10 @@ const AudioCall = ({ user, selectedReceiver, onCallEnd, getUserName }) => {
         </div>
       )}
 
-      {/* Call Button */}
+      {/* Call Button (hidden, for triggers) */}
       {!isInCall && !isRinging && (
-        <button
-          onClick={startCall}
-          className="bg-green-500 hover:bg-green-600 text-white p-2 rounded-lg transition flex items-center gap-2"
-          title="Start audio call"
-        >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
-            />
-          </svg>
-          <span className="hidden sm:inline">Call</span>
+        <button title="Start audio call" onClick={startCall} className="hidden">
+          Call
         </button>
       )}
 
