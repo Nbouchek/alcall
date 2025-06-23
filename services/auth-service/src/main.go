@@ -33,16 +33,6 @@ var users = map[string]map[string]interface{}{
         "password": "password123",
         "email":    "admin@example.com",
     },
-    "user2": {
-        "id":       2,
-        "password": "password123",
-        "email":    "user2@example.com",
-    },
-    "user3": {
-        "id":       3,
-        "password": "password123",
-        "email":    "user3@example.com",
-    },
     "Linda": {
         "id":       4,
         "password": "Linda",
@@ -62,6 +52,16 @@ var users = map[string]map[string]interface{}{
         "id":       7,
         "password": "Ahmed",
         "email":    "ahmed@example.com",
+    },
+    "Hamid": {
+        "id":       8,
+        "password": "Hamid",
+        "email":    "hamid@example.com",
+    },
+    "Mueen": {
+        "id":       9,
+        "password": "Mueen",
+        "email":    "mueen@example.com",
     },
 }
 
