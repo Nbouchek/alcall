@@ -3,7 +3,7 @@ import Head from "next/head";
 import axios from "axios";
 
 // Use external IP for cross-machine testing
-const API_BASE_URL = "http://192.168.1.249";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 
 export default function Home() {
   const [user, setUser] = useState(null);
