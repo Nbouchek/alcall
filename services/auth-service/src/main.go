@@ -63,6 +63,11 @@ var users = map[string]map[string]interface{}{
         "password": "Mueen",
         "email":    "mueen@example.com",
     },
+    "Nacer": {
+        "id":       10,
+        "password": "Nacer",
+        "email":    "nacer@example.com",
+    },
 }
 
 func main() {
