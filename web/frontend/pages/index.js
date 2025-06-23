@@ -2,8 +2,9 @@ import { useState, useEffect } from "react";
 import Head from "next/head";
 import axios from "axios";
 
-// Use external IP for cross-machine testing
-const API_BASE_URL = "https://unifiedchat-auth.onrender.com";
+// Use environment variable for API base URL
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || "https://unifiedchat-auth.onrender.com";
 
 export default function Home() {
   const [user, setUser] = useState(null);
@@ -25,15 +26,12 @@ export default function Home() {
   const login = async (e) => {
     e.preventDefault();
     try {
-      const response = await axios.post(
-        `${API_BASE_URL}:8082/login`,
-        loginForm
-      );
+      const response = await axios.post(`${API_BASE_URL}/login`, loginForm);
       localStorage.setItem("token", response.data.token);
       setUser(response.data.user);
       setIsLoggedIn(true);
     } catch (error) {
-      alert("Login failed: " + error.response?.data?.error || error.message);
+      alert("Login failed: " + (error.response?.data?.error || error.message));
     }
   };
 
@@ -41,7 +39,7 @@ export default function Home() {
     if (!newMessage.trim()) return;
 
     try {
-      const response = await axios.post(`${API_BASE_URL}:8083/messages`, {
+      const response = await axios.post(`${API_BASE_URL}/messages`, {
         sender_id: user.id,
         receiver_id: selectedReceiver,
         content: newMessage,
@@ -51,17 +49,15 @@ export default function Home() {
       setNewMessage("");
     } catch (error) {
       alert(
-        "Failed to send message: " + error.response?.data?.error ||
-          error.message
+        "Failed to send message: " +
+          (error.response?.data?.error || error.message)
       );
     }
   };
 
   const loadMessages = async () => {
     try {
-      const response = await axios.get(
-        `${API_BASE_URL}:8083/messages/${user.id}`
-      );
+      const response = await axios.get(`${API_BASE_URL}/messages/${user.id}`);
       setMessages(response.data);
     } catch (error) {
       console.error("Failed to load messages:", error);
