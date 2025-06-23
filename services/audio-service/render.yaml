@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: unifiedchat-audio-service
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 8084
+      - key: NODE_ENV
+        value: production
