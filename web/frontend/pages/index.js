@@ -240,12 +240,6 @@ export default function Home() {
                 >
                   Login
                 </button>
-                <div className="mt-4 p-3 bg-gray-50 rounded text-xs text-gray-600">
-                  <p>Test Accounts:</p>
-                  <p>• admin / password123</p>
-                  <p>• user2 / password123</p>
-                  <p>• user3 / password123</p>
-                </div>
                 <div className="mt-2 p-2 bg-blue-50 rounded text-xs text-blue-600">
                   Connected to: Auth: {AUTH_API_BASE_URL} | Messages:{" "}
                   {MESSAGE_API_BASE_URL}
