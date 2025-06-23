@@ -2,9 +2,12 @@ import { useState, useEffect } from "react";
 import Head from "next/head";
 import axios from "axios";
 
-// Use environment variable for API base URL
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "https://unifiedchat-auth.onrender.com";
+const AUTH_API_BASE_URL =
+  process.env.NEXT_PUBLIC_AUTH_API_URL ||
+  "https://unifiedchat-auth.onrender.com";
+const MESSAGE_API_BASE_URL =
+  process.env.NEXT_PUBLIC_MESSAGE_API_URL ||
+  "https://unifiedchat-message-service.onrender.com";
 
 export default function Home() {
   const [user, setUser] = useState(null);
@@ -27,8 +30,11 @@ export default function Home() {
     e.preventDefault();
     console.log("Login button clicked", loginForm);
     try {
-      console.log("Sending login request to:", `${API_BASE_URL}/login`);
-      const response = await axios.post(`${API_BASE_URL}/login`, loginForm);
+      console.log("Sending login request to:", `${AUTH_API_BASE_URL}/login`);
+      const response = await axios.post(
+        `${AUTH_API_BASE_URL}/login`,
+        loginForm
+      );
       console.log("Login response:", response);
       localStorage.setItem("token", response.data.token);
       setUser(response.data.user);
@@ -43,7 +49,7 @@ export default function Home() {
     if (!newMessage.trim()) return;
 
     try {
-      const response = await axios.post(`${API_BASE_URL}/messages`, {
+      const response = await axios.post(`${MESSAGE_API_BASE_URL}/messages`, {
         sender_id: user.id,
         receiver_id: selectedReceiver,
         content: newMessage,
@@ -61,7 +67,9 @@ export default function Home() {
 
   const loadMessages = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/messages/${user.id}`);
+      const response = await axios.get(
+        `${MESSAGE_API_BASE_URL}/messages/${user.id}`
+      );
       setMessages(response.data);
     } catch (error) {
       console.error("Failed to load messages:", error);
@@ -153,7 +161,8 @@ export default function Home() {
             </div>
             <div className="mt-2 p-2 bg-blue-50 rounded">
               <p className="text-xs text-blue-600">
-                Connected to: {API_BASE_URL}
+                Connected to: Auth: {AUTH_API_BASE_URL} | Messages:{" "}
+                {MESSAGE_API_BASE_URL}
               </p>
             </div>
           </div>
