@@ -1,16 +1,21 @@
 import { useState, useEffect, useRef } from "react";
 
-const AudioCall = ({ user, selectedReceiver, onCallEnd }) => {
+const AudioCall = ({ user, selectedReceiver, onCallEnd, getUserName }) => {
   const [isInCall, setIsInCall] = useState(false);
   const [isRinging, setIsRinging] = useState(false);
   const [callStatus, setCallStatus] = useState("");
   const [incomingCall, setIncomingCall] = useState(null);
+  const [callDuration, setCallDuration] = useState(0);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isCallActive, setIsCallActive] = useState(false);
 
   const localStreamRef = useRef(null);
   const remoteStreamRef = useRef(null);
   const peerConnectionRef = useRef(null);
   const wsRef = useRef(null);
   const audioRef = useRef(null);
+  const durationIntervalRef = useRef(null);
+  const ringtoneIntervalRef = useRef(null);
 
   const AUDIO_SERVICE_URL =
     process.env.NEXT_PUBLIC_AUDIO_API_URL ||
@@ -23,6 +28,12 @@ const AudioCall = ({ user, selectedReceiver, onCallEnd }) => {
     return () => {
       if (wsRef.current) {
         wsRef.current.close();
+      }
+      if (durationIntervalRef.current) {
+        clearInterval(durationIntervalRef.current);
+      }
+      if (ringtoneIntervalRef.current) {
+        clearInterval(ringtoneIntervalRef.current);
       }
     };
   }, [user]);
@@ -58,19 +69,25 @@ const AudioCall = ({ user, selectedReceiver, onCallEnd }) => {
       case "call_answered":
         setCallStatus("connected");
         setIsRinging(false);
+        setIsCallActive(true);
         stopRingtone();
+        startCallTimer();
         await establishWebRTCConnection(message.call_id);
         break;
       case "call_rejected":
         setCallStatus("rejected");
         setIsRinging(false);
         stopRingtone();
+        setTimeout(() => setCallStatus(""), 3000);
         break;
       case "call_ended":
         setCallStatus("ended");
         setIsInCall(false);
+        setIsCallActive(false);
+        stopCallTimer();
         stopRingtone();
         cleanupCall();
+        setTimeout(() => setCallStatus(""), 3000);
         break;
       case "offer":
         await handleOffer(message.data);
@@ -126,7 +143,9 @@ const AudioCall = ({ user, selectedReceiver, onCallEnd }) => {
 
       if (answer) {
         setIsInCall(true);
+        setIsCallActive(true);
         setCallStatus("connected");
+        startCallTimer();
         await establishWebRTCConnection(incomingCall.id);
       }
 
@@ -154,11 +173,44 @@ const AudioCall = ({ user, selectedReceiver, onCallEnd }) => {
       });
 
       setIsInCall(false);
+      setIsCallActive(false);
       setCallStatus("ended");
+      stopCallTimer();
       cleanupCall();
     } catch (error) {
       console.error("Failed to end call:", error);
     }
+  };
+
+  const toggleMute = () => {
+    if (localStreamRef.current) {
+      const audioTrack = localStreamRef.current.getAudioTracks()[0];
+      if (audioTrack) {
+        audioTrack.enabled = !audioTrack.enabled;
+        setIsMuted(!audioTrack.enabled);
+      }
+    }
+  };
+
+  const startCallTimer = () => {
+    setCallDuration(0);
+    durationIntervalRef.current = setInterval(() => {
+      setCallDuration((prev) => prev + 1);
+    }, 1000);
+  };
+
+  const stopCallTimer = () => {
+    if (durationIntervalRef.current) {
+      clearInterval(durationIntervalRef.current);
+      durationIntervalRef.current = null;
+    }
+    setCallDuration(0);
+  };
+
+  const formatDuration = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
   const establishWebRTCConnection = async (callId) => {
@@ -295,34 +347,10 @@ const AudioCall = ({ user, selectedReceiver, onCallEnd }) => {
   };
 
   const playRingtone = () => {
-    // Simple ringtone using Web Audio API
     const audioContext = new (window.AudioContext ||
       window.webkitAudioContext)();
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
 
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-
-    oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-    oscillator.frequency.setValueAtTime(600, audioContext.currentTime + 0.5);
-
-    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(
-      0.01,
-      audioContext.currentTime + 0.5
-    );
-
-    oscillator.start(audioContext.currentTime);
-    oscillator.stop(audioContext.currentTime + 0.5);
-
-    // Repeat ringtone
-    const ringInterval = setInterval(() => {
-      if (!isRinging) {
-        clearInterval(ringInterval);
-        return;
-      }
-
+    const playTone = () => {
       const oscillator = audioContext.createOscillator();
       const gainNode = audioContext.createGain();
 
@@ -332,7 +360,7 @@ const AudioCall = ({ user, selectedReceiver, onCallEnd }) => {
       oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
       oscillator.frequency.setValueAtTime(600, audioContext.currentTime + 0.5);
 
-      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+      gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
       gainNode.gain.exponentialRampToValueAtTime(
         0.01,
         audioContext.currentTime + 0.5
@@ -340,11 +368,17 @@ const AudioCall = ({ user, selectedReceiver, onCallEnd }) => {
 
       oscillator.start(audioContext.currentTime);
       oscillator.stop(audioContext.currentTime + 0.5);
-    }, 1000);
+    };
+
+    playTone();
+    ringtoneIntervalRef.current = setInterval(playTone, 1000);
   };
 
   const stopRingtone = () => {
-    // Ringtone will stop automatically when isRinging becomes false
+    if (ringtoneIntervalRef.current) {
+      clearInterval(ringtoneIntervalRef.current);
+      ringtoneIntervalRef.current = null;
+    }
   };
 
   if (!user) return null;
@@ -354,66 +388,209 @@ const AudioCall = ({ user, selectedReceiver, onCallEnd }) => {
       {/* Incoming Call Modal */}
       {isRinging && incomingCall && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-sm w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4">Incoming Call</h3>
-            <p className="text-gray-600 mb-6">
-              {incomingCall.caller_id === user.id
-                ? "Unknown"
-                : `Call from User ${incomingCall.caller_id}`}
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => answerCall(true)}
-                className="flex-1 bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600"
-              >
-                Answer
-              </button>
-              <button
-                onClick={() => answerCall(false)}
-                className="flex-1 bg-red-500 text-white py-2 px-4 rounded hover:bg-red-600"
-              >
-                Decline
-              </button>
+          <div className="bg-white rounded-xl p-8 max-w-sm w-full mx-4 shadow-2xl">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg
+                  className="w-8 h-8 text-green-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+                  />
+                </svg>
+              </div>
+              <h3 className="text-xl font-semibold mb-2">Incoming Call</h3>
+              <p className="text-gray-600 mb-6">
+                {getUserName
+                  ? getUserName(incomingCall.caller_id)
+                  : `User ${incomingCall.caller_id}`}
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => answerCall(true)}
+                  className="flex-1 bg-green-500 text-white py-3 px-4 rounded-lg hover:bg-green-600 transition flex items-center justify-center gap-2"
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+                    />
+                  </svg>
+                  Answer
+                </button>
+                <button
+                  onClick={() => answerCall(false)}
+                  className="flex-1 bg-red-500 text-white py-3 px-4 rounded-lg hover:bg-red-600 transition flex items-center justify-center gap-2"
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                  Decline
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Call Controls */}
-      <div className="flex gap-2 mb-4">
-        {!isInCall && !isRinging && (
-          <button
-            onClick={startCall}
-            className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition"
-          >
-            📞 Call
-          </button>
-        )}
+      {/* Call Status Bar */}
+      {isCallActive && (
+        <div className="fixed top-0 left-0 right-0 bg-green-500 text-white py-2 px-4 z-40 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+            <span className="font-medium">
+              Call with{" "}
+              {getUserName
+                ? getUserName(selectedReceiver)
+                : `User ${selectedReceiver}`}
+            </span>
+            <span className="text-sm opacity-90">
+              {formatDuration(callDuration)}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={toggleMute}
+              className={`p-2 rounded-full transition ${
+                isMuted
+                  ? "bg-red-500 hover:bg-red-600"
+                  : "bg-white bg-opacity-20 hover:bg-opacity-30"
+              }`}
+            >
+              {isMuted ? (
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
+                  />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"
+                  />
+                </svg>
+              ) : (
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+                  />
+                </svg>
+              )}
+            </button>
+            <button
+              onClick={endCall}
+              className="bg-red-500 hover:bg-red-600 p-2 rounded-full transition"
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+                />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
 
-        {isInCall && (
-          <button
-            onClick={endCall}
-            className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition"
+      {/* Call Button */}
+      {!isInCall && !isRinging && (
+        <button
+          onClick={startCall}
+          className="bg-green-500 hover:bg-green-600 text-white p-2 rounded-lg transition flex items-center gap-2"
+          title="Start audio call"
+        >
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
           >
-            📞 End Call
-          </button>
-        )}
-      </div>
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+            />
+          </svg>
+          <span className="hidden sm:inline">Call</span>
+        </button>
+      )}
 
-      {/* Call Status */}
-      {callStatus && (
+      {/* Call Status Notifications */}
+      {callStatus && !isCallActive && (
         <div
-          className={`text-sm p-2 rounded mb-4 ${
+          className={`fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 max-w-sm ${
             callStatus === "connected"
-              ? "bg-green-100 text-green-800"
+              ? "bg-green-500 text-white"
               : callStatus === "ringing"
-              ? "bg-yellow-100 text-yellow-800"
+              ? "bg-yellow-500 text-white"
               : callStatus === "ended"
-              ? "bg-gray-100 text-gray-800"
-              : "bg-red-100 text-red-800"
+              ? "bg-gray-500 text-white"
+              : callStatus === "rejected"
+              ? "bg-red-500 text-white"
+              : "bg-blue-500 text-white"
           }`}
         >
-          Call Status: {callStatus}
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+            <span className="font-medium">
+              {callStatus === "connected"
+                ? "Call connected"
+                : callStatus === "ringing"
+                ? "Calling..."
+                : callStatus === "ended"
+                ? "Call ended"
+                : callStatus === "rejected"
+                ? "Call rejected"
+                : "Call status: " + callStatus}
+            </span>
+          </div>
         </div>
       )}
 
