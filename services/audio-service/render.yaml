@@ -3,6 +3,7 @@ services:
     name: unifiedchat-audio-service
     runtime: docker
     plan: free
+    rootDir: services/audio-service
     dockerfilePath: ./Dockerfile
     dockerContext: .
     healthCheckPath: /health
