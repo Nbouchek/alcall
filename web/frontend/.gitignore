@@ -1,0 +1,29 @@
+# dependencies
+node_modules/
+.pnp/
+.pnp.js
+
+# next.js build output
+.next/
+out/
+
+# production
+build/
+dist/
+
+# misc
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Tailwind JIT cache
+.tailwindcss/
+
+# VSCode
+.vscode/
