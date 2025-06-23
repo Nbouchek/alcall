@@ -27,7 +27,9 @@ export default function Home() {
     e.preventDefault();
     console.log("Login button clicked", loginForm);
     try {
+      console.log("Sending login request to:", `${API_BASE_URL}/login`);
       const response = await axios.post(`${API_BASE_URL}/login`, loginForm);
+      console.log("Login response:", response);
       localStorage.setItem("token", response.data.token);
       setUser(response.data.user);
       setIsLoggedIn(true);
