@@ -3,7 +3,7 @@ import Head from "next/head";
 import axios from "axios";
 
 // Use external IP for cross-machine testing
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+const API_BASE_URL = "https://unifiedchat-auth.onrender.com";
 
 export default function Home() {
   const [user, setUser] = useState(null);
