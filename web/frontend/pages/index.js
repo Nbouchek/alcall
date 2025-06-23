@@ -19,6 +19,10 @@ export default function Home() {
     { id: 1, username: "admin" },
     { id: 2, username: "user2" },
     { id: 3, username: "user3" },
+    { id: 4, username: "Linda" },
+    { id: 5, username: "Hana" },
+    { id: 6, username: "Adam" },
+    { id: 7, username: "Ahmed" },
   ]);
 
   const [loginForm, setLoginForm] = useState({
