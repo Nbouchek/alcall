@@ -24,6 +24,9 @@ const AUTH_API_BASE_URL =
 const MESSAGE_API_BASE_URL =
   process.env.NEXT_PUBLIC_MESSAGE_API_URL ||
   "https://unifiedchat-message-service.onrender.com";
+const REALTIME_API_BASE_URL =
+  process.env.NEXT_PUBLIC_REALTIME_API_URL ||
+  "https://unifiedchat-realtime-service.onrender.com";
 
 export default function Home() {
   const [user, setUser] = useState(null);
@@ -35,6 +38,7 @@ export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [users, setUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
+  const [onlineUsers, setOnlineUsers] = useState([]);
 
   const [loginForm, setLoginForm] = useState({
     username: "",
@@ -45,6 +49,7 @@ export default function Home() {
   const [popoverUser, setPopoverUser] = useState(null);
   const [popoverAnchor, setPopoverAnchor] = useState(null);
   const audioCallRef = useRef(null);
+  const wsRef = useRef(null);
 
   // Debug: Monitor AudioCall ref
   useEffect(() => {
@@ -240,6 +245,54 @@ export default function Home() {
     });
   }, [isLoggedIn, selectedReceiver, shouldShowChat, user]);
 
+  // Connect to realtime-service WebSocket and send username
+  useEffect(() => {
+    if (isLoggedIn && user?.username) {
+      // Close any previous connection
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+      const wsUrl = REALTIME_API_BASE_URL.replace(/^http/, "ws") + "/ws";
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+      ws.onopen = () => {
+        console.log("WebSocket connected, sending username:", user.username);
+        ws.send(user.username);
+      };
+      ws.onclose = () => {
+        console.log("WebSocket closed");
+      };
+      ws.onerror = (err) => {
+        console.error("WebSocket error:", err);
+      };
+      // No need to handle messages for presence
+      return () => {
+        ws.close();
+      };
+    }
+  }, [isLoggedIn, user?.username]);
+
+  // Poll /online-users endpoint every 5 seconds
+  useEffect(() => {
+    let interval;
+    const fetchOnlineUsers = async () => {
+      try {
+        const response = await axios.get(
+          `${REALTIME_API_BASE_URL}/online-users`
+        );
+        setOnlineUsers(response.data.online_users || []);
+      } catch (error) {
+        console.error("Failed to fetch online users:", error);
+        setOnlineUsers([]);
+      }
+    };
+    if (isLoggedIn) {
+      fetchOnlineUsers();
+      interval = setInterval(fetchOnlineUsers, 5000);
+    }
+    return () => interval && clearInterval(interval);
+  }, [isLoggedIn]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-100 via-blue-100 to-pink-100 flex flex-col">
       <Head>
@@ -380,22 +433,26 @@ export default function Home() {
                                 </div>
                                 <div
                                   className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white ${
-                                    selectedReceiver === u.id
-                                      ? "bg-yellow-300"
-                                      : "bg-green-400"
-                                  } animate-pulse`}
+                                    onlineUsers.includes(u.username)
+                                      ? "bg-green-400 animate-pulse"
+                                      : "bg-gray-400"
+                                  }`}
                                 ></div>
                               </div>
                               <div className="text-left">
                                 <div className="font-medium">@{u.username}</div>
                                 <div
                                   className={`text-xs ${
-                                    selectedReceiver === u.id
-                                      ? "text-white/80"
-                                      : "text-gray-500"
+                                    onlineUsers.includes(u.username)
+                                      ? selectedReceiver === u.id
+                                        ? "text-white/80"
+                                        : "text-gray-500"
+                                      : "text-gray-400 italic"
                                   }`}
                                 >
-                                  Available for chat
+                                  {onlineUsers.includes(u.username)
+                                    ? "Available for chat"
+                                    : "Offline"}
                                 </div>
                               </div>
                             </div>
