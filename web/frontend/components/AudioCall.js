@@ -82,6 +82,30 @@ const AudioCall = forwardRef(
       };
     }, [user]);
 
+    // Debug: Monitor AudioCall ref
+    useEffect(() => {
+      console.log("AudioCall ref status:", ref ? "Available" : "Not available");
+    }, [ref]);
+
+    // Debug: Monitor call states
+    useEffect(() => {
+      console.log("AudioCall: State changes:", {
+        isInCall,
+        isCallActive,
+        isRinging,
+        callStatus,
+        audioConnected,
+        currentCallId,
+      });
+    }, [
+      isInCall,
+      isCallActive,
+      isRinging,
+      callStatus,
+      audioConnected,
+      currentCallId,
+    ]);
+
     // Auto-hide connected status notification
     useEffect(() => {
       if (callStatus === "connected") {
@@ -590,11 +614,6 @@ const AudioCall = forwardRef(
       }
     };
 
-    // Debug: Monitor AudioCall ref
-    useEffect(() => {
-      console.log("AudioCall ref status:", ref ? "Available" : "Not available");
-    }, [ref]);
-
     if (!user) return null;
 
     return (
@@ -667,7 +686,7 @@ const AudioCall = forwardRef(
         )}
 
         {/* Enhanced Floating Call Bar */}
-        {isCallActive && (
+        {(isCallActive || (isInCall && currentCallId)) && (
           <div className="fixed left-1/2 bottom-6 transform -translate-x-1/2 bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 shadow-2xl rounded-full px-8 py-4 flex items-center gap-6 z-50 border-0 animate-fade-in backdrop-blur-sm">
             {/* Glowing ring effect */}
             <div className="absolute -inset-1 bg-gradient-to-r from-pink-600 to-purple-600 rounded-full blur opacity-30 animate-pulse"></div>
@@ -793,6 +812,19 @@ const AudioCall = forwardRef(
                   : "📱 " + callStatus}
               </span>
             </div>
+          </div>
+        )}
+
+        {/* Debug Component - Remove in production */}
+        {process.env.NODE_ENV === "development" && (
+          <div className="fixed top-4 left-4 bg-black/80 text-white p-4 rounded-lg text-xs z-50">
+            <div>Debug Info:</div>
+            <div>isInCall: {isInCall.toString()}</div>
+            <div>isCallActive: {isCallActive.toString()}</div>
+            <div>isRinging: {isRinging.toString()}</div>
+            <div>callStatus: {callStatus}</div>
+            <div>audioConnected: {audioConnected.toString()}</div>
+            <div>currentCallId: {currentCallId || "none"}</div>
           </div>
         )}
 
