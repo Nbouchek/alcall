@@ -8,10 +8,9 @@ RUN apt-get update && apt-get install -y \
     software-properties-common \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Janus from PPA
+# Add Janus PPA and install Janus
 RUN apt-get update && apt-get install -y \
     janus \
-    janus-plugins \
     && rm -rf /var/lib/apt/lists/*
 
 # Create necessary directories
