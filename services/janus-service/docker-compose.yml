@@ -5,9 +5,10 @@ services:
     image: meetecho/janus-gateway:latest
     container_name: unifiedchat-janus
     ports:
+      - "8090:8090"
       - "8088:8088"
       - "8089:8089"
-      - "8090:8090"
+      - "8188:8188"
       - "8000:8000"
       - "10000-10200:10000-10200/udp"
     volumes:
