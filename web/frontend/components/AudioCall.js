@@ -83,6 +83,27 @@ const AudioCall = forwardRef(
           currentCallId,
         };
       },
+      setVolume: (volume) => {
+        if (audioRef.current) {
+          audioRef.current.volume = Math.max(0, Math.min(1, volume));
+          console.log("AudioCall: Volume set to:", audioRef.current.volume);
+        } else {
+          console.error(
+            "AudioCall: No audio element available for volume control"
+          );
+        }
+      },
+      getVolume: () => {
+        if (audioRef.current) {
+          console.log("AudioCall: Current volume:", audioRef.current.volume);
+          return audioRef.current.volume;
+        } else {
+          console.error(
+            "AudioCall: No audio element available for volume check"
+          );
+          return 0;
+        }
+      },
     }));
 
     useEffect(() => {
@@ -484,6 +505,14 @@ const AudioCall = forwardRef(
           if (audioRef.current) {
             console.log("AudioCall: Setting audio element srcObject");
             audioRef.current.srcObject = event.streams[0];
+
+            // Set volume to maximum immediately
+            audioRef.current.volume = 1.0;
+            console.log(
+              "AudioCall: Audio volume set to maximum:",
+              audioRef.current.volume
+            );
+
             console.log("AudioCall: Audio element srcObject set successfully");
 
             // Ensure audio plays
@@ -491,6 +520,13 @@ const AudioCall = forwardRef(
               console.log(
                 "AudioCall: Audio metadata loaded, attempting to play"
               );
+              // Ensure volume is still at maximum
+              audioRef.current.volume = 1.0;
+              console.log(
+                "AudioCall: Audio volume confirmed at maximum:",
+                audioRef.current.volume
+              );
+
               audioRef.current
                 .play()
                 .then(() => {
@@ -628,11 +664,25 @@ const AudioCall = forwardRef(
             );
             audioRef.current.srcObject = event.streams[0];
 
+            // Set volume to maximum immediately
+            audioRef.current.volume = 1.0;
+            console.log(
+              "AudioCall: Audio volume set to maximum in handleOffer:",
+              audioRef.current.volume
+            );
+
             // Ensure audio plays and update connection status
             audioRef.current.onloadedmetadata = () => {
               console.log(
                 "AudioCall: Audio metadata loaded in handleOffer, attempting to play"
               );
+              // Ensure volume is still at maximum
+              audioRef.current.volume = 1.0;
+              console.log(
+                "AudioCall: Audio volume confirmed at maximum in handleOffer:",
+                audioRef.current.volume
+              );
+
               audioRef.current
                 .play()
                 .then(() => {
@@ -962,6 +1012,54 @@ const AudioCall = forwardRef(
                   <FaMicrophone className="w-5 h-5 animate-pulse group-hover:animate-bounce" />
                 )}
               </button>
+
+              {/* Volume Control */}
+              <div className="relative group">
+                <button
+                  onClick={() => {
+                    if (audioRef.current) {
+                      const currentVolume = audioRef.current.volume;
+                      const newVolume = currentVolume === 0 ? 1.0 : 0;
+                      audioRef.current.volume = newVolume;
+                      console.log("AudioCall: Volume toggled to:", newVolume);
+                    }
+                  }}
+                  className="group p-3 rounded-full transition-all duration-300 ease-in-out transform hover:scale-110 active:scale-95 shadow-lg bg-white/20 backdrop-blur-sm text-white border border-white/30"
+                  title="Toggle Volume"
+                >
+                  {audioRef.current && audioRef.current.volume > 0 ? (
+                    <FaVolumeUp className="w-5 h-5 animate-pulse group-hover:animate-bounce" />
+                  ) : (
+                    <FaVolumeMute className="w-5 h-5 animate-pulse group-hover:animate-bounce" />
+                  )}
+                </button>
+
+                {/* Volume Slider */}
+                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    defaultValue="1"
+                    onChange={(e) => {
+                      if (audioRef.current) {
+                        audioRef.current.volume = parseFloat(e.target.value);
+                        console.log(
+                          "AudioCall: Volume adjusted to:",
+                          audioRef.current.volume
+                        );
+                      }
+                    }}
+                    className="w-20 h-2 bg-white/30 rounded-lg appearance-none cursor-pointer slider"
+                    style={{
+                      background:
+                        "linear-gradient(to right, #ffffff 0%, #ffffff 100%)",
+                    }}
+                  />
+                </div>
+              </div>
+
               <button
                 onClick={endCall}
                 className="group bg-gradient-to-r from-red-400 to-pink-500 hover:from-red-500 hover:to-pink-600 text-white p-3 rounded-full transition-all duration-300 ease-in-out transform hover:scale-110 hover:shadow-2xl active:scale-95 shadow-lg"
@@ -1047,13 +1145,42 @@ const AudioCall = forwardRef(
           ref={audioRef}
           autoPlay
           muted={false}
+          volume={1.0}
           controls={false}
           style={{ display: "none" }}
-          onLoadedMetadata={() =>
-            console.log("AudioCall: Audio metadata loaded")
-          }
-          onCanPlay={() => console.log("AudioCall: Audio can play")}
-          onPlay={() => console.log("AudioCall: Audio started playing")}
+          onLoadedMetadata={() => {
+            console.log("AudioCall: Audio metadata loaded");
+            // Set volume to maximum when metadata is loaded
+            if (audioRef.current) {
+              audioRef.current.volume = 1.0;
+              console.log(
+                "AudioCall: Audio volume set to:",
+                audioRef.current.volume
+              );
+            }
+          }}
+          onCanPlay={() => {
+            console.log("AudioCall: Audio can play");
+            // Ensure volume is set when audio can play
+            if (audioRef.current) {
+              audioRef.current.volume = 1.0;
+              console.log(
+                "AudioCall: Audio volume confirmed at:",
+                audioRef.current.volume
+              );
+            }
+          }}
+          onPlay={() => {
+            console.log("AudioCall: Audio started playing");
+            // Double-check volume when audio starts playing
+            if (audioRef.current) {
+              audioRef.current.volume = 1.0;
+              console.log(
+                "AudioCall: Audio volume set on play:",
+                audioRef.current.volume
+              );
+            }
+          }}
           onPause={() => console.log("AudioCall: Audio paused")}
           onError={(e) => console.error("AudioCall: Audio error:", e)}
         />
