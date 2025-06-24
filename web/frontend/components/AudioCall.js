@@ -501,6 +501,21 @@ const AudioCall = forwardRef(
             "AudioCall: Connection state changed to:",
             peerConnection.connectionState
           );
+          // Update audio connection status when connection is established
+          if (peerConnection.connectionState === "connected") {
+            console.log(
+              "AudioCall: WebRTC connection established, setting audioConnected to true"
+            );
+            setAudioConnected(true);
+          } else if (
+            peerConnection.connectionState === "failed" ||
+            peerConnection.connectionState === "disconnected"
+          ) {
+            console.log(
+              "AudioCall: WebRTC connection failed/disconnected, setting audioConnected to false"
+            );
+            setAudioConnected(false);
+          }
         };
 
         peerConnection.oniceconnectionstatechange = () => {
@@ -508,6 +523,21 @@ const AudioCall = forwardRef(
             "AudioCall: ICE connection state changed to:",
             peerConnection.iceConnectionState
           );
+          // Update audio connection status when ICE connection is established
+          if (peerConnection.iceConnectionState === "connected") {
+            console.log(
+              "AudioCall: ICE connection established, setting audioConnected to true"
+            );
+            setAudioConnected(true);
+          } else if (
+            peerConnection.iceConnectionState === "failed" ||
+            peerConnection.iceConnectionState === "disconnected"
+          ) {
+            console.log(
+              "AudioCall: ICE connection failed/disconnected, setting audioConnected to false"
+            );
+            setAudioConnected(false);
+          }
         };
 
         peerConnectionRef.current = peerConnection;
@@ -543,9 +573,62 @@ const AudioCall = forwardRef(
         });
 
         peerConnection.ontrack = (event) => {
+          console.log(
+            "AudioCall: Remote stream received in handleOffer, tracks:",
+            event.streams[0].getTracks().length
+          );
           remoteStreamRef.current = event.streams[0];
           if (audioRef.current) {
+            console.log(
+              "AudioCall: Setting audio element srcObject in handleOffer"
+            );
             audioRef.current.srcObject = event.streams[0];
+
+            // Ensure audio plays and update connection status
+            audioRef.current.onloadedmetadata = () => {
+              console.log(
+                "AudioCall: Audio metadata loaded in handleOffer, attempting to play"
+              );
+              audioRef.current
+                .play()
+                .then(() => {
+                  console.log(
+                    "AudioCall: Audio playback started successfully in handleOffer"
+                  );
+                  setAudioConnected(true);
+                })
+                .catch((err) => {
+                  console.error(
+                    "AudioCall: Failed to start audio playback in handleOffer:",
+                    err
+                  );
+                  setAudioConnected(false);
+                  // Try again after user interaction
+                  document.addEventListener(
+                    "click",
+                    () => {
+                      audioRef.current
+                        .play()
+                        .then(() => {
+                          console.log(
+                            "AudioCall: Audio playback retry successful in handleOffer"
+                          );
+                          setAudioConnected(true);
+                        })
+                        .catch((e) => {
+                          console.error(
+                            "AudioCall: Still failed to play in handleOffer:",
+                            e
+                          );
+                          setAudioConnected(false);
+                        });
+                    },
+                    { once: true }
+                  );
+                });
+            };
+          } else {
+            console.error("AudioCall: Audio element not found in handleOffer!");
           }
         };
 
@@ -559,6 +642,50 @@ const AudioCall = forwardRef(
                 data: event.candidate,
               })
             );
+          }
+        };
+
+        peerConnection.onconnectionstatechange = () => {
+          console.log(
+            "AudioCall: Connection state changed in handleOffer to:",
+            peerConnection.connectionState
+          );
+          // Update audio connection status when connection is established
+          if (peerConnection.connectionState === "connected") {
+            console.log(
+              "AudioCall: WebRTC connection established in handleOffer, setting audioConnected to true"
+            );
+            setAudioConnected(true);
+          } else if (
+            peerConnection.connectionState === "failed" ||
+            peerConnection.connectionState === "disconnected"
+          ) {
+            console.log(
+              "AudioCall: WebRTC connection failed/disconnected in handleOffer, setting audioConnected to false"
+            );
+            setAudioConnected(false);
+          }
+        };
+
+        peerConnection.oniceconnectionstatechange = () => {
+          console.log(
+            "AudioCall: ICE connection state changed in handleOffer to:",
+            peerConnection.iceConnectionState
+          );
+          // Update audio connection status when ICE connection is established
+          if (peerConnection.iceConnectionState === "connected") {
+            console.log(
+              "AudioCall: ICE connection established in handleOffer, setting audioConnected to true"
+            );
+            setAudioConnected(true);
+          } else if (
+            peerConnection.iceConnectionState === "failed" ||
+            peerConnection.iceConnectionState === "disconnected"
+          ) {
+            console.log(
+              "AudioCall: ICE connection failed/disconnected in handleOffer, setting audioConnected to false"
+            );
+            setAudioConnected(false);
           }
         };
 

@@ -47,31 +47,37 @@ navigator.permissions
     console.log("❌ Could not check microphone permissions:", err);
   });
 
-// 4. Check WebSocket connection
-console.log("\n🔌 WebSocket Connection:");
-const wsUrl = "ws://localhost:8081";
+// 4. Check WebSocket connection to deployed audio service
+console.log("\n🔌 WebSocket Connection (Deployed Service):");
+const deployedAudioUrl = "https://unifiedchat-audio-service.onrender.com";
+const wsUrl = `${deployedAudioUrl.replace("https", "wss")}/ws/test`;
 console.log("Attempting to connect to WebSocket:", wsUrl);
 
 try {
   const testWs = new WebSocket(wsUrl);
 
   testWs.onopen = () => {
-    console.log("✅ WebSocket connection successful");
+    console.log("✅ WebSocket connection successful to deployed service");
     testWs.close();
   };
 
   testWs.onerror = (error) => {
-    console.log("❌ WebSocket connection failed:", error);
+    console.log("❌ WebSocket connection failed to deployed service:", error);
   };
 
-  testWs.onclose = () => {
-    console.log("WebSocket connection closed");
+  testWs.onclose = (event) => {
+    console.log(
+      "WebSocket connection closed, code:",
+      event.code,
+      "reason:",
+      event.reason
+    );
   };
 
   // Timeout after 5 seconds
   setTimeout(() => {
     if (testWs.readyState === WebSocket.CONNECTING) {
-      console.log("❌ WebSocket connection timeout");
+      console.log("❌ WebSocket connection timeout to deployed service");
       testWs.close();
     }
   }, 5000);
@@ -79,22 +85,22 @@ try {
   console.log("❌ WebSocket connection error:", error);
 }
 
-// 5. Check audio service health
-console.log("\n🏥 Audio Service Health Check:");
-fetch("http://localhost:8081/health")
+// 5. Check deployed audio service health
+console.log("\n🏥 Deployed Audio Service Health Check:");
+fetch(`${deployedAudioUrl}/health`)
   .then((response) => {
     if (response.ok) {
-      console.log("✅ Audio service is running");
+      console.log("✅ Deployed audio service is running");
       return response.text();
     } else {
-      console.log("❌ Audio service returned error:", response.status);
+      console.log("❌ Deployed audio service returned error:", response.status);
     }
   })
   .then((data) => {
-    if (data) console.log("Audio service response:", data);
+    if (data) console.log("Deployed audio service response:", data);
   })
   .catch((error) => {
-    console.log("❌ Audio service not reachable:", error);
+    console.log("❌ Deployed audio service not reachable:", error);
   });
 
 // 6. Test microphone access
@@ -172,9 +178,36 @@ if (window.audioCallRef && window.audioCallRef.current) {
   }
 }
 
+// 10. Check current page URL and environment
+console.log("\n🌍 Environment Info:");
+console.log("Current URL:", window.location.href);
+console.log("User Agent:", navigator.userAgent);
+console.log("Is HTTPS:", window.location.protocol === "https:");
+
+// 11. Test local audio service (for comparison)
+console.log("\n🏥 Local Audio Service Health Check (for comparison):");
+fetch("http://localhost:8081/health")
+  .then((response) => {
+    if (response.ok) {
+      console.log("✅ Local audio service is running");
+      return response.text();
+    } else {
+      console.log("❌ Local audio service returned error:", response.status);
+    }
+  })
+  .then((data) => {
+    if (data) console.log("Local audio service response:", data);
+  })
+  .catch((error) => {
+    console.log(
+      "❌ Local audio service not reachable (expected from deployed frontend):",
+      error
+    );
+  });
+
 console.log("\n🔍 Debug complete! Check the logs above for issues.");
 console.log("💡 Common solutions:");
 console.log("1. Allow microphone access in browser settings");
-console.log("2. Check if audio service is running on port 8081");
+console.log("2. Check if deployed audio service WebSocket is working");
 console.log("3. Ensure WebSocket connection is working");
 console.log("4. Try refreshing the page and allowing permissions");
