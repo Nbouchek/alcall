@@ -1,0 +1,8 @@
+general: {
+    enabled = true
+    port = 8088
+    interface = "0.0.0.0"
+    threads = 4
+    http = true
+    https = false
+}

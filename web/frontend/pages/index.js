@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import Head from "next/head";
 import axios from "axios";
-import AudioCall from "../components/AudioCall";
+import JanusAudioCall from "../components/JanusAudioCall";
 import UserPopover from "../components/UserPopover";
 import {
   FaPhone,
@@ -313,6 +313,7 @@ export default function Home() {
         <meta name="description" content="UnifiedChat MVP" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <link rel="icon" href="/favicon.ico" />
+        <script src="https://unpkg.com/janus-gateway@1.0.0/html/janus.js"></script>
       </Head>
 
       <main className="flex flex-1 h-screen max-h-screen overflow-hidden">
@@ -594,7 +595,7 @@ export default function Home() {
 
               {/* Audio Call Component - Always available for ref access when logged in */}
               {isLoggedIn && (
-                <AudioCall
+                <JanusAudioCall
                   ref={audioCallRef}
                   user={user}
                   selectedReceiver={selectedReceiver}

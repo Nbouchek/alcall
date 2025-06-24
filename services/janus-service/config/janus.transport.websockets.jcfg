@@ -1,0 +1,8 @@
+general: {
+    enabled = true
+    port = 8089
+    interface = "0.0.0.0"
+    threads = 4
+    ws = true
+    wss = false
+}
