@@ -129,6 +129,41 @@ const AudioCall = forwardRef(
           isCallActive,
         };
       },
+      resumeAudioContext: async () => {
+        try {
+          const audioContext = new (window.AudioContext ||
+            window.webkitAudioContext)();
+          if (audioContext.state === "suspended") {
+            console.log("AudioCall: Resuming suspended audio context...");
+            await audioContext.resume();
+            console.log("AudioCall: Audio context resumed successfully");
+            return true;
+          } else {
+            console.log("AudioCall: Audio context already running");
+            return true;
+          }
+        } catch (error) {
+          console.error("AudioCall: Failed to resume audio context:", error);
+          return false;
+        }
+      },
+      forcePlayAudio: async () => {
+        if (audioRef.current && audioRef.current.srcObject) {
+          try {
+            console.log("AudioCall: Force playing audio...");
+            await audioRef.current.play();
+            console.log("AudioCall: Audio force play successful");
+            setAudioConnected(true);
+            return true;
+          } catch (error) {
+            console.error("AudioCall: Force play failed:", error);
+            return false;
+          }
+        } else {
+          console.error("AudioCall: No audio element or srcObject available");
+          return false;
+        }
+      },
     }));
 
     useEffect(() => {
@@ -496,6 +531,17 @@ const AudioCall = forwardRef(
           callId
         );
 
+        // Resume audio context if suspended
+        const audioContext = new (window.AudioContext ||
+          window.webkitAudioContext)();
+        if (audioContext.state === "suspended") {
+          console.log(
+            "AudioCall: Audio context suspended, attempting to resume..."
+          );
+          await audioContext.resume();
+          console.log("AudioCall: Audio context resumed successfully");
+        }
+
         console.log("AudioCall: Requesting microphone access...");
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: true,
@@ -551,6 +597,13 @@ const AudioCall = forwardRef(
                 "AudioCall: Audio volume confirmed at maximum:",
                 audioRef.current.volume
               );
+
+              // Resume audio context again before playing
+              if (audioContext.state === "suspended") {
+                audioContext.resume().then(() => {
+                  console.log("AudioCall: Audio context resumed before play");
+                });
+              }
 
               audioRef.current
                 .play()
@@ -677,6 +730,19 @@ const AudioCall = forwardRef(
           "AudioCall: handleOffer called - setting up respondent audio"
         );
 
+        // Resume audio context if suspended
+        const audioContext = new (window.AudioContext ||
+          window.webkitAudioContext)();
+        if (audioContext.state === "suspended") {
+          console.log(
+            "AudioCall: Audio context suspended in handleOffer, attempting to resume..."
+          );
+          await audioContext.resume();
+          console.log(
+            "AudioCall: Audio context resumed successfully in handleOffer"
+          );
+        }
+
         // Get microphone access for the respondent
         console.log(
           "AudioCall: Requesting microphone access for respondent..."
@@ -734,6 +800,15 @@ const AudioCall = forwardRef(
                 "AudioCall: Audio volume confirmed at maximum in handleOffer:",
                 audioRef.current.volume
               );
+
+              // Resume audio context again before playing
+              if (audioContext.state === "suspended") {
+                audioContext.resume().then(() => {
+                  console.log(
+                    "AudioCall: Audio context resumed before play in handleOffer"
+                  );
+                });
+              }
 
               audioRef.current
                 .play()
@@ -1005,14 +1080,14 @@ const AudioCall = forwardRef(
 
         {/* Enhanced Floating Call Bar */}
         {(isCallActive || (isInCall && currentCallId)) && (
-          <div className="fixed left-1/2 bottom-6 transform -translate-x-1/2 bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 shadow-2xl rounded-full px-8 py-4 flex items-center gap-6 z-50 border-0 animate-fade-in backdrop-blur-sm">
+          <div className="fixed left-1/2 bottom-6 transform -translate-x-1/2 bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 shadow-2xl rounded-full px-4 sm:px-8 py-3 sm:py-4 flex flex-col sm:flex-row items-center gap-3 sm:gap-6 z-50 border-0 animate-fade-in backdrop-blur-sm max-w-[95vw] sm:max-w-none">
             {/* Glowing ring effect */}
             <div className="absolute -inset-1 bg-gradient-to-r from-pink-600 to-purple-600 rounded-full blur opacity-30 animate-pulse"></div>
 
-            <div className="relative flex items-center gap-4">
+            <div className="relative flex items-center gap-2 sm:gap-4">
               <div className="relative">
                 <div
-                  className={`w-4 h-4 rounded-full animate-pulse ${
+                  className={`w-3 h-3 sm:w-4 sm:h-4 rounded-full animate-pulse ${
                     audioConnected ? "bg-green-400" : "bg-yellow-400"
                   }`}
                 ></div>
@@ -1022,15 +1097,15 @@ const AudioCall = forwardRef(
                   }`}
                 ></div>
               </div>
-              <div className="text-white">
-                <span className="font-bold text-lg">
+              <div className="text-white text-center sm:text-left">
+                <span className="font-bold text-sm sm:text-lg">
                   Huddle with{" "}
                   {getUserName
                     ? getUserName(selectedReceiver)
                     : `User ${selectedReceiver}`}
                 </span>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="text-white/80 text-sm">
+                <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 mt-1">
+                  <span className="text-white/80 text-xs sm:text-sm">
                     {formatDuration(callDuration)}
                   </span>
                   <FaStar
@@ -1038,7 +1113,7 @@ const AudioCall = forwardRef(
                     style={{ animationDuration: "3s" }}
                   />
                   <span
-                    className={`text-xs px-2 py-1 rounded-full ${
+                    className={`text-xs px-1 sm:px-2 py-1 rounded-full ${
                       audioConnected ? "bg-green-500" : "bg-yellow-500"
                     }`}
                   >
@@ -1050,10 +1125,10 @@ const AudioCall = forwardRef(
               </div>
             </div>
 
-            <div className="relative flex items-center gap-3">
+            <div className="relative flex items-center gap-2 sm:gap-3">
               <button
                 onClick={toggleMute}
-                className={`group p-3 rounded-full transition-all duration-300 ease-in-out transform hover:scale-110 active:scale-95 shadow-lg ${
+                className={`group p-2 sm:p-3 rounded-full transition-all duration-300 ease-in-out transform hover:scale-110 active:scale-95 shadow-lg ${
                   isMuted
                     ? "bg-gradient-to-r from-red-400 to-pink-500 text-white"
                     : "bg-white/20 backdrop-blur-sm text-white border border-white/30"
@@ -1061,13 +1136,13 @@ const AudioCall = forwardRef(
                 title={isMuted ? "Unmute" : "Mute"}
               >
                 {isMuted ? (
-                  <FaMicrophoneSlash className="w-5 h-5 animate-pulse group-hover:animate-bounce" />
+                  <FaMicrophoneSlash className="w-4 h-4 sm:w-5 sm:h-5 animate-pulse group-hover:animate-bounce" />
                 ) : (
-                  <FaMicrophone className="w-5 h-5 animate-pulse group-hover:animate-bounce" />
+                  <FaMicrophone className="w-4 h-4 sm:w-5 sm:h-5 animate-pulse group-hover:animate-bounce" />
                 )}
               </button>
 
-              {/* Volume Control */}
+              {/* Volume Control - Always visible on mobile */}
               <div className="relative group">
                 <button
                   onClick={() => {
@@ -1078,18 +1153,18 @@ const AudioCall = forwardRef(
                       console.log("AudioCall: Volume toggled to:", newVolume);
                     }
                   }}
-                  className="group p-3 rounded-full transition-all duration-300 ease-in-out transform hover:scale-110 active:scale-95 shadow-lg bg-white/20 backdrop-blur-sm text-white border border-white/30"
+                  className="group p-2 sm:p-3 rounded-full transition-all duration-300 ease-in-out transform hover:scale-110 active:scale-95 shadow-lg bg-white/20 backdrop-blur-sm text-white border border-white/30"
                   title="Toggle Volume"
                 >
                   {audioRef.current && audioRef.current.volume > 0 ? (
-                    <FaVolumeUp className="w-5 h-5 animate-pulse group-hover:animate-bounce" />
+                    <FaVolumeUp className="w-4 h-4 sm:w-5 sm:h-5 animate-pulse group-hover:animate-bounce" />
                   ) : (
-                    <FaVolumeMute className="w-5 h-5 animate-pulse group-hover:animate-bounce" />
+                    <FaVolumeMute className="w-4 h-4 sm:w-5 sm:h-5 animate-pulse group-hover:animate-bounce" />
                   )}
                 </button>
 
-                {/* Volume Slider */}
-                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                {/* Volume Slider - Always visible on mobile */}
+                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-300">
                   <input
                     type="range"
                     min="0"
@@ -1105,7 +1180,7 @@ const AudioCall = forwardRef(
                         );
                       }
                     }}
-                    className="w-20 h-2 bg-white/30 rounded-lg appearance-none cursor-pointer slider"
+                    className="w-16 sm:w-20 h-2 bg-white/30 rounded-lg appearance-none cursor-pointer slider"
                     style={{
                       background:
                         "linear-gradient(to right, #ffffff 0%, #ffffff 100%)",
@@ -1116,17 +1191,17 @@ const AudioCall = forwardRef(
 
               <button
                 onClick={endCall}
-                className="group bg-gradient-to-r from-red-400 to-pink-500 hover:from-red-500 hover:to-pink-600 text-white p-3 rounded-full transition-all duration-300 ease-in-out transform hover:scale-110 hover:shadow-2xl active:scale-95 shadow-lg"
+                className="group bg-gradient-to-r from-red-400 to-pink-500 hover:from-red-500 hover:to-pink-600 text-white p-2 sm:p-3 rounded-full transition-all duration-300 ease-in-out transform hover:scale-110 hover:shadow-2xl active:scale-95 shadow-lg"
                 title="End Huddle"
               >
                 {/* Glowing effect */}
                 <div className="absolute -inset-1 bg-gradient-to-r from-red-400 to-pink-500 rounded-full blur opacity-30 group-hover:opacity-50 transition duration-300"></div>
-                <FaPhoneSlash className="w-5 h-5 relative z-10 animate-pulse group-hover:animate-bounce" />
+                <FaPhoneSlash className="w-4 h-4 sm:w-5 sm:h-5 relative z-10 animate-pulse group-hover:animate-bounce" />
               </button>
             </div>
 
-            {/* Fun status indicator */}
-            <div className="absolute -top-2 -right-2">
+            {/* Fun status indicator - Hidden on mobile */}
+            <div className="absolute -top-2 -right-2 hidden sm:block">
               <span className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-2 py-1 rounded-full text-xs font-bold shadow-lg">
                 🚀 Live
               </span>
