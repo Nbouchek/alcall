@@ -44,6 +44,7 @@ export default function Home() {
   const chatEndRef = useRef(null);
   const [popoverUser, setPopoverUser] = useState(null);
   const [popoverAnchor, setPopoverAnchor] = useState(null);
+  const audioCallRef = useRef(null);
 
   // Function to fetch users from backend
   const fetchUsers = async () => {
@@ -446,12 +447,11 @@ export default function Home() {
                 <button
                   onClick={() => {
                     if (audioServiceStatus === "available") {
-                      const callButton = document.querySelector(
-                        '.audio-call-container button[title="Start audio call"]'
-                      );
-                      if (callButton) {
-                        callButton.click();
+                      if (audioCallRef.current) {
+                        console.log("Calling startCall via ref");
+                        audioCallRef.current.startCall();
                       } else {
+                        console.error("AudioCall ref not available");
                         alert(
                           "Audio call feature is loading... Please wait a moment and try again."
                         );
@@ -489,6 +489,7 @@ export default function Home() {
               {shouldShowChat && (
                 <div className="hidden">
                   <AudioCall
+                    ref={audioCallRef}
                     user={user}
                     selectedReceiver={selectedReceiver}
                     onCallEnd={() => {}}
@@ -641,10 +642,17 @@ export default function Home() {
                 {/* Enhanced Quick Call Button */}
                 <button
                   onClick={() => {
-                    const callButton = document.querySelector(
-                      ".audio-call-container button"
-                    );
-                    if (callButton) callButton.click();
+                    if (audioCallRef.current) {
+                      console.log("Quick call: Calling startCall via ref");
+                      audioCallRef.current.startCall();
+                    } else {
+                      console.error(
+                        "AudioCall ref not available for quick call"
+                      );
+                      alert(
+                        "Audio call feature is loading... Please wait a moment and try again."
+                      );
+                    }
                   }}
                   className="group relative bg-gradient-to-r from-green-400 to-emerald-500 hover:from-green-500 hover:to-emerald-600 text-white p-3 rounded-xl transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 shadow-lg"
                   title="Quick call"
@@ -686,10 +694,15 @@ export default function Home() {
             setSelectedReceiver(popoverUser.id);
             setPopoverUser(null);
             setTimeout(() => {
-              const callButton = document.querySelector(
-                '.audio-call-container button[title="Start audio call"]'
-              );
-              if (callButton) callButton.click();
+              if (audioCallRef.current) {
+                console.log("Popover call: Calling startCall via ref");
+                audioCallRef.current.startCall();
+              } else {
+                console.error("AudioCall ref not available for popover call");
+                alert(
+                  "Audio call feature is loading... Please wait a moment and try again."
+                );
+              }
             }, 100);
           }}
         />
