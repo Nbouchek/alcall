@@ -3,6 +3,16 @@ import Head from "next/head";
 import axios from "axios";
 import AudioCall from "../components/AudioCall";
 import UserPopover from "../components/UserPopover";
+import {
+  FaPhone,
+  FaPaperPlane,
+  FaUser,
+  FaSignOutAlt,
+  FaRocket,
+  FaStar,
+  FaBell,
+  FaMicrophone,
+} from "react-icons/fa";
 
 const AUTH_API_BASE_URL =
   process.env.NEXT_PUBLIC_AUTH_API_URL ||
@@ -147,7 +157,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-100 to-blue-100 flex flex-col">
+    <div className="min-h-screen bg-gradient-to-br from-purple-100 via-blue-100 to-pink-100 flex flex-col">
       <Head>
         <title>UnifiedChat MVP</title>
         <meta name="description" content="UnifiedChat MVP" />
@@ -155,23 +165,31 @@ export default function Home() {
       </Head>
 
       <main className="flex flex-1 h-screen max-h-screen overflow-hidden">
-        {/* Sidebar */}
+        {/* Enhanced Sidebar */}
         {isLoggedIn && (
-          <aside className="hidden sm:flex flex-col w-64 bg-white border-r shadow-lg z-10">
-            <div className="p-6 border-b">
-              <h2 className="text-xl font-bold text-blue-600 tracking-tight">
+          <aside className="hidden sm:flex flex-col w-64 bg-gradient-to-b from-white to-gray-50 border-r shadow-xl z-10">
+            <div className="p-6 border-b bg-gradient-to-r from-blue-500 to-purple-600">
+              <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+                <FaRocket className="text-yellow-300 animate-bounce" />
                 UnifiedChat
               </h2>
-              <p className="text-xs text-gray-500 mt-1">Slack-style MVP</p>
+              <p className="text-xs text-blue-100 mt-1 flex items-center gap-1">
+                <FaStar
+                  className="text-yellow-300 animate-spin"
+                  style={{ animationDuration: "3s" }}
+                />
+                Slack-style MVP
+              </p>
             </div>
             <div className="flex-1 overflow-y-auto p-4">
-              <h3 className="text-xs font-semibold text-gray-400 mb-2 uppercase tracking-wider">
-                Users
+              <h3 className="text-xs font-semibold text-gray-400 mb-3 uppercase tracking-wider flex items-center gap-2">
+                <FaUser className="text-blue-500" />
+                Active Users
               </h3>
               {users
                 .filter((u) => u.id !== user?.id)
                 .map((u) => (
-                  <div key={u.id} className="flex items-center gap-2 mb-2">
+                  <div key={u.id} className="flex items-center gap-2 mb-3">
                     <button
                       onClick={(e) => {
                         setSelectedReceiver(u.id);
@@ -179,49 +197,71 @@ export default function Home() {
                         setPopoverUser(u);
                         setPopoverAnchor(rect);
                       }}
-                      className={`flex-1 text-left px-3 py-2 rounded-lg transition-colors duration-150 ${
+                      className={`group flex-1 text-left px-4 py-3 rounded-xl transition-all duration-300 ease-in-out transform hover:scale-105 ${
                         selectedReceiver === u.id
-                          ? "bg-blue-100 text-blue-800 font-semibold"
-                          : "hover:bg-gray-100 text-gray-700"
+                          ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold shadow-lg"
+                          : "hover:bg-gradient-to-r hover:from-gray-100 hover:to-blue-50 text-gray-700 border border-transparent hover:border-blue-200"
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <span>@{u.username}</span>
+                        <span className="flex items-center gap-2">
+                          <div
+                            className={`w-2 h-2 rounded-full ${
+                              selectedReceiver === u.id
+                                ? "bg-yellow-300"
+                                : "bg-green-400"
+                            } animate-pulse`}
+                          ></div>
+                          @{u.username}
+                        </span>
                         <div className="flex items-center gap-1">
-                          <div className="w-2 h-2 rounded-full bg-gray-300"></div>
+                          <div
+                            className={`w-2 h-2 rounded-full ${
+                              selectedReceiver === u.id
+                                ? "bg-yellow-300"
+                                : "bg-gray-300"
+                            } animate-ping`}
+                          ></div>
                         </div>
                       </div>
                     </button>
                   </div>
                 ))}
             </div>
-            <div className="p-4 border-t text-xs text-gray-400">
-              <span>Logged in as </span>
-              <span className="font-semibold text-blue-700">
-                {user?.username}
-              </span>
+            <div className="p-4 border-t bg-gradient-to-r from-gray-50 to-blue-50">
+              <div className="text-xs text-gray-500 flex items-center gap-2">
+                <span>Logged in as </span>
+                <span className="font-semibold text-blue-700 bg-white px-2 py-1 rounded-full shadow-sm">
+                  {user?.username}
+                </span>
+              </div>
             </div>
           </aside>
         )}
-        {/* Main Chat Area */}
-        <section className="flex-1 flex flex-col h-full max-h-screen bg-white shadow-md rounded-lg overflow-hidden relative">
-          {/* Header */}
-          <header className="flex items-center justify-between px-4 py-3 border-b bg-blue-50 shadow-sm sticky top-0 z-10">
-            <div className="flex items-center gap-2">
-              <span className="text-lg font-bold text-blue-700">
+
+        {/* Enhanced Main Chat Area */}
+        <section className="flex-1 flex flex-col h-full max-h-screen bg-white shadow-2xl rounded-lg overflow-hidden relative">
+          {/* Enhanced Header */}
+          <header className="flex items-center justify-between px-6 py-4 border-b bg-gradient-to-r from-blue-500 to-purple-600 shadow-lg sticky top-0 z-10">
+            <div className="flex items-center gap-3">
+              <span className="text-xl font-bold text-white flex items-center gap-2">
                 {isLoggedIn ? getUserName(selectedReceiver) : "UnifiedChat MVP"}
+                {isLoggedIn && (
+                  <FaBell className="text-yellow-300 animate-bounce text-sm" />
+                )}
               </span>
               {isLoggedIn && (
-                <span className="text-xs text-gray-400">(Direct Message)</span>
+                <span className="text-xs text-blue-100 bg-white/20 px-2 py-1 rounded-full">
+                  Direct Message
+                </span>
               )}
             </div>
-            <div className="flex items-center gap-3">
-              {/* Prominent Call Button */}
+            <div className="flex items-center gap-4">
+              {/* Enhanced Call Button */}
               {isLoggedIn && (
                 <button
                   onClick={() => {
                     if (audioServiceStatus === "available") {
-                      // Trigger call from AudioCall component
                       const callButton = document.querySelector(
                         '.audio-call-container button[title="Start audio call"]'
                       );
@@ -238,10 +278,10 @@ export default function Home() {
                       );
                     }
                   }}
-                  className={`px-4 py-2 rounded-lg transition flex items-center gap-2 font-medium ${
+                  className={`group relative px-6 py-3 rounded-xl transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 flex items-center gap-3 font-bold shadow-lg ${
                     audioServiceStatus === "available"
-                      ? "bg-green-500 hover:bg-green-600 text-white"
-                      : "bg-gray-400 text-gray-600 cursor-not-allowed"
+                      ? "bg-gradient-to-r from-green-400 to-emerald-500 hover:from-green-500 hover:to-emerald-600 text-white"
+                      : "bg-gradient-to-r from-gray-400 to-gray-500 text-gray-600 cursor-not-allowed"
                   }`}
                   title={
                     audioServiceStatus === "available"
@@ -250,20 +290,14 @@ export default function Home() {
                   }
                   disabled={audioServiceStatus !== "available"}
                 >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
-                    />
-                  </svg>
-                  {audioServiceStatus === "checking" ? "..." : "Call"}
+                  {/* Glowing effect */}
+                  {audioServiceStatus === "available" && (
+                    <div className="absolute -inset-1 bg-gradient-to-r from-green-400 to-emerald-500 rounded-xl blur opacity-30 group-hover:opacity-50 transition duration-300"></div>
+                  )}
+                  <FaPhone className="w-5 h-5 relative z-10 animate-pulse group-hover:animate-bounce" />
+                  <span className="relative z-10">
+                    {audioServiceStatus === "checking" ? "..." : "Start Huddle"}
+                  </span>
                 </button>
               )}
 
@@ -279,6 +313,7 @@ export default function Home() {
                 </div>
               )}
 
+              {/* Enhanced Logout Button */}
               {isLoggedIn && (
                 <button
                   onClick={() => {
@@ -287,94 +322,118 @@ export default function Home() {
                     setUser(null);
                     setMessages([]);
                   }}
-                  className="text-xs text-red-500 hover:text-red-700 border border-red-200 px-3 py-1 rounded transition"
+                  className="group bg-gradient-to-r from-red-400 to-pink-500 hover:from-red-500 hover:to-pink-600 text-white px-4 py-2 rounded-xl transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 flex items-center gap-2 font-semibold shadow-lg"
                 >
+                  <FaSignOutAlt className="w-4 h-4 animate-pulse group-hover:animate-bounce" />
                   Logout
                 </button>
               )}
             </div>
           </header>
-          {/* Login Form */}
+
+          {/* Enhanced Login Form */}
           {!isLoggedIn && (
-            <div className="flex flex-1 items-center justify-center p-4">
+            <div className="flex flex-1 items-center justify-center p-4 bg-gradient-to-br from-blue-50 to-purple-50">
               <form
                 onSubmit={login}
-                className="w-full max-w-sm bg-white rounded-xl shadow-lg p-8 space-y-6"
+                className="relative w-full max-w-md bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-2xl p-8 space-y-6 border-0"
               >
-                <h2 className="text-2xl font-bold text-center text-blue-700 mb-2">
-                  Login
-                </h2>
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Username
-                  </label>
-                  <input
-                    type="text"
-                    value={loginForm.username}
-                    onChange={(e) =>
-                      setLoginForm((prev) => ({
-                        ...prev,
-                        username: e.target.value,
-                      }))
-                    }
-                    className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
-                    required
-                  />
+                {/* Glowing ring effect */}
+                <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl blur opacity-25"></div>
+
+                <div className="relative text-center">
+                  <h2 className="text-3xl font-bold text-gray-800 mb-2 flex items-center justify-center gap-2">
+                    <FaRocket className="text-blue-500 animate-bounce" />
+                    Welcome Back!
+                  </h2>
+                  <p className="text-gray-600">Sign in to start chatting</p>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Password
-                  </label>
-                  <input
-                    type="password"
-                    value={loginForm.password}
-                    onChange={(e) =>
-                      setLoginForm((prev) => ({
-                        ...prev,
-                        password: e.target.value,
-                      }))
-                    }
-                    className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
-                    required
-                  />
+
+                <div className="relative space-y-4">
+                  <div>
+                    <label className="block text-sm font-semibold mb-2 text-gray-700">
+                      Username
+                    </label>
+                    <input
+                      type="text"
+                      value={loginForm.username}
+                      onChange={(e) =>
+                        setLoginForm((prev) => ({
+                          ...prev,
+                          username: e.target.value,
+                        }))
+                      }
+                      className="w-full p-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all duration-300"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold mb-2 text-gray-700">
+                      Password
+                    </label>
+                    <input
+                      type="password"
+                      value={loginForm.password}
+                      onChange={(e) =>
+                        setLoginForm((prev) => ({
+                          ...prev,
+                          password: e.target.value,
+                        }))
+                      }
+                      className="w-full p-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all duration-300"
+                      required
+                    />
+                  </div>
                 </div>
+
                 <button
                   type="submit"
-                  className="w-full bg-blue-600 text-white p-2 rounded font-semibold hover:bg-blue-700 transition"
+                  className="group relative w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white p-3 rounded-xl font-bold shadow-lg transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95"
                 >
-                  Login
+                  {/* Glowing effect */}
+                  <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl blur opacity-30 group-hover:opacity-50 transition duration-300"></div>
+                  <span className="relative z-10 flex items-center justify-center gap-2">
+                    <FaUser className="w-4 h-4 animate-pulse group-hover:animate-bounce" />
+                    Sign In
+                  </span>
                 </button>
               </form>
             </div>
           )}
-          {/* Chat Area */}
+
+          {/* Enhanced Chat Area */}
           {isLoggedIn && (
             <div className="flex-1 flex flex-col h-full max-h-full">
               <div
-                className="flex-1 overflow-y-auto px-2 py-4 sm:px-6 bg-gradient-to-b from-blue-50 to-white"
+                className="flex-1 overflow-y-auto px-4 py-6 bg-gradient-to-b from-blue-50 via-white to-purple-50"
                 style={{ minHeight: 0 }}
               >
                 {messages.length === 0 ? (
-                  <p className="text-gray-400 text-center mt-8">
-                    No messages yet. Start a conversation!
-                  </p>
+                  <div className="text-center mt-8">
+                    <div className="w-16 h-16 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+                      <FaRocket className="w-8 h-8 text-white animate-bounce" />
+                    </div>
+                    <p className="text-gray-500 text-lg font-semibold">
+                      No messages yet. Start a conversation! 🚀
+                    </p>
+                  </div>
                 ) : (
                   messages.map((msg, index) => (
                     <div
                       key={index}
-                      className={`flex mb-3 ${
+                      className={`flex mb-4 ${
                         isOwnMessage(msg) ? "justify-end" : "justify-start"
                       }`}
                     >
                       <div
-                        className={`max-w-[80%] sm:max-w-md p-3 rounded-2xl shadow-md ${
+                        className={`max-w-[80%] sm:max-w-md p-4 rounded-2xl shadow-lg transition-all duration-300 ease-in-out transform hover:scale-105 ${
                           isOwnMessage(msg)
-                            ? "bg-blue-600 text-white rounded-br-none"
-                            : "bg-gray-200 text-gray-800 rounded-bl-none"
+                            ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-br-none"
+                            : "bg-gradient-to-r from-gray-100 to-white text-gray-800 rounded-bl-none border border-gray-200"
                         }`}
                       >
-                        <div className="text-xs opacity-70 mb-1 flex items-center gap-2">
-                          <span className="font-semibold">
+                        <div className="text-xs opacity-80 mb-2 flex items-center gap-2">
+                          <span className="font-bold">
                             {getUserName(msg.sender_id)}
                           </span>
                           <span className="">{formatTime(msg.created_at)}</span>
@@ -388,53 +447,50 @@ export default function Home() {
                 )}
                 <div ref={chatEndRef} />
               </div>
-              {/* Message Input Bar */}
-              <div className="w-full bg-white border-t p-3 flex items-center gap-2 sticky bottom-0">
+
+              {/* Enhanced Message Input Bar */}
+              <div className="w-full bg-gradient-to-r from-white to-gray-50 border-t p-4 flex items-center gap-3 sticky bottom-0 shadow-lg">
                 <input
                   type="text"
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && sendMessage()}
                   placeholder="Type a message..."
-                  className="flex-1 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  className="flex-1 p-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all duration-300"
                 />
+
+                {/* Enhanced Send Button */}
                 <button
                   onClick={sendMessage}
-                  className="bg-blue-600 text-white px-5 py-2 rounded-lg font-semibold hover:bg-blue-700 transition"
+                  className="group relative bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 flex items-center gap-2"
                 >
-                  Send
+                  {/* Glowing effect */}
+                  <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl blur opacity-30 group-hover:opacity-50 transition duration-300"></div>
+                  <FaPaperPlane className="w-4 h-4 relative z-10 animate-pulse group-hover:animate-bounce" />
+                  <span className="relative z-10">Send</span>
                 </button>
-                {/* Quick call button */}
+
+                {/* Enhanced Quick Call Button */}
                 <button
                   onClick={() => {
-                    // This will trigger the call from the AudioCall component
                     const callButton = document.querySelector(
                       ".audio-call-container button"
                     );
                     if (callButton) callButton.click();
                   }}
-                  className="bg-green-500 hover:bg-green-600 text-white p-2 rounded-lg transition"
+                  className="group relative bg-gradient-to-r from-green-400 to-emerald-500 hover:from-green-500 hover:to-emerald-600 text-white p-3 rounded-xl transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 shadow-lg"
                   title="Quick call"
                 >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
-                    />
-                  </svg>
+                  {/* Glowing effect */}
+                  <div className="absolute -inset-1 bg-gradient-to-r from-green-400 to-emerald-500 rounded-xl blur opacity-30 group-hover:opacity-50 transition duration-300"></div>
+                  <FaPhone className="w-4 h-4 relative z-10 animate-pulse group-hover:animate-bounce" />
                 </button>
               </div>
             </div>
           )}
         </section>
       </main>
+
       {/* Render the popover */}
       {popoverUser && popoverAnchor && (
         <UserPopover

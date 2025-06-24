@@ -1,4 +1,5 @@
 import { useRef, useEffect } from "react";
+import { FaUserAstronaut, FaPhone, FaStar, FaRocket } from "react-icons/fa";
 
 export default function UserPopover({ user, onClose, onCall, anchorRect }) {
   const popoverRef = useRef(null);
@@ -20,51 +21,74 @@ export default function UserPopover({ user, onClose, onCall, anchorRect }) {
     top: anchorRect.bottom + 8,
     left: anchorRect.left,
     zIndex: 100,
-    minWidth: 220,
+    minWidth: 280,
   };
 
   return (
     <div
       ref={popoverRef}
       style={style}
-      className="bg-white rounded-xl shadow-2xl border p-4 flex flex-col items-center animate-fade-in"
+      className="relative bg-gradient-to-br from-purple-500 via-pink-500 to-orange-500 rounded-2xl shadow-2xl border-0 p-6 flex flex-col items-center animate-fade-in backdrop-blur-sm"
     >
-      <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center mb-2">
-        <svg
-          className="w-10 h-10 text-gray-400"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M5.121 17.804A13.937 13.937 0 0112 15c2.5 0 4.847.655 6.879 1.804M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-          />
-        </svg>
+      {/* Glowing ring effect */}
+      <div className="absolute -inset-1 bg-gradient-to-r from-pink-600 to-purple-600 rounded-2xl blur opacity-25 group-hover:opacity-75 transition duration-1000 group-hover:duration-200 animate-pulse"></div>
+
+      {/* Animated avatar with gradient background */}
+      <div className="relative mb-4">
+        <div className="w-20 h-20 rounded-full bg-gradient-to-br from-yellow-400 via-orange-500 to-red-500 flex items-center justify-center shadow-lg animate-pulse">
+          <FaUserAstronaut className="w-10 h-10 text-white animate-bounce" />
+        </div>
+        {/* Glowing ring around avatar */}
+        <div className="absolute -inset-2 bg-gradient-to-r from-pink-400 to-purple-400 rounded-full opacity-30 animate-ping"></div>
       </div>
-      <div className="font-bold text-lg mb-1">{user.username}</div>
-      <div className="text-xs text-gray-500 mb-4">ID: {user.id}</div>
+
+      {/* User info with fun labels */}
+      <div className="text-center mb-4">
+        <div className="font-bold text-white text-xl mb-1 flex items-center justify-center gap-2">
+          {user.username}
+          <FaStar
+            className="text-yellow-300 animate-spin"
+            style={{ animationDuration: "3s" }}
+          />
+        </div>
+        <div className="text-white/80 text-sm mb-2">ID: {user.id}</div>
+
+        {/* Fun status labels */}
+        <div className="flex gap-2 justify-center mb-3">
+          <span className="bg-white/20 backdrop-blur-sm text-white px-3 py-1 rounded-full text-xs font-bold border border-white/30">
+            🚀 Active User
+          </span>
+          <span className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg">
+            ⭐ Premium
+          </span>
+        </div>
+      </div>
+
+      {/* Enhanced call button with animations */}
       <button
         onClick={onCall}
-        className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-semibold shadow transition"
+        className="group relative flex items-center gap-3 bg-gradient-to-r from-green-400 to-emerald-500 hover:from-green-500 hover:to-emerald-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg transition-all duration-300 ease-in-out transform hover:scale-105 hover:shadow-2xl active:scale-95"
       >
-        <svg
-          className="w-5 h-5"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
-          />
-        </svg>
-        Huddle
+        {/* Glowing effect behind button */}
+        <div className="absolute -inset-1 bg-gradient-to-r from-green-400 to-emerald-500 rounded-xl blur opacity-30 group-hover:opacity-50 transition duration-300"></div>
+
+        <FaPhone className="w-5 h-5 animate-pulse group-hover:animate-bounce" />
+        <span className="relative z-10">Start Huddle</span>
+
+        {/* Animated rocket icon */}
+        <FaRocket
+          className="w-4 h-4 animate-bounce ml-1"
+          style={{ animationDelay: "0.5s" }}
+        />
       </button>
+
+      {/* Decorative elements */}
+      <div className="absolute top-2 right-2">
+        <div className="w-3 h-3 bg-yellow-300 rounded-full animate-ping"></div>
+      </div>
+      <div className="absolute bottom-2 left-2">
+        <div className="w-2 h-2 bg-pink-300 rounded-full animate-pulse"></div>
+      </div>
     </div>
   );
 }

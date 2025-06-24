@@ -1,4 +1,15 @@
 import { useState, useEffect, useRef } from "react";
+import {
+  FaPhone,
+  FaPhoneSlash,
+  FaMicrophone,
+  FaMicrophoneSlash,
+  FaVolumeUp,
+  FaVolumeMute,
+  FaStar,
+  FaRocket,
+  FaBell,
+} from "react-icons/fa";
 
 const AudioCall = ({ user, selectedReceiver, onCallEnd, getUserName }) => {
   const [isInCall, setIsInCall] = useState(false);
@@ -385,157 +396,135 @@ const AudioCall = ({ user, selectedReceiver, onCallEnd, getUserName }) => {
 
   return (
     <div className="audio-call-container">
-      {/* Incoming Call Modal */}
+      {/* Enhanced Incoming Call Modal */}
       {isRinging && incomingCall && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-8 max-w-sm w-full mx-4 shadow-2xl">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg
-                  className="w-8 h-8 text-green-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
-                  />
-                </svg>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
+          <div className="relative bg-gradient-to-br from-purple-500 via-pink-500 to-orange-500 rounded-3xl p-8 max-w-sm w-full mx-4 shadow-2xl border-0">
+            {/* Glowing ring effect */}
+            <div className="absolute -inset-1 bg-gradient-to-r from-pink-600 to-purple-600 rounded-3xl blur opacity-30 animate-pulse"></div>
+
+            <div className="relative text-center">
+              {/* Animated phone icon */}
+              <div className="relative mb-6">
+                <div className="w-20 h-20 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full flex items-center justify-center mx-auto shadow-lg animate-pulse">
+                  <FaPhone className="w-10 h-10 text-white animate-bounce" />
+                </div>
+                {/* Glowing ring around phone */}
+                <div className="absolute -inset-3 bg-gradient-to-r from-green-400 to-emerald-500 rounded-full opacity-30 animate-ping"></div>
               </div>
-              <h3 className="text-xl font-semibold mb-2">Incoming Call</h3>
-              <p className="text-gray-600 mb-6">
+
+              <h3 className="text-2xl font-bold text-white mb-2 flex items-center justify-center gap-2">
+                Incoming Huddle
+                <FaBell className="text-yellow-300 animate-bounce" />
+              </h3>
+              <p className="text-white/90 mb-6 text-lg">
                 {getUserName
                   ? getUserName(incomingCall.caller_id)
                   : `User ${incomingCall.caller_id}`}
               </p>
-              <div className="flex gap-3">
+
+              {/* Fun status label */}
+              <div className="mb-6">
+                <span className="bg-white/20 backdrop-blur-sm text-white px-4 py-2 rounded-full text-sm font-bold border border-white/30">
+                  🎉 Ready to Connect!
+                </span>
+              </div>
+
+              <div className="flex gap-4">
                 <button
                   onClick={() => answerCall(true)}
-                  className="flex-1 bg-green-500 text-white py-3 px-4 rounded-lg hover:bg-green-600 transition flex items-center justify-center gap-2"
+                  className="group flex-1 bg-gradient-to-r from-green-400 to-emerald-500 hover:from-green-500 hover:to-emerald-600 text-white py-4 px-6 rounded-2xl font-bold shadow-lg transition-all duration-300 ease-in-out transform hover:scale-105 hover:shadow-2xl active:scale-95 flex items-center justify-center gap-3"
                 >
-                  <svg
-                    className="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
-                    />
-                  </svg>
-                  Answer
+                  {/* Glowing effect */}
+                  <div className="absolute -inset-1 bg-gradient-to-r from-green-400 to-emerald-500 rounded-2xl blur opacity-30 group-hover:opacity-50 transition duration-300"></div>
+                  <FaPhone className="w-5 h-5 relative z-10 animate-pulse group-hover:animate-bounce" />
+                  <span className="relative z-10">Answer</span>
                 </button>
                 <button
                   onClick={() => answerCall(false)}
-                  className="flex-1 bg-red-500 text-white py-3 px-4 rounded-lg hover:bg-red-600 transition flex items-center justify-center gap-2"
+                  className="group flex-1 bg-gradient-to-r from-red-400 to-pink-500 hover:from-red-500 hover:to-pink-600 text-white py-4 px-6 rounded-2xl font-bold shadow-lg transition-all duration-300 ease-in-out transform hover:scale-105 hover:shadow-2xl active:scale-95 flex items-center justify-center gap-3"
                 >
-                  <svg
-                    className="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
-                  Decline
+                  {/* Glowing effect */}
+                  <div className="absolute -inset-1 bg-gradient-to-r from-red-400 to-pink-500 rounded-2xl blur opacity-30 group-hover:opacity-50 transition duration-300"></div>
+                  <FaPhoneSlash className="w-5 h-5 relative z-10 animate-pulse group-hover:animate-bounce" />
+                  <span className="relative z-10">Decline</span>
                 </button>
               </div>
+            </div>
+
+            {/* Decorative elements */}
+            <div className="absolute top-4 right-4">
+              <div className="w-3 h-3 bg-yellow-300 rounded-full animate-ping"></div>
+            </div>
+            <div className="absolute bottom-4 left-4">
+              <div className="w-2 h-2 bg-pink-300 rounded-full animate-pulse"></div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Floating Call Bar (Slack-style, bottom) */}
+      {/* Enhanced Floating Call Bar */}
       {isCallActive && (
-        <div className="fixed left-1/2 bottom-6 transform -translate-x-1/2 bg-white shadow-2xl rounded-full px-6 py-3 flex items-center gap-6 z-50 border border-gray-200 animate-fade-in">
-          <div className="flex items-center gap-3">
-            <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-            <span className="font-semibold text-gray-800">
-              Huddle with{" "}
-              {getUserName
-                ? getUserName(selectedReceiver)
-                : `User ${selectedReceiver}`}
-            </span>
-            <span className="text-sm text-gray-500">
-              {formatDuration(callDuration)}
-            </span>
+        <div className="fixed left-1/2 bottom-6 transform -translate-x-1/2 bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 shadow-2xl rounded-full px-8 py-4 flex items-center gap-6 z-50 border-0 animate-fade-in backdrop-blur-sm">
+          {/* Glowing ring effect */}
+          <div className="absolute -inset-1 bg-gradient-to-r from-pink-600 to-purple-600 rounded-full blur opacity-30 animate-pulse"></div>
+
+          <div className="relative flex items-center gap-4">
+            <div className="relative">
+              <div className="w-4 h-4 bg-green-400 rounded-full animate-pulse"></div>
+              <div className="absolute -inset-1 bg-green-400 rounded-full opacity-30 animate-ping"></div>
+            </div>
+            <div className="text-white">
+              <span className="font-bold text-lg">
+                Huddle with{" "}
+                {getUserName
+                  ? getUserName(selectedReceiver)
+                  : `User ${selectedReceiver}`}
+              </span>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-white/80 text-sm">
+                  {formatDuration(callDuration)}
+                </span>
+                <FaStar
+                  className="text-yellow-300 animate-spin text-xs"
+                  style={{ animationDuration: "3s" }}
+                />
+              </div>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
+
+          <div className="relative flex items-center gap-3">
             <button
               onClick={toggleMute}
-              className={`p-2 rounded-full transition border ${
+              className={`group p-3 rounded-full transition-all duration-300 ease-in-out transform hover:scale-110 active:scale-95 shadow-lg ${
                 isMuted
-                  ? "bg-red-100 border-red-300 text-red-600"
-                  : "bg-gray-100 border-gray-300 text-gray-700"
+                  ? "bg-gradient-to-r from-red-400 to-pink-500 text-white"
+                  : "bg-white/20 backdrop-blur-sm text-white border border-white/30"
               }`}
               title={isMuted ? "Unmute" : "Mute"}
             >
               {isMuted ? (
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
-                  />
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"
-                  />
-                </svg>
+                <FaMicrophoneSlash className="w-5 h-5 animate-pulse group-hover:animate-bounce" />
               ) : (
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
-                  />
-                </svg>
+                <FaMicrophone className="w-5 h-5 animate-pulse group-hover:animate-bounce" />
               )}
             </button>
             <button
               onClick={endCall}
-              className="bg-red-500 hover:bg-red-600 text-white p-2 rounded-full transition shadow-lg"
+              className="group bg-gradient-to-r from-red-400 to-pink-500 hover:from-red-500 hover:to-pink-600 text-white p-3 rounded-full transition-all duration-300 ease-in-out transform hover:scale-110 hover:shadow-2xl active:scale-95 shadow-lg"
               title="End Huddle"
             >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
+              {/* Glowing effect */}
+              <div className="absolute -inset-1 bg-gradient-to-r from-red-400 to-pink-500 rounded-full blur opacity-30 group-hover:opacity-50 transition duration-300"></div>
+              <FaPhoneSlash className="w-5 h-5 relative z-10 animate-pulse group-hover:animate-bounce" />
             </button>
+          </div>
+
+          {/* Fun status indicator */}
+          <div className="absolute -top-2 -right-2">
+            <span className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-2 py-1 rounded-full text-xs font-bold shadow-lg">
+              🚀 Live
+            </span>
           </div>
         </div>
       )}
@@ -547,33 +536,36 @@ const AudioCall = ({ user, selectedReceiver, onCallEnd, getUserName }) => {
         </button>
       )}
 
-      {/* Call Status Notifications */}
+      {/* Enhanced Call Status Notifications */}
       {callStatus && !isCallActive && (
         <div
-          className={`fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 max-w-sm ${
+          className={`fixed top-4 right-4 p-4 rounded-2xl shadow-2xl z-50 max-w-sm backdrop-blur-sm border-0 ${
             callStatus === "connected"
-              ? "bg-green-500 text-white"
+              ? "bg-gradient-to-r from-green-400 to-emerald-500 text-white"
               : callStatus === "ringing"
-              ? "bg-yellow-500 text-white"
+              ? "bg-gradient-to-r from-yellow-400 to-orange-500 text-white"
               : callStatus === "ended"
-              ? "bg-gray-500 text-white"
+              ? "bg-gradient-to-r from-gray-400 to-gray-600 text-white"
               : callStatus === "rejected"
-              ? "bg-red-500 text-white"
-              : "bg-blue-500 text-white"
+              ? "bg-gradient-to-r from-red-400 to-pink-500 text-white"
+              : "bg-gradient-to-r from-blue-400 to-purple-500 text-white"
           }`}
         >
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
-            <span className="font-medium">
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <div className="w-3 h-3 bg-white rounded-full animate-pulse"></div>
+              <div className="absolute -inset-1 bg-white rounded-full opacity-30 animate-ping"></div>
+            </div>
+            <span className="font-bold">
               {callStatus === "connected"
-                ? "Call connected"
+                ? "🎉 Huddle Connected!"
                 : callStatus === "ringing"
-                ? "Calling..."
+                ? "📞 Calling..."
                 : callStatus === "ended"
-                ? "Call ended"
+                ? "👋 Huddle Ended"
                 : callStatus === "rejected"
-                ? "Call rejected"
-                : "Call status: " + callStatus}
+                ? "❌ Huddle Rejected"
+                : "📱 " + callStatus}
             </span>
           </div>
         </div>
