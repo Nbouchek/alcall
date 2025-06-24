@@ -317,28 +317,54 @@ const AudioCall = forwardRef(
 
     const establishWebRTCConnection = async (callId) => {
       try {
+        console.log(
+          "AudioCall: establishWebRTCConnection called with callId:",
+          callId
+        );
+
+        console.log("AudioCall: Requesting microphone access...");
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: true,
         });
+        console.log(
+          "AudioCall: getUserMedia successful, stream tracks:",
+          stream.getTracks().length
+        );
+
         localStreamRef.current = stream;
 
+        console.log("AudioCall: Creating RTCPeerConnection...");
         const peerConnection = new RTCPeerConnection({
           iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
         });
+        console.log("AudioCall: RTCPeerConnection created successfully");
 
         stream.getTracks().forEach((track) => {
+          console.log(
+            "AudioCall: Adding track to peer connection:",
+            track.kind
+          );
           peerConnection.addTrack(track, stream);
         });
 
         peerConnection.ontrack = (event) => {
+          console.log(
+            "AudioCall: Remote stream received, tracks:",
+            event.streams[0].getTracks().length
+          );
           remoteStreamRef.current = event.streams[0];
           if (audioRef.current) {
+            console.log("AudioCall: Setting audio element srcObject");
             audioRef.current.srcObject = event.streams[0];
+            console.log("AudioCall: Audio element srcObject set successfully");
+          } else {
+            console.error("AudioCall: Audio element not found!");
           }
         };
 
         peerConnection.onicecandidate = (event) => {
           if (event.candidate) {
+            console.log("AudioCall: ICE candidate generated");
             wsRef.current?.send(
               JSON.stringify({
                 type: "ice_candidate",
@@ -350,11 +376,27 @@ const AudioCall = forwardRef(
           }
         };
 
+        peerConnection.onconnectionstatechange = () => {
+          console.log(
+            "AudioCall: Connection state changed to:",
+            peerConnection.connectionState
+          );
+        };
+
+        peerConnection.oniceconnectionstatechange = () => {
+          console.log(
+            "AudioCall: ICE connection state changed to:",
+            peerConnection.iceConnectionState
+          );
+        };
+
         peerConnectionRef.current = peerConnection;
 
         // Create and send offer
+        console.log("AudioCall: Creating offer...");
         const offer = await peerConnection.createOffer();
         await peerConnection.setLocalDescription(offer);
+        console.log("AudioCall: Offer created and set as local description");
 
         wsRef.current?.send(
           JSON.stringify({
@@ -364,8 +406,13 @@ const AudioCall = forwardRef(
             data: offer,
           })
         );
+        console.log("AudioCall: Offer sent via WebSocket");
       } catch (error) {
-        console.error("Failed to establish WebRTC connection:", error);
+        console.error(
+          "AudioCall: Failed to establish WebRTC connection:",
+          error
+        );
+        alert("Failed to establish audio connection: " + error.message);
       }
     };
 
