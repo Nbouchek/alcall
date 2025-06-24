@@ -5,7 +5,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN go build -o main ./src
+RUN go build -mod=vendor -o main ./src
 
 FROM alpine:latest
 RUN apk --no-cache add ca-certificates
