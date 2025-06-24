@@ -5,6 +5,7 @@ import (
     "net/http"
     "github.com/gorilla/websocket"
     "github.com/gin-gonic/gin"
+    "github.com/gin-contrib/cors"
 )
 
 var upgrader = websocket.Upgrader{
@@ -25,6 +26,7 @@ var usernameToClientID = make(map[string]string)
 
 func main() {
     r := gin.Default()
+    r.Use(cors.Default()) // Allow all origins for MVP
 
     // Health check
     r.GET("/health", func(c *gin.Context) {
