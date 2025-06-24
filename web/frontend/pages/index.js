@@ -32,7 +32,6 @@ export default function Home() {
   const [newMessage, setNewMessage] = useState("");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [selectedReceiver, setSelectedReceiver] = useState(null);
-  const [audioServiceStatus, setAudioServiceStatus] = useState("checking");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [users, setUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
@@ -108,28 +107,6 @@ export default function Home() {
       setSelectedReceiver(availableUsers[0].id);
     }
   };
-
-  // Check audio service status
-  const checkAudioService = async () => {
-    const AUDIO_SERVICE_URL =
-      process.env.NEXT_PUBLIC_AUDIO_API_URL ||
-      "https://unifiedchat-audio-service.onrender.com";
-    try {
-      const response = await fetch(`${AUDIO_SERVICE_URL}/health`);
-      if (response.ok) {
-        setAudioServiceStatus("available");
-      } else {
-        setAudioServiceStatus("unavailable");
-      }
-    } catch (error) {
-      console.log("Audio service not available:", error);
-      setAudioServiceStatus("unavailable");
-    }
-  };
-
-  useEffect(() => {
-    checkAudioService();
-  }, []);
 
   // Fetch users when logged in
   useEffect(() => {

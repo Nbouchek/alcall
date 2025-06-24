@@ -39,13 +39,15 @@ const JanusAudioCall = forwardRef(
     const janusRef = useRef(null);
     const pluginHandleRef = useRef(null);
     const localStreamRef = useRef(null);
+    const remoteStreamRef = useRef(null);
     const audioRef = useRef(null);
     const durationIntervalRef = useRef(null);
     const ringtoneIntervalRef = useRef(null);
     const reconnectTimeoutRef = useRef(null);
 
+    // Janus configuration
     const JANUS_URL =
-      process.env.NEXT_PUBLIC_JANUS_URL || "ws://localhost:8089";
+      process.env.NEXT_PUBLIC_JANUS_URL || "ws://localhost:8188";
     const JANUS_HTTP_URL =
       process.env.NEXT_PUBLIC_JANUS_HTTP_URL || "http://localhost:8088";
 
