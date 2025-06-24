@@ -72,10 +72,10 @@ func main() {
     r.GET("/call/status/:call_id", getCallStatus)
     r.GET("/ws/:user_id", handleWebSocket)
 
-    log.Println("Audio service starting on port 8084")
+    log.Println("Audio service starting on port 8085")
     port := os.Getenv("PORT")
     if port == "" {
-        port = "8084"
+        port = "8085"
     }
     r.Run(":" + port)
 }
