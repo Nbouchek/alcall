@@ -5,20 +5,20 @@ services:
     image: ubuntu:20.04
     container_name: unifiedchat-janus
     ports:
-      - "8088:8088" # HTTP API
-      - "8089:8089" # WebSocket API
-      - "8000:8000" # WebRTC (HTTP)
-      - "10000-10200:10000-10200/udp" # WebRTC (UDP)
+      - "8088:8088"
+      - "8089:8089"
+      - "8000:8000"
+      - "10000-10200:10000-10200/udp"
+    volumes:
+      - ./config:/opt/janus/etc/janus
     environment:
       - JANUS_LOG_LEVEL=4
       - JANUS_LOG_TIMESTAMPS=true
     command: >
       bash -c "
-      apt-get update && apt-get install -y janus janus-plugins curl &&
+      apt-get update && apt-get install -y janus curl &&
       mkdir -p /opt/janus/etc/janus &&
-      echo 'general: { enabled = true, sampling_rate = 48000, opus_bitrate = 32000 }' > /opt/janus/etc/janus/janus.plugin.audiobridge.jcfg &&
-      echo 'general: { base_path = \"/janus\" }' > /opt/janus/etc/janus/janus.transport.http.jcfg &&
-      echo 'general: { enabled = true }' > /opt/janus/etc/janus/janus.transport.websockets.jcfg &&
+      cp /opt/janus/etc/janus/*.jcfg /opt/janus/etc/janus/ 2>/dev/null || true &&
       janus -F /opt/janus/etc/janus -L 4 -d 5
       "
     restart: unless-stopped
@@ -34,10 +34,10 @@ services:
     image: coturn/coturn:latest
     container_name: unifiedchat-turn
     ports:
-      - "3478:3478" # TURN TCP
-      - "3478:3478/udp" # TURN UDP
-      - "5349:5349" # TURN TLS
-      - "5349:5349/udp" # TURN TLS UDP
+      - "3478:3478"
+      - "3478:3478/udp"
+      - "5349:5349"
+      - "5349:5349/udp"
     environment:
       - TURN_USERNAME=unifiedchat
       - TURN_PASSWORD=unifiedchat123
