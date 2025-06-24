@@ -3,6 +3,7 @@ package main
 import (
     "log"
     "net/http"
+    "os"
     "github.com/gorilla/websocket"
     "github.com/gin-gonic/gin"
     "github.com/gin-contrib/cors"
@@ -44,8 +45,14 @@ func main() {
 
     r.GET("/ws", handleWebSocket)
 
-    log.Println("Realtime service starting on port 8084")
-    r.Run(":8084")
+    // Use PORT environment variable for Render deployment
+    port := os.Getenv("PORT")
+    if port == "" {
+        port = "8084" // Default fallback
+    }
+
+    log.Printf("Realtime service starting on port %s", port)
+    r.Run(":" + port)
 }
 
 func handleWebSocket(c *gin.Context) {
