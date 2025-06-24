@@ -25,7 +25,6 @@ const MESSAGE_API_BASE_URL =
   process.env.NEXT_PUBLIC_MESSAGE_API_URL ||
   "https://unifiedchat-message-service.onrender.com";
 const REALTIME_API_BASE_URL =
-  process.env.NEXT_PUBLIC_REALTIME_API_URL ||
   "https://unifiedchat-realtime-service.onrender.com";
 
 export default function Home() {
