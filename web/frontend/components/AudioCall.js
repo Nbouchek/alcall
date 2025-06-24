@@ -698,6 +698,20 @@ const AudioCall = forwardRef(
           }
         };
 
+        peerConnection.onicegatheringstatechange = () => {
+          console.log(
+            "AudioCall: ICE gathering state changed to:",
+            peerConnection.iceGatheringState
+          );
+        };
+
+        peerConnection.onsignalingstatechange = () => {
+          console.log(
+            "AudioCall: Signaling state changed to:",
+            peerConnection.signalingState
+          );
+        };
+
         peerConnectionRef.current = peerConnection;
 
         // Create and send offer
@@ -885,6 +899,9 @@ const AudioCall = forwardRef(
               "AudioCall: WebRTC connection failed/disconnected in handleOffer, setting audioConnected to false"
             );
             setAudioConnected(false);
+            console.error(
+              "AudioCall: WebRTC connection failed - this may cause audio issues"
+            );
           }
         };
 
@@ -907,7 +924,24 @@ const AudioCall = forwardRef(
               "AudioCall: ICE connection failed/disconnected in handleOffer, setting audioConnected to false"
             );
             setAudioConnected(false);
+            console.error(
+              "AudioCall: ICE connection failed - this will prevent audio from working"
+            );
           }
+        };
+
+        peerConnection.onicegatheringstatechange = () => {
+          console.log(
+            "AudioCall: ICE gathering state changed in handleOffer to:",
+            peerConnection.iceGatheringState
+          );
+        };
+
+        peerConnection.onsignalingstatechange = () => {
+          console.log(
+            "AudioCall: Signaling state changed in handleOffer to:",
+            peerConnection.signalingState
+          );
         };
 
         peerConnectionRef.current = peerConnection;
@@ -915,6 +949,32 @@ const AudioCall = forwardRef(
         await peerConnection.setRemoteDescription(
           new RTCSessionDescription(offer)
         );
+        console.log("AudioCall: Remote description set in handleOffer");
+
+        // Process any pending ICE candidates
+        if (peerConnection.pendingIceCandidates) {
+          console.log(
+            "AudioCall: Processing pending ICE candidates in handleOffer:",
+            peerConnection.pendingIceCandidates.length
+          );
+          for (const candidate of peerConnection.pendingIceCandidates) {
+            try {
+              await peerConnection.addIceCandidate(
+                new RTCIceCandidate(candidate)
+              );
+              console.log(
+                "AudioCall: Pending ICE candidate added successfully in handleOffer"
+              );
+            } catch (error) {
+              console.error(
+                "AudioCall: Failed to add pending ICE candidate in handleOffer:",
+                error
+              );
+            }
+          }
+          peerConnection.pendingIceCandidates = [];
+        }
+
         const answer = await peerConnection.createAnswer();
         await peerConnection.setLocalDescription(answer);
 
@@ -935,21 +995,78 @@ const AudioCall = forwardRef(
 
     const handleAnswer = async (answer) => {
       try {
-        await peerConnectionRef.current.setRemoteDescription(
-          new RTCSessionDescription(answer)
-        );
+        console.log("AudioCall: Handling answer:", answer);
+
+        if (peerConnectionRef.current) {
+          await peerConnectionRef.current.setRemoteDescription(
+            new RTCSessionDescription(answer)
+          );
+          console.log("AudioCall: Remote description set successfully");
+
+          // Process any pending ICE candidates
+          if (peerConnectionRef.current.pendingIceCandidates) {
+            console.log(
+              "AudioCall: Processing pending ICE candidates:",
+              peerConnectionRef.current.pendingIceCandidates.length
+            );
+            for (const candidate of peerConnectionRef.current
+              .pendingIceCandidates) {
+              try {
+                await peerConnectionRef.current.addIceCandidate(
+                  new RTCIceCandidate(candidate)
+                );
+                console.log(
+                  "AudioCall: Pending ICE candidate added successfully"
+                );
+              } catch (error) {
+                console.error(
+                  "AudioCall: Failed to add pending ICE candidate:",
+                  error
+                );
+              }
+            }
+            peerConnectionRef.current.pendingIceCandidates = [];
+          }
+        } else {
+          console.error("AudioCall: No peer connection available for answer");
+        }
       } catch (error) {
-        console.error("Failed to handle answer:", error);
+        console.error("AudioCall: Failed to handle answer:", error);
       }
     };
 
     const handleIceCandidate = async (candidate) => {
       try {
-        await peerConnectionRef.current.addIceCandidate(
-          new RTCIceCandidate(candidate)
-        );
+        console.log("AudioCall: Handling ICE candidate:", candidate);
+
+        if (peerConnectionRef.current) {
+          // Check if remote description is set before adding ICE candidate
+          if (peerConnectionRef.current.remoteDescription) {
+            console.log(
+              "AudioCall: Adding ICE candidate - remote description is set"
+            );
+            await peerConnectionRef.current.addIceCandidate(
+              new RTCIceCandidate(candidate)
+            );
+            console.log("AudioCall: ICE candidate added successfully");
+          } else {
+            console.log(
+              "AudioCall: Remote description not set yet, storing ICE candidate for later"
+            );
+            // Store the candidate to add later when remote description is set
+            if (!peerConnectionRef.current.pendingIceCandidates) {
+              peerConnectionRef.current.pendingIceCandidates = [];
+            }
+            peerConnectionRef.current.pendingIceCandidates.push(candidate);
+          }
+        } else {
+          console.error(
+            "AudioCall: No peer connection available for ICE candidate"
+          );
+        }
       } catch (error) {
-        console.error("Failed to handle ICE candidate:", error);
+        console.error("AudioCall: Failed to handle ICE candidate:", error);
+        // Don't throw the error, just log it to prevent connection failure
       }
     };
 
