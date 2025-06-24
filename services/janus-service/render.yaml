@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: unifiedchat-janus-service
+    runtime: docker
+    region: oregon
+    plan: starter
+    buildCommand: docker build -t janus .
+    startCommand: docker run -p $PORT:8088 janus
+    envVars:
+      - key: PORT
+        value: 8088
+    healthCheckPath: /
+    autoDeploy: true
