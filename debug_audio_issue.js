@@ -1,4 +1,4 @@
-// Comprehensive Audio Debug Script
+// Comprehensive Audio Debug Script - Volume and Connection Issues
 // Run this in your browser console to diagnose audio issues
 
 console.log("🔍 Starting comprehensive audio debug...");
@@ -8,8 +8,10 @@ console.log("\n📞 AudioCall Component State:");
 if (window.audioCallRef && window.audioCallRef.current) {
   const audioCall = window.audioCallRef.current;
   console.log("AudioCall ref available:", !!audioCall);
-  console.log("AudioCall state:", audioCall.state);
-  console.log("AudioCall methods:", Object.getOwnPropertyNames(audioCall));
+
+  // Get current status
+  const status = audioCall.getAudioStatus();
+  console.log("Current audio status:", status);
 
   // Check if startCall method exists
   if (typeof audioCall.startCall === "function") {
@@ -17,17 +19,70 @@ if (window.audioCallRef && window.audioCallRef.current) {
   } else {
     console.log("❌ startCall method NOT available");
   }
+
+  // Check volume
+  const currentVolume = audioCall.getVolume();
+  console.log("Current volume:", currentVolume);
+
+  // Force set audio connected
+  console.log("🔧 Attempting to force set audioConnected to true...");
+  audioCall.setAudioConnected(true);
+
+  // Check volume and set to maximum
+  console.log("🔧 Setting volume to maximum...");
+  audioCall.setVolume(1.0);
+
+  // Check status again
+  const newStatus = audioCall.getAudioStatus();
+  console.log("Updated audio status:", newStatus);
 } else {
   console.log("❌ AudioCall ref not available");
 }
 
-// 2. Check WebRTC support
+// 2. Check for audio elements
+console.log("\n🎵 Audio Elements:");
+const audioElements = document.querySelectorAll("audio");
+console.log("Number of audio elements:", audioElements.length);
+audioElements.forEach((audio, index) => {
+  console.log(`Audio ${index + 1}:`, {
+    src: audio.src,
+    srcObject: audio.srcObject,
+    autoplay: audio.autoplay,
+    muted: audio.muted,
+    volume: audio.volume,
+    readyState: audio.readyState,
+    paused: audio.paused,
+    currentTime: audio.currentTime,
+    duration: audio.duration,
+  });
+
+  // Try to set volume to maximum
+  if (audio.volume !== 1.0) {
+    console.log(`🔧 Setting audio ${index + 1} volume to maximum`);
+    audio.volume = 1.0;
+  }
+
+  // Try to play if paused
+  if (audio.paused && audio.srcObject) {
+    console.log(`🔧 Attempting to play audio ${index + 1}`);
+    audio
+      .play()
+      .then(() => {
+        console.log(`✅ Audio ${index + 1} started playing`);
+      })
+      .catch((err) => {
+        console.error(`❌ Failed to play audio ${index + 1}:`, err);
+      });
+  }
+});
+
+// 3. Check WebRTC support
 console.log("\n🌐 WebRTC Support:");
 console.log("getUserMedia:", !!navigator.mediaDevices?.getUserMedia);
 console.log("RTCPeerConnection:", !!window.RTCPeerConnection);
 console.log("WebSocket:", !!window.WebSocket);
 
-// 3. Check microphone permissions
+// 4. Check microphone permissions
 console.log("\n🎤 Microphone Permissions:");
 navigator.permissions
   .query({ name: "microphone" })
@@ -47,63 +102,7 @@ navigator.permissions
     console.log("❌ Could not check microphone permissions:", err);
   });
 
-// 4. Check WebSocket connection to deployed audio service
-console.log("\n🔌 WebSocket Connection (Deployed Service):");
-const deployedAudioUrl = "https://unifiedchat-audio-service.onrender.com";
-const wsUrl = `${deployedAudioUrl.replace("https", "wss")}/ws/test`;
-console.log("Attempting to connect to WebSocket:", wsUrl);
-
-try {
-  const testWs = new WebSocket(wsUrl);
-
-  testWs.onopen = () => {
-    console.log("✅ WebSocket connection successful to deployed service");
-    testWs.close();
-  };
-
-  testWs.onerror = (error) => {
-    console.log("❌ WebSocket connection failed to deployed service:", error);
-  };
-
-  testWs.onclose = (event) => {
-    console.log(
-      "WebSocket connection closed, code:",
-      event.code,
-      "reason:",
-      event.reason
-    );
-  };
-
-  // Timeout after 5 seconds
-  setTimeout(() => {
-    if (testWs.readyState === WebSocket.CONNECTING) {
-      console.log("❌ WebSocket connection timeout to deployed service");
-      testWs.close();
-    }
-  }, 5000);
-} catch (error) {
-  console.log("❌ WebSocket connection error:", error);
-}
-
-// 5. Check deployed audio service health
-console.log("\n🏥 Deployed Audio Service Health Check:");
-fetch(`${deployedAudioUrl}/health`)
-  .then((response) => {
-    if (response.ok) {
-      console.log("✅ Deployed audio service is running");
-      return response.text();
-    } else {
-      console.log("❌ Deployed audio service returned error:", response.status);
-    }
-  })
-  .then((data) => {
-    if (data) console.log("Deployed audio service response:", data);
-  })
-  .catch((error) => {
-    console.log("❌ Deployed audio service not reachable:", error);
-  });
-
-// 6. Test microphone access
+// 5. Test microphone access
 console.log("\n🎤 Testing Microphone Access:");
 if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
   navigator.mediaDevices
@@ -118,19 +117,12 @@ if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
     })
     .catch((error) => {
       console.log("❌ Microphone access failed:", error.name, error.message);
-      if (error.name === "NotAllowedError") {
-        console.log("💡 Solution: Allow microphone access in browser settings");
-      } else if (error.name === "NotFoundError") {
-        console.log(
-          "💡 Solution: Check if microphone is connected and working"
-        );
-      }
     });
 } else {
   console.log("❌ getUserMedia not supported");
 }
 
-// 7. Check browser audio context
+// 6. Check browser audio context
 console.log("\n🔊 Audio Context:");
 try {
   const audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -147,67 +139,43 @@ try {
   console.log("❌ Audio context creation failed:", error);
 }
 
-// 8. Check for existing audio elements
-console.log("\n🎵 Audio Elements:");
-const audioElements = document.querySelectorAll("audio");
-console.log("Number of audio elements:", audioElements.length);
-audioElements.forEach((audio, index) => {
-  console.log(`Audio ${index + 1}:`, {
-    src: audio.src,
-    autoplay: audio.autoplay,
-    muted: audio.muted,
-    volume: audio.volume,
-    readyState: audio.readyState,
-  });
-});
-
-// 9. Check for WebRTC peer connections
-console.log("\n🔗 WebRTC Connections:");
-if (window.audioCallRef && window.audioCallRef.current) {
-  const audioCall = window.audioCallRef.current;
-  if (audioCall.peerConnection) {
-    console.log("✅ Peer connection exists");
-    console.log("Connection state:", audioCall.peerConnection.connectionState);
-    console.log(
-      "ICE connection state:",
-      audioCall.peerConnection.iceConnectionState
-    );
-    console.log("Signaling state:", audioCall.peerConnection.signalingState);
-  } else {
-    console.log("❌ No peer connection found");
-  }
-}
-
-// 10. Check current page URL and environment
+// 7. Check current page URL and environment
 console.log("\n🌍 Environment Info:");
 console.log("Current URL:", window.location.href);
 console.log("User Agent:", navigator.userAgent);
 console.log("Is HTTPS:", window.location.protocol === "https:");
 
-// 11. Test local audio service (for comparison)
-console.log("\n🏥 Local Audio Service Health Check (for comparison):");
-fetch("http://localhost:8081/health")
-  .then((response) => {
-    if (response.ok) {
-      console.log("✅ Local audio service is running");
-      return response.text();
-    } else {
-      console.log("❌ Local audio service returned error:", response.status);
-    }
-  })
-  .then((data) => {
-    if (data) console.log("Local audio service response:", data);
-  })
-  .catch((error) => {
+// 8. Manual audio test
+console.log("\n🧪 Manual Audio Test:");
+if (audioElements.length > 0) {
+  const testAudio = audioElements[0];
+  console.log("Testing first audio element...");
+
+  // Create a test tone
+  const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  const oscillator = audioContext.createOscillator();
+  const gainNode = audioContext.createGain();
+
+  oscillator.connect(gainNode);
+  gainNode.connect(audioContext.destination);
+
+  oscillator.frequency.setValueAtTime(440, audioContext.currentTime); // A4 note
+  gainNode.gain.setValueAtTime(0.1, audioContext.currentTime); // Low volume
+
+  oscillator.start();
+  setTimeout(() => {
+    oscillator.stop();
+    audioContext.close();
     console.log(
-      "❌ Local audio service not reachable (expected from deployed frontend):",
-      error
+      "✅ Test tone played - if you heard it, audio output is working"
     );
-  });
+  }, 1000);
+} else {
+  console.log("❌ No audio elements found for testing");
+}
 
 console.log("\n🔍 Debug complete! Check the logs above for issues.");
-console.log("💡 Common solutions:");
-console.log("1. Allow microphone access in browser settings");
-console.log("2. Check if deployed audio service WebSocket is working");
-console.log("3. Ensure WebSocket connection is working");
-console.log("4. Try refreshing the page and allowing permissions");
+console.log("💡 If audioConnected is still false, try:");
+console.log("1. window.audioCallRef.current.setAudioConnected(true)");
+console.log("2. window.audioCallRef.current.setVolume(1.0)");
+console.log("3. Check if any audio elements have srcObject set");
