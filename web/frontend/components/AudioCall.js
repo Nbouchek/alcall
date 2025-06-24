@@ -26,6 +26,7 @@ const AudioCall = forwardRef(
     const [callDuration, setCallDuration] = useState(0);
     const [isMuted, setIsMuted] = useState(false);
     const [isCallActive, setIsCallActive] = useState(false);
+    const [currentCallId, setCurrentCallId] = useState(null);
 
     const localStreamRef = useRef(null);
     const remoteStreamRef = useRef(null);
@@ -86,6 +87,8 @@ const AudioCall = forwardRef(
     };
 
     const handleWebSocketMessage = async (message) => {
+      console.log("AudioCall: WebSocket message received:", message);
+
       switch (message.type) {
         case "incoming_call":
           setIncomingCall(message.data);
@@ -96,6 +99,7 @@ const AudioCall = forwardRef(
           setCallStatus("connected");
           setIsRinging(false);
           setIsCallActive(true);
+          setCurrentCallId(message.call_id); // Track the call ID
           stopRingtone();
           startCallTimer();
           await establishWebRTCConnection(message.call_id);
@@ -110,6 +114,7 @@ const AudioCall = forwardRef(
           setCallStatus("ended");
           setIsInCall(false);
           setIsCallActive(false);
+          setCurrentCallId(null); // Clear the call ID
           stopCallTimer();
           stopRingtone();
           cleanupCall();
@@ -159,6 +164,7 @@ const AudioCall = forwardRef(
           console.log("AudioCall: Call started successfully");
           setCallStatus("ringing");
           setIsInCall(true);
+          setCurrentCallId(data.call_id);
           await establishWebRTCConnection(data.call_id);
         } else {
           console.error("AudioCall: Failed to start call - API error");
@@ -177,7 +183,10 @@ const AudioCall = forwardRef(
       if (!incomingCall) return;
 
       try {
-        await fetch(`${AUDIO_SERVICE_URL}/call/answer`, {
+        console.log("AudioCall: Answering call with answer =", answer);
+        console.log("AudioCall: incomingCall =", incomingCall);
+
+        const response = await fetch(`${AUDIO_SERVICE_URL}/call/answer`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -189,44 +198,73 @@ const AudioCall = forwardRef(
           }),
         });
 
-        if (answer) {
+        console.log("AudioCall: Answer response status =", response.status);
+        const data = await response.json();
+        console.log("AudioCall: Answer response data =", data);
+
+        if (response.ok && answer) {
+          console.log("AudioCall: Call answered successfully");
           setIsInCall(true);
           setIsCallActive(true);
           setCallStatus("connected");
+          setCurrentCallId(incomingCall.id); // Track the call ID
           startCallTimer();
           await establishWebRTCConnection(incomingCall.id);
+        } else if (!answer) {
+          console.log("AudioCall: Call declined");
+          setCallStatus("rejected");
+          setTimeout(() => setCallStatus(""), 3000);
         }
 
         setIncomingCall(null);
         setIsRinging(false);
         stopRingtone();
       } catch (error) {
-        console.error("Failed to answer call:", error);
+        console.error("AudioCall: Failed to answer call:", error);
+        alert("Failed to answer call: " + error.message);
       }
     };
 
     const endCall = async () => {
-      if (!isInCall) return;
+      if (!isInCall || !currentCallId) {
+        console.log("AudioCall: Cannot end call - not in call or no call ID");
+        return;
+      }
 
       try {
-        await fetch(`${AUDIO_SERVICE_URL}/call/end`, {
+        console.log("AudioCall: Ending call with ID =", currentCallId);
+
+        const response = await fetch(`${AUDIO_SERVICE_URL}/call/end`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            call_id: "current_call_id", // You'll need to track this
+            call_id: currentCallId,
             user_id: user.id,
           }),
         });
 
-        setIsInCall(false);
-        setIsCallActive(false);
-        setCallStatus("ended");
-        stopCallTimer();
-        cleanupCall();
+        console.log("AudioCall: End call response status =", response.status);
+        const data = await response.json();
+        console.log("AudioCall: End call response data =", data);
+
+        if (response.ok) {
+          console.log("AudioCall: Call ended successfully");
+          setIsInCall(false);
+          setIsCallActive(false);
+          setCallStatus("ended");
+          setCurrentCallId(null); // Clear the call ID
+          stopCallTimer();
+          cleanupCall();
+          setTimeout(() => setCallStatus(""), 3000);
+        } else {
+          console.error("AudioCall: Failed to end call - API error");
+          alert("Failed to end call: " + (data.error || "Unknown error"));
+        }
       } catch (error) {
-        console.error("Failed to end call:", error);
+        console.error("AudioCall: Failed to end call - network error:", error);
+        alert("Failed to end call: " + error.message);
       }
     };
 
@@ -394,6 +432,7 @@ const AudioCall = forwardRef(
       if (audioRef.current) {
         audioRef.current.srcObject = null;
       }
+      setCurrentCallId(null); // Clear the call ID
     };
 
     const playRingtone = () => {
