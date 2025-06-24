@@ -30,19 +30,11 @@ export default function Home() {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [selectedReceiver, setSelectedReceiver] = useState(null); // Start with null instead of hardcoded 4
+  const [selectedReceiver, setSelectedReceiver] = useState(null);
   const [audioServiceStatus, setAudioServiceStatus] = useState("checking");
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [users] = useState([
-    { id: 1, username: "admin" },
-    { id: 4, username: "Linda" },
-    { id: 5, username: "Hana" },
-    { id: 6, username: "Adam" },
-    { id: 7, username: "Ahmed" },
-    { id: 8, username: "Hamid" },
-    { id: 9, username: "Mueen" },
-    { id: 10, username: "Nacer" },
-  ]);
+  const [users, setUsers] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
 
   const [loginForm, setLoginForm] = useState({
     username: "",
@@ -52,6 +44,49 @@ export default function Home() {
   const chatEndRef = useRef(null);
   const [popoverUser, setPopoverUser] = useState(null);
   const [popoverAnchor, setPopoverAnchor] = useState(null);
+
+  // Function to fetch users from backend
+  const fetchUsers = async () => {
+    setLoadingUsers(true);
+    try {
+      const response = await axios.get(`${AUTH_API_BASE_URL}/users`);
+      if (response.data && Array.isArray(response.data)) {
+        setUsers(response.data);
+        console.log("Fetched users from backend:", response.data);
+      } else {
+        console.error("Invalid users response:", response.data);
+        // Fallback to hardcoded users if backend doesn't work
+        setUsers([
+          { id: 1, username: "admin" },
+          { id: 4, username: "Linda" },
+          { id: 5, username: "Hana" },
+          { id: 6, username: "Adam" },
+          { id: 7, username: "Ahmed" },
+          { id: 8, username: "Hamid" },
+          { id: 9, username: "Mueen" },
+          { id: 10, username: "Nacer" },
+        ]);
+      }
+    } catch (error) {
+      console.error("Failed to fetch users:", error);
+      if (error.response && error.response.status === 404) {
+        console.log("Users endpoint not available yet, using fallback");
+      }
+      // Fallback to hardcoded users if backend doesn't work
+      setUsers([
+        { id: 1, username: "admin" },
+        { id: 4, username: "Linda" },
+        { id: 5, username: "Hana" },
+        { id: 6, username: "Adam" },
+        { id: 7, username: "Ahmed" },
+        { id: 8, username: "Hamid" },
+        { id: 9, username: "Mueen" },
+        { id: 10, username: "Nacer" },
+      ]);
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
 
   // Function to set a sensible default receiver when user logs in
   const setDefaultReceiver = (loggedInUser) => {
@@ -84,6 +119,16 @@ export default function Home() {
     checkAudioService();
   }, []);
 
+  // Fetch users when logged in
+  useEffect(() => {
+    if (isLoggedIn) {
+      fetchUsers();
+      // Refresh users list every 30 seconds to catch new logins
+      const interval = setInterval(fetchUsers, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [isLoggedIn]);
+
   const login = async (e) => {
     e.preventDefault();
     console.log("Login button clicked", loginForm);
@@ -97,7 +142,8 @@ export default function Home() {
       localStorage.setItem("token", response.data.token);
       setUser(response.data.user);
       setIsLoggedIn(true);
-      // Set a sensible default receiver after login
+      // Fetch users first, then set default receiver
+      await fetchUsers();
       setDefaultReceiver(response.data.user);
     } catch (error) {
       console.error("Login error:", error);
@@ -268,83 +314,95 @@ export default function Home() {
                 <h3 className="text-xs font-semibold text-gray-400 mb-3 uppercase tracking-wider flex items-center gap-2">
                   <FaUsers className="text-blue-500" />
                   Direct Messages
-                </h3>
-                {users
-                  .filter((u) => u.id !== user?.id)
-                  .map((u) => (
-                    <div key={u.id} className="mb-2">
-                      <button
-                        onClick={() => {
-                          setSelectedReceiver(u.id);
-                          setSidebarOpen(false); // Close sidebar on mobile
-                        }}
-                        className={`group w-full text-left px-4 py-3 rounded-xl transition-all duration-300 ease-in-out transform hover:scale-105 ${
-                          selectedReceiver === u.id
-                            ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold shadow-lg"
-                            : "hover:bg-gradient-to-r hover:from-gray-100 hover:to-blue-50 text-gray-700 border border-transparent hover:border-blue-200"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="relative">
-                              <div
-                                className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                                  selectedReceiver === u.id
-                                    ? "bg-white/20"
-                                    : "bg-gradient-to-br from-gray-200 to-gray-300"
-                                }`}
-                              >
-                                <FaUser
-                                  className={`w-5 h-5 ${
-                                    selectedReceiver === u.id
-                                      ? "text-white"
-                                      : "text-gray-600"
-                                  }`}
-                                />
-                              </div>
-                              <div
-                                className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white ${
-                                  selectedReceiver === u.id
-                                    ? "bg-yellow-300"
-                                    : "bg-green-400"
-                                } animate-pulse`}
-                              ></div>
-                            </div>
-                            <div className="text-left">
-                              <div className="font-medium">@{u.username}</div>
-                              <div
-                                className={`text-xs ${
-                                  selectedReceiver === u.id
-                                    ? "text-white/80"
-                                    : "text-gray-500"
-                                }`}
-                              >
-                                Available for chat
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                const rect =
-                                  e.currentTarget.getBoundingClientRect();
-                                setPopoverUser(u);
-                                setPopoverAnchor(rect);
-                              }}
-                              className={`p-2 rounded-lg transition-all duration-300 ${
-                                selectedReceiver === u.id
-                                  ? "bg-white/20 text-white hover:bg-white/30"
-                                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                              }`}
-                            >
-                              <FaPhone className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-                      </button>
+                  {loadingUsers && (
+                    <div className="ml-auto">
+                      <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
                     </div>
-                  ))}
+                  )}
+                </h3>
+                {loadingUsers ? (
+                  <div className="text-center py-4">
+                    <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                    <p className="text-xs text-gray-500">Loading users...</p>
+                  </div>
+                ) : (
+                  users
+                    .filter((u) => u.id !== user?.id)
+                    .map((u) => (
+                      <div key={u.id} className="mb-2">
+                        <button
+                          onClick={() => {
+                            setSelectedReceiver(u.id);
+                            setSidebarOpen(false); // Close sidebar on mobile
+                          }}
+                          className={`group w-full text-left px-4 py-3 rounded-xl transition-all duration-300 ease-in-out transform hover:scale-105 ${
+                            selectedReceiver === u.id
+                              ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold shadow-lg"
+                              : "hover:bg-gradient-to-r hover:from-gray-100 hover:to-blue-50 text-gray-700 border border-transparent hover:border-blue-200"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="relative">
+                                <div
+                                  className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                                    selectedReceiver === u.id
+                                      ? "bg-white/20"
+                                      : "bg-gradient-to-br from-gray-200 to-gray-300"
+                                  }`}
+                                >
+                                  <FaUser
+                                    className={`w-5 h-5 ${
+                                      selectedReceiver === u.id
+                                        ? "text-white"
+                                        : "text-gray-600"
+                                    }`}
+                                  />
+                                </div>
+                                <div
+                                  className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white ${
+                                    selectedReceiver === u.id
+                                      ? "bg-yellow-300"
+                                      : "bg-green-400"
+                                  } animate-pulse`}
+                                ></div>
+                              </div>
+                              <div className="text-left">
+                                <div className="font-medium">@{u.username}</div>
+                                <div
+                                  className={`text-xs ${
+                                    selectedReceiver === u.id
+                                      ? "text-white/80"
+                                      : "text-gray-500"
+                                  }`}
+                                >
+                                  Available for chat
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const rect =
+                                    e.currentTarget.getBoundingClientRect();
+                                  setPopoverUser(u);
+                                  setPopoverAnchor(rect);
+                                }}
+                                className={`p-2 rounded-lg transition-all duration-300 ${
+                                  selectedReceiver === u.id
+                                    ? "bg-white/20 text-white hover:bg-white/30"
+                                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                }`}
+                              >
+                                <FaPhone className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        </button>
+                      </div>
+                    ))
+                )}
               </div>
             </div>
           </aside>

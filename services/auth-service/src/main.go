@@ -88,6 +88,7 @@ func main() {
     r.POST("/login", login)
     r.POST("/register", register)
     r.GET("/verify", verifyToken)
+    r.GET("/users", getUsers)
 
     log.Println("Auth service starting on port 8082")
     port := os.Getenv("PORT"); if port == "" { port = "8082" }; r.Run(":" + port)
@@ -177,4 +178,17 @@ func verifyToken(c *gin.Context) {
     } else {
         c.JSON(401, gin.H{"error": "Invalid token claims"})
     }
+}
+
+// Add function to get all users
+func getUsers(c *gin.Context) {
+    var userList []gin.H
+    for username, userData := range users {
+        userList = append(userList, gin.H{
+            "id":       userData["id"],
+            "username": username,
+            "email":    userData["email"],
+        })
+    }
+    c.JSON(200, userList)
 }
