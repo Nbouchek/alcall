@@ -46,6 +46,14 @@ export default function Home() {
   const [popoverAnchor, setPopoverAnchor] = useState(null);
   const audioCallRef = useRef(null);
 
+  // Debug: Monitor AudioCall ref
+  useEffect(() => {
+    console.log(
+      "AudioCall ref status:",
+      audioCallRef.current ? "Available" : "Not available"
+    );
+  }, [audioCallRef.current]);
+
   // Function to fetch users from backend
   const fetchUsers = async () => {
     setLoadingUsers(true);
@@ -221,6 +229,16 @@ export default function Home() {
 
   // Don't render chat interface if no receiver is selected
   const shouldShowChat = isLoggedIn && selectedReceiver !== null;
+
+  // Debug: Log the conditions
+  useEffect(() => {
+    console.log("Debug conditions:", {
+      isLoggedIn,
+      selectedReceiver,
+      shouldShowChat,
+      user,
+    });
+  }, [isLoggedIn, selectedReceiver, shouldShowChat, user]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-100 via-blue-100 to-pink-100 flex flex-col">
@@ -446,12 +464,24 @@ export default function Home() {
               {shouldShowChat && (
                 <button
                   onClick={() => {
+                    console.log("Call button clicked");
+                    console.log("Audio service status:", audioServiceStatus);
+                    console.log("AudioCall ref:", audioCallRef.current);
+                    console.log("User:", user);
+                    console.log("Selected receiver:", selectedReceiver);
+
                     if (audioServiceStatus === "available") {
+                      // Use the ref to call startCall directly
                       if (audioCallRef.current) {
                         console.log("Calling startCall via ref");
                         audioCallRef.current.startCall();
                       } else {
                         console.error("AudioCall ref not available");
+                        console.log("AudioCall ref details:", {
+                          ref: audioCallRef,
+                          current: audioCallRef.current,
+                          shouldShowChat,
+                        });
                         alert(
                           "Audio call feature is loading... Please wait a moment and try again."
                         );
@@ -485,17 +515,15 @@ export default function Home() {
                 </button>
               )}
 
-              {/* Audio Call Component (hidden but functional) */}
-              {shouldShowChat && (
-                <div className="hidden">
-                  <AudioCall
-                    ref={audioCallRef}
-                    user={user}
-                    selectedReceiver={selectedReceiver}
-                    onCallEnd={() => {}}
-                    getUserName={getUserName}
-                  />
-                </div>
+              {/* Audio Call Component - Always available for ref access when logged in */}
+              {isLoggedIn && (
+                <AudioCall
+                  ref={audioCallRef}
+                  user={user}
+                  selectedReceiver={selectedReceiver}
+                  onCallEnd={() => {}}
+                  getUserName={getUserName}
+                />
               )}
             </div>
           </header>
