@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import Head from "next/head";
+import Script from "next/script";
 import axios from "axios";
 import JanusAudioCall from "../components/JanusAudioCall";
 import UserPopover from "../components/UserPopover";
@@ -285,12 +286,15 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-100 via-blue-100 to-pink-100 flex flex-col">
+      <Script
+        src="https://unpkg.com/janus-gateway@1.0.0/html/janus.js"
+        strategy="beforeInteractive"
+      />
       <Head>
         <title>UnifiedChat MVP</title>
         <meta name="description" content="UnifiedChat MVP" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <link rel="icon" href="/favicon.ico" />
-        <script src="https://unpkg.com/janus-gateway@1.0.0/html/janus.js"></script>
       </Head>
 
       <main className="flex flex-1 h-screen max-h-screen overflow-hidden">
