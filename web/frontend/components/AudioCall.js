@@ -27,6 +27,7 @@ const AudioCall = forwardRef(
     const [isMuted, setIsMuted] = useState(false);
     const [isCallActive, setIsCallActive] = useState(false);
     const [currentCallId, setCurrentCallId] = useState(null);
+    const [audioConnected, setAudioConnected] = useState(false);
 
     const localStreamRef = useRef(null);
     const remoteStreamRef = useRef(null);
@@ -45,6 +46,22 @@ const AudioCall = forwardRef(
       startCall: () => {
         console.log("AudioCall: startCall called");
         startCall();
+      },
+      testAudio: () => {
+        console.log("AudioCall: Testing audio playback...");
+        if (audioRef.current) {
+          console.log("AudioCall: Audio element found, attempting to play");
+          audioRef.current
+            .play()
+            .then(() => {
+              console.log("AudioCall: Test audio playback successful");
+            })
+            .catch((err) => {
+              console.error("AudioCall: Test audio playback failed:", err);
+            });
+        } else {
+          console.error("AudioCall: No audio element found for testing");
+        }
       },
     }));
 
@@ -357,6 +374,42 @@ const AudioCall = forwardRef(
             console.log("AudioCall: Setting audio element srcObject");
             audioRef.current.srcObject = event.streams[0];
             console.log("AudioCall: Audio element srcObject set successfully");
+
+            // Ensure audio plays
+            audioRef.current.onloadedmetadata = () => {
+              console.log(
+                "AudioCall: Audio metadata loaded, attempting to play"
+              );
+              audioRef.current
+                .play()
+                .then(() => {
+                  console.log("AudioCall: Audio playback started successfully");
+                  setAudioConnected(true);
+                })
+                .catch((err) => {
+                  console.error(
+                    "AudioCall: Failed to start audio playback:",
+                    err
+                  );
+                  setAudioConnected(false);
+                  // Try again after user interaction
+                  document.addEventListener(
+                    "click",
+                    () => {
+                      audioRef.current
+                        .play()
+                        .then(() => {
+                          setAudioConnected(true);
+                        })
+                        .catch((e) => {
+                          console.error("AudioCall: Still failed to play:", e);
+                          setAudioConnected(false);
+                        });
+                    },
+                    { once: true }
+                  );
+                });
+            };
           } else {
             console.error("AudioCall: Audio element not found!");
           }
@@ -496,6 +549,7 @@ const AudioCall = forwardRef(
         audioRef.current.srcObject = null;
       }
       setCurrentCallId(null); // Clear the call ID
+      setAudioConnected(false); // Reset audio connection status
     };
 
     const playRingtone = () => {
@@ -620,8 +674,16 @@ const AudioCall = forwardRef(
 
             <div className="relative flex items-center gap-4">
               <div className="relative">
-                <div className="w-4 h-4 bg-green-400 rounded-full animate-pulse"></div>
-                <div className="absolute -inset-1 bg-green-400 rounded-full opacity-30 animate-ping"></div>
+                <div
+                  className={`w-4 h-4 rounded-full animate-pulse ${
+                    audioConnected ? "bg-green-400" : "bg-yellow-400"
+                  }`}
+                ></div>
+                <div
+                  className={`absolute -inset-1 rounded-full opacity-30 animate-ping ${
+                    audioConnected ? "bg-green-400" : "bg-yellow-400"
+                  }`}
+                ></div>
               </div>
               <div className="text-white">
                 <span className="font-bold text-lg">
@@ -638,6 +700,15 @@ const AudioCall = forwardRef(
                     className="text-yellow-300 animate-spin text-xs"
                     style={{ animationDuration: "3s" }}
                   />
+                  <span
+                    className={`text-xs px-2 py-1 rounded-full ${
+                      audioConnected ? "bg-green-500" : "bg-yellow-500"
+                    }`}
+                  >
+                    {audioConnected
+                      ? "🔊 Audio Connected"
+                      : "🔇 Connecting Audio..."}
+                  </span>
                 </div>
               </div>
             </div>
@@ -726,7 +797,20 @@ const AudioCall = forwardRef(
         )}
 
         {/* Audio Element for Remote Stream */}
-        <audio ref={audioRef} autoPlay muted={false} />
+        <audio
+          ref={audioRef}
+          autoPlay
+          muted={false}
+          controls={false}
+          style={{ display: "none" }}
+          onLoadedMetadata={() =>
+            console.log("AudioCall: Audio metadata loaded")
+          }
+          onCanPlay={() => console.log("AudioCall: Audio can play")}
+          onPlay={() => console.log("AudioCall: Audio started playing")}
+          onPause={() => console.log("AudioCall: Audio paused")}
+          onError={(e) => console.error("AudioCall: Audio error:", e)}
+        />
       </div>
     );
   }
