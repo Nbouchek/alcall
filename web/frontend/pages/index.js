@@ -12,6 +12,10 @@ import {
   FaStar,
   FaBell,
   FaMicrophone,
+  FaBars,
+  FaTimes,
+  FaSearch,
+  FaUsers,
 } from "react-icons/fa";
 
 const AUTH_API_BASE_URL =
@@ -28,6 +32,7 @@ export default function Home() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [selectedReceiver, setSelectedReceiver] = useState(4); // Default to Linda
   const [audioServiceStatus, setAudioServiceStatus] = useState("checking");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [users] = useState([
     { id: 1, username: "admin" },
     { id: 4, username: "Linda" },
@@ -161,102 +166,202 @@ export default function Home() {
       <Head>
         <title>UnifiedChat MVP</title>
         <meta name="description" content="UnifiedChat MVP" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
       <main className="flex flex-1 h-screen max-h-screen overflow-hidden">
-        {/* Enhanced Sidebar */}
-        {isLoggedIn && (
-          <aside className="hidden sm:flex flex-col w-64 bg-gradient-to-b from-white to-gray-50 border-r shadow-xl z-10">
-            <div className="p-6 border-b bg-gradient-to-r from-blue-500 to-purple-600">
+        {/* Mobile Sidebar Overlay */}
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 bg-black bg-opacity-50 z-40 sm:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
+        {/* Enhanced Mobile-First Sidebar */}
+        <aside
+          className={`fixed inset-y-0 left-0 z-50 w-80 bg-gradient-to-b from-white to-gray-50 border-r shadow-2xl transform transition-transform duration-300 ease-in-out sm:relative sm:translate-x-0 ${
+            sidebarOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
+        >
+          {/* Sidebar Header */}
+          <div className="p-6 border-b bg-gradient-to-r from-blue-500 to-purple-600">
+            <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
                 <FaRocket className="text-yellow-300 animate-bounce" />
                 UnifiedChat
               </h2>
-              <p className="text-xs text-blue-100 mt-1 flex items-center gap-1">
-                <FaStar
-                  className="text-yellow-300 animate-spin"
-                  style={{ animationDuration: "3s" }}
-                />
-                Slack-style MVP
-              </p>
+              <button
+                onClick={() => setSidebarOpen(false)}
+                className="sm:hidden text-white hover:text-yellow-300 transition-colors"
+              >
+                <FaTimes className="w-5 h-5" />
+              </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-4">
+            <p className="text-xs text-blue-100 mt-1 flex items-center gap-1">
+              <FaStar
+                className="text-yellow-300 animate-spin"
+                style={{ animationDuration: "3s" }}
+              />
+              Slack-style MVP
+            </p>
+          </div>
+
+          {/* User Info Section */}
+          <div className="p-4 border-b bg-gradient-to-r from-gray-50 to-blue-50">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center">
+                <FaUser className="w-5 h-5 text-white" />
+              </div>
+              <div className="flex-1">
+                <div className="font-semibold text-gray-800">
+                  {user?.username}
+                </div>
+                <div className="text-xs text-gray-500">Online</div>
+              </div>
+              <button
+                onClick={() => {
+                  localStorage.removeItem("token");
+                  setIsLoggedIn(false);
+                  setUser(null);
+                  setMessages([]);
+                }}
+                className="text-red-500 hover:text-red-700 transition-colors"
+              >
+                <FaSignOutAlt className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Search Bar */}
+          <div className="p-4 border-b">
+            <div className="relative">
+              <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder="Search users..."
+                className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+              />
+            </div>
+          </div>
+
+          {/* Users List */}
+          <div className="flex-1 overflow-y-auto">
+            <div className="p-4">
               <h3 className="text-xs font-semibold text-gray-400 mb-3 uppercase tracking-wider flex items-center gap-2">
-                <FaUser className="text-blue-500" />
-                Active Users
+                <FaUsers className="text-blue-500" />
+                Direct Messages
               </h3>
               {users
                 .filter((u) => u.id !== user?.id)
                 .map((u) => (
-                  <div key={u.id} className="flex items-center gap-2 mb-3">
+                  <div key={u.id} className="mb-2">
                     <button
-                      onClick={(e) => {
+                      onClick={() => {
                         setSelectedReceiver(u.id);
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        setPopoverUser(u);
-                        setPopoverAnchor(rect);
+                        setSidebarOpen(false); // Close sidebar on mobile
                       }}
-                      className={`group flex-1 text-left px-4 py-3 rounded-xl transition-all duration-300 ease-in-out transform hover:scale-105 ${
+                      className={`group w-full text-left px-4 py-3 rounded-xl transition-all duration-300 ease-in-out transform hover:scale-105 ${
                         selectedReceiver === u.id
                           ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold shadow-lg"
                           : "hover:bg-gradient-to-r hover:from-gray-100 hover:to-blue-50 text-gray-700 border border-transparent hover:border-blue-200"
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <span className="flex items-center gap-2">
-                          <div
-                            className={`w-2 h-2 rounded-full ${
+                        <div className="flex items-center gap-3">
+                          <div className="relative">
+                            <div
+                              className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                                selectedReceiver === u.id
+                                  ? "bg-white/20"
+                                  : "bg-gradient-to-br from-gray-200 to-gray-300"
+                              }`}
+                            >
+                              <FaUser
+                                className={`w-5 h-5 ${
+                                  selectedReceiver === u.id
+                                    ? "text-white"
+                                    : "text-gray-600"
+                                }`}
+                              />
+                            </div>
+                            <div
+                              className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white ${
+                                selectedReceiver === u.id
+                                  ? "bg-yellow-300"
+                                  : "bg-green-400"
+                              } animate-pulse`}
+                            ></div>
+                          </div>
+                          <div className="text-left">
+                            <div className="font-medium">@{u.username}</div>
+                            <div
+                              className={`text-xs ${
+                                selectedReceiver === u.id
+                                  ? "text-white/80"
+                                  : "text-gray-500"
+                              }`}
+                            >
+                              Available for chat
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const rect =
+                                e.currentTarget.getBoundingClientRect();
+                              setPopoverUser(u);
+                              setPopoverAnchor(rect);
+                            }}
+                            className={`p-2 rounded-lg transition-all duration-300 ${
                               selectedReceiver === u.id
-                                ? "bg-yellow-300"
-                                : "bg-green-400"
-                            } animate-pulse`}
-                          ></div>
-                          @{u.username}
-                        </span>
-                        <div className="flex items-center gap-1">
-                          <div
-                            className={`w-2 h-2 rounded-full ${
-                              selectedReceiver === u.id
-                                ? "bg-yellow-300"
-                                : "bg-gray-300"
-                            } animate-ping`}
-                          ></div>
+                                ? "bg-white/20 text-white hover:bg-white/30"
+                                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                            }`}
+                          >
+                            <FaPhone className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
                     </button>
                   </div>
                 ))}
             </div>
-            <div className="p-4 border-t bg-gradient-to-r from-gray-50 to-blue-50">
-              <div className="text-xs text-gray-500 flex items-center gap-2">
-                <span>Logged in as </span>
-                <span className="font-semibold text-blue-700 bg-white px-2 py-1 rounded-full shadow-sm">
-                  {user?.username}
-                </span>
-              </div>
-            </div>
-          </aside>
-        )}
+          </div>
+        </aside>
 
         {/* Enhanced Main Chat Area */}
         <section className="flex-1 flex flex-col h-full max-h-screen bg-white shadow-2xl rounded-lg overflow-hidden relative">
-          {/* Enhanced Header */}
-          <header className="flex items-center justify-between px-6 py-4 border-b bg-gradient-to-r from-blue-500 to-purple-600 shadow-lg sticky top-0 z-10">
+          {/* Enhanced Header with Mobile Menu */}
+          <header className="flex items-center justify-between px-4 sm:px-6 py-4 border-b bg-gradient-to-r from-blue-500 to-purple-600 shadow-lg sticky top-0 z-10">
             <div className="flex items-center gap-3">
-              <span className="text-xl font-bold text-white flex items-center gap-2">
-                {isLoggedIn ? getUserName(selectedReceiver) : "UnifiedChat MVP"}
-                {isLoggedIn && (
-                  <FaBell className="text-yellow-300 animate-bounce text-sm" />
-                )}
-              </span>
-              {isLoggedIn && (
-                <span className="text-xs text-blue-100 bg-white/20 px-2 py-1 rounded-full">
-                  Direct Message
-                </span>
-              )}
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="sm:hidden text-white hover:text-yellow-300 transition-colors"
+              >
+                <FaBars className="w-5 h-5" />
+              </button>
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
+                  <FaUser className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <span className="text-lg font-bold text-white">
+                    {isLoggedIn
+                      ? getUserName(selectedReceiver)
+                      : "UnifiedChat MVP"}
+                  </span>
+                  {isLoggedIn && (
+                    <div className="text-xs text-blue-100">Direct Message</div>
+                  )}
+                </div>
+              </div>
             </div>
-            <div className="flex items-center gap-4">
+
+            <div className="flex items-center gap-3">
               {/* Enhanced Call Button */}
               {isLoggedIn && (
                 <button
@@ -278,7 +383,7 @@ export default function Home() {
                       );
                     }
                   }}
-                  className={`group relative px-6 py-3 rounded-xl transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 flex items-center gap-3 font-bold shadow-lg ${
+                  className={`group relative px-4 py-2 sm:px-6 sm:py-3 rounded-xl transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 flex items-center gap-2 font-bold shadow-lg ${
                     audioServiceStatus === "available"
                       ? "bg-gradient-to-r from-green-400 to-emerald-500 hover:from-green-500 hover:to-emerald-600 text-white"
                       : "bg-gradient-to-r from-gray-400 to-gray-500 text-gray-600 cursor-not-allowed"
@@ -294,8 +399,8 @@ export default function Home() {
                   {audioServiceStatus === "available" && (
                     <div className="absolute -inset-1 bg-gradient-to-r from-green-400 to-emerald-500 rounded-xl blur opacity-30 group-hover:opacity-50 transition duration-300"></div>
                   )}
-                  <FaPhone className="w-5 h-5 relative z-10 animate-pulse group-hover:animate-bounce" />
-                  <span className="relative z-10">
+                  <FaPhone className="w-4 h-4 sm:w-5 sm:h-5 relative z-10 animate-pulse group-hover:animate-bounce" />
+                  <span className="relative z-10 hidden sm:inline">
                     {audioServiceStatus === "checking" ? "..." : "Start Huddle"}
                   </span>
                 </button>
@@ -311,22 +416,6 @@ export default function Home() {
                     getUserName={getUserName}
                   />
                 </div>
-              )}
-
-              {/* Enhanced Logout Button */}
-              {isLoggedIn && (
-                <button
-                  onClick={() => {
-                    localStorage.removeItem("token");
-                    setIsLoggedIn(false);
-                    setUser(null);
-                    setMessages([]);
-                  }}
-                  className="group bg-gradient-to-r from-red-400 to-pink-500 hover:from-red-500 hover:to-pink-600 text-white px-4 py-2 rounded-xl transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 flex items-center gap-2 font-semibold shadow-lg"
-                >
-                  <FaSignOutAlt className="w-4 h-4 animate-pulse group-hover:animate-bounce" />
-                  Logout
-                </button>
               )}
             </div>
           </header>
@@ -426,7 +515,7 @@ export default function Home() {
                       }`}
                     >
                       <div
-                        className={`max-w-[80%] sm:max-w-md p-4 rounded-2xl shadow-lg transition-all duration-300 ease-in-out transform hover:scale-105 ${
+                        className={`max-w-[85%] sm:max-w-md p-4 rounded-2xl shadow-lg transition-all duration-300 ease-in-out transform hover:scale-105 ${
                           isOwnMessage(msg)
                             ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-br-none"
                             : "bg-gradient-to-r from-gray-100 to-white text-gray-800 rounded-bl-none border border-gray-200"
@@ -462,12 +551,12 @@ export default function Home() {
                 {/* Enhanced Send Button */}
                 <button
                   onClick={sendMessage}
-                  className="group relative bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 flex items-center gap-2"
+                  className="group relative bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white p-3 rounded-xl font-bold shadow-lg transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 flex items-center gap-2"
                 >
                   {/* Glowing effect */}
                   <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl blur opacity-30 group-hover:opacity-50 transition duration-300"></div>
                   <FaPaperPlane className="w-4 h-4 relative z-10 animate-pulse group-hover:animate-bounce" />
-                  <span className="relative z-10">Send</span>
+                  <span className="relative z-10 hidden sm:inline">Send</span>
                 </button>
 
                 {/* Enhanced Quick Call Button */}

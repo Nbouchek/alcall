@@ -1,5 +1,11 @@
 import { useRef, useEffect } from "react";
-import { FaUserAstronaut, FaPhone, FaStar, FaRocket } from "react-icons/fa";
+import {
+  FaUserAstronaut,
+  FaPhone,
+  FaStar,
+  FaRocket,
+  FaTimes,
+} from "react-icons/fa";
 
 export default function UserPopover({ user, onClose, onCall, anchorRect }) {
   const popoverRef = useRef(null);
@@ -16,13 +22,26 @@ export default function UserPopover({ user, onClose, onCall, anchorRect }) {
 
   if (!user || !anchorRect) return null;
 
+  // Mobile-friendly positioning
+  const isMobile = window.innerWidth < 640;
   const style = {
     position: "absolute",
-    top: anchorRect.bottom + 8,
-    left: anchorRect.left,
     zIndex: 100,
-    minWidth: 280,
+    minWidth: isMobile ? "280px" : "320px",
+    maxWidth: isMobile ? "90vw" : "400px",
   };
+
+  // Position the popover based on available space
+  if (isMobile) {
+    // On mobile, position at bottom center of screen
+    style.bottom = "20px";
+    style.left = "50%";
+    style.transform = "translateX(-50%)";
+  } else {
+    // On desktop, position relative to anchor
+    style.top = anchorRect.bottom + 8;
+    style.left = anchorRect.left;
+  }
 
   return (
     <div
@@ -30,6 +49,16 @@ export default function UserPopover({ user, onClose, onCall, anchorRect }) {
       style={style}
       className="relative bg-gradient-to-br from-purple-500 via-pink-500 to-orange-500 rounded-2xl shadow-2xl border-0 p-6 flex flex-col items-center animate-fade-in backdrop-blur-sm"
     >
+      {/* Close button for mobile */}
+      {isMobile && (
+        <button
+          onClick={onClose}
+          className="absolute top-3 right-3 text-white/80 hover:text-white transition-colors"
+        >
+          <FaTimes className="w-5 h-5" />
+        </button>
+      )}
+
       {/* Glowing ring effect */}
       <div className="absolute -inset-1 bg-gradient-to-r from-pink-600 to-purple-600 rounded-2xl blur opacity-25 group-hover:opacity-75 transition duration-1000 group-hover:duration-200 animate-pulse"></div>
 
@@ -54,7 +83,7 @@ export default function UserPopover({ user, onClose, onCall, anchorRect }) {
         <div className="text-white/80 text-sm mb-2">ID: {user.id}</div>
 
         {/* Fun status labels */}
-        <div className="flex gap-2 justify-center mb-3">
+        <div className="flex flex-wrap gap-2 justify-center mb-3">
           <span className="bg-white/20 backdrop-blur-sm text-white px-3 py-1 rounded-full text-xs font-bold border border-white/30">
             🚀 Active User
           </span>
@@ -67,9 +96,9 @@ export default function UserPopover({ user, onClose, onCall, anchorRect }) {
       {/* Enhanced call button with animations */}
       <button
         onClick={onCall}
-        className="group relative flex items-center gap-3 bg-gradient-to-r from-green-400 to-emerald-500 hover:from-green-500 hover:to-emerald-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg transition-all duration-300 ease-in-out transform hover:scale-105 hover:shadow-2xl active:scale-95"
+        className="group relative flex items-center gap-3 bg-gradient-to-r from-green-400 to-emerald-500 hover:from-green-500 hover:to-emerald-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg transition-all duration-300 ease-in-out transform hover:scale-105 hover:shadow-2xl active:scale-95 w-full justify-center"
       >
-        {/* Glowing effect behind button */}
+        {/* Glowing effect */}
         <div className="absolute -inset-1 bg-gradient-to-r from-green-400 to-emerald-500 rounded-xl blur opacity-30 group-hover:opacity-50 transition duration-300"></div>
 
         <FaPhone className="w-5 h-5 animate-pulse group-hover:animate-bounce" />
