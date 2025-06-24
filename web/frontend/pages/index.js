@@ -24,8 +24,7 @@ const AUTH_API_BASE_URL =
 const MESSAGE_API_BASE_URL =
   process.env.NEXT_PUBLIC_MESSAGE_API_URL ||
   "https://unifiedchat-message-service.onrender.com";
-const REALTIME_API_BASE_URL =
-  "https://unifiedchat-realtime-service.onrender.com";
+const REALTIME_API_BASE_URL = "https://realtime-service-onfn.onrender.com";
 
 export default function Home() {
   const [user, setUser] = useState(null);
