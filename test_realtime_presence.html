@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>UnifiedChat Real-time Presence Test</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        min-height: 100vh;
+      }
+      .container {
+        background: rgba(255, 255, 255, 0.1);
+        padding: 20px;
+        border-radius: 10px;
+        backdrop-filter: blur(10px);
+      }
+      .status {
+        padding: 10px;
+        margin: 10px 0;
+        border-radius: 5px;
+        font-weight: bold;
+      }
+      .online {
+        background: rgba(34, 197, 94, 0.3);
+      }
+      .offline {
+        background: rgba(239, 68, 68, 0.3);
+      }
+      .connecting {
+        background: rgba(245, 158, 11, 0.3);
+      }
+      .log {
+        background: rgba(0, 0, 0, 0.3);
+        padding: 10px;
+        border-radius: 5px;
+        margin: 10px 0;
+        max-height: 300px;
+        overflow-y: auto;
+        font-family: monospace;
+        font-size: 12px;
+      }
+      button {
+        background: rgba(255, 255, 255, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        color: white;
+        padding: 10px 20px;
+        border-radius: 5px;
+        cursor: pointer;
+        margin: 5px;
+      }
+      button:hover {
+        background: rgba(255, 255, 255, 0.3);
+      }
+      input {
+        background: rgba(255, 255, 255, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        color: white;
+        padding: 8px;
+        border-radius: 5px;
+        margin: 5px;
+      }
+      input::placeholder {
+        color: rgba(255, 255, 255, 0.7);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🔍 UnifiedChat Real-time Presence Test</h1>
+
+      <div class="status connecting" id="connectionStatus">
+        🔌 Connecting to realtime service...
+      </div>
+
+      <div>
+        <input
+          type="text"
+          id="username"
+          placeholder="Enter username"
+          value="testuser"
+        />
+        <button onclick="connect()">Connect</button>
+        <button onclick="disconnect()">Disconnect</button>
+      </div>
+
+      <div>
+        <h3>📊 Online Users:</h3>
+        <div id="onlineUsers">No users online</div>
+      </div>
+
+      <div>
+        <h3>📝 Log:</h3>
+        <div class="log" id="log"></div>
+      </div>
+    </div>
+
+    <script>
+      let ws = null;
+      let onlineUsers = [];
+
+      function log(message) {
+        const logDiv = document.getElementById("log");
+        const timestamp = new Date().toLocaleTimeString();
+        logDiv.innerHTML += `[${timestamp}] ${message}\n`;
+        logDiv.scrollTop = logDiv.scrollHeight;
+      }
+
+      function updateConnectionStatus(status, message) {
+        const statusDiv = document.getElementById("connectionStatus");
+        statusDiv.className = `status ${status}`;
+        statusDiv.textContent = message;
+      }
+
+      function updateOnlineUsers() {
+        const usersDiv = document.getElementById("onlineUsers");
+        if (onlineUsers.length === 0) {
+          usersDiv.textContent = "No users online";
+        } else {
+          usersDiv.innerHTML = onlineUsers
+            .map(
+              (user) =>
+                `<span style="background: rgba(34, 197, 94, 0.3); padding: 5px; margin: 2px; border-radius: 3px;">${user}</span>`
+            )
+            .join("");
+        }
+      }
+
+      function connect() {
+        const username = document.getElementById("username").value.trim();
+        if (!username) {
+          alert("Please enter a username");
+          return;
+        }
+
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          log("Already connected");
+          return;
+        }
+
+        updateConnectionStatus("connecting", "🔌 Connecting...");
+        log(`Connecting as: ${username}`);
+
+        const wsUrl = "wss://realtime-service-onfn.onrender.com/ws";
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+          updateConnectionStatus("online", `✅ Connected as ${username}`);
+          log("WebSocket connected, sending username");
+          ws.send(username);
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === "presence_update") {
+              onlineUsers = data.online_users || [];
+              log(
+                `Received presence update: ${onlineUsers.length} users online`
+              );
+              updateOnlineUsers();
+            } else {
+              log(`Received message: ${event.data}`);
+            }
+          } catch (error) {
+            log(`Received non-JSON message: ${event.data}`);
+          }
+        };
+
+        ws.onclose = () => {
+          updateConnectionStatus("offline", "❌ Disconnected");
+          log("WebSocket closed");
+          onlineUsers = [];
+          updateOnlineUsers();
+        };
+
+        ws.onerror = (error) => {
+          updateConnectionStatus("offline", "❌ Connection error");
+          log(`WebSocket error: ${error}`);
+        };
+      }
+
+      function disconnect() {
+        if (ws) {
+          ws.close();
+          ws = null;
+        }
+      }
+
+      // Test the services on page load
+      window.onload = async () => {
+        log("Page loaded, testing services...");
+
+        try {
+          const healthResponse = await fetch(
+            "https://realtime-service-onfn.onrender.com/health"
+          );
+          const healthData = await healthResponse.json();
+          log(`✅ Realtime service health: ${JSON.stringify(healthData)}`);
+
+          const onlineResponse = await fetch(
+            "https://realtime-service-onfn.onrender.com/online-users"
+          );
+          const onlineData = await onlineResponse.json();
+          log(`✅ Current online users: ${JSON.stringify(onlineData)}`);
+
+          onlineUsers = onlineData.online_users || [];
+          updateOnlineUsers();
+        } catch (error) {
+          log(`❌ Service test failed: ${error.message}`);
+        }
+      };
+    </script>
+  </body>
+</html>

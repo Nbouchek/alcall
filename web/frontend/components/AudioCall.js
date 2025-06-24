@@ -531,7 +531,7 @@ const AudioCall = forwardRef(
           callId
         );
 
-        // Resume audio context if suspended
+        // Resume audio context if suspended - CRITICAL for audio to work
         const audioContext = new (window.AudioContext ||
           window.webkitAudioContext)();
         if (audioContext.state === "suspended") {
@@ -540,6 +540,34 @@ const AudioCall = forwardRef(
           );
           await audioContext.resume();
           console.log("AudioCall: Audio context resumed successfully");
+        }
+
+        // Ensure user has interacted with the page (required for autoplay)
+        if (audioContext.state === "suspended") {
+          console.log(
+            "AudioCall: Audio context still suspended, waiting for user interaction..."
+          );
+          await new Promise((resolve) => {
+            const resumeAudio = async () => {
+              try {
+                await audioContext.resume();
+                console.log(
+                  "AudioCall: Audio context resumed after user interaction"
+                );
+                resolve();
+              } catch (error) {
+                console.error(
+                  "AudioCall: Failed to resume audio context:",
+                  error
+                );
+                resolve();
+              }
+              document.removeEventListener("click", resumeAudio);
+              document.removeEventListener("touchstart", resumeAudio);
+            };
+            document.addEventListener("click", resumeAudio);
+            document.addEventListener("touchstart", resumeAudio);
+          });
         }
 
         console.log("AudioCall: Requesting microphone access...");
@@ -586,8 +614,8 @@ const AudioCall = forwardRef(
 
             console.log("AudioCall: Audio element srcObject set successfully");
 
-            // Ensure audio plays
-            audioRef.current.onloadedmetadata = () => {
+            // Ensure audio plays with proper error handling
+            audioRef.current.onloadedmetadata = async () => {
               console.log(
                 "AudioCall: Audio metadata loaded, attempting to play"
               );
@@ -600,40 +628,67 @@ const AudioCall = forwardRef(
 
               // Resume audio context again before playing
               if (audioContext.state === "suspended") {
-                audioContext.resume().then(() => {
+                try {
+                  await audioContext.resume();
                   console.log("AudioCall: Audio context resumed before play");
-                });
+                } catch (error) {
+                  console.error(
+                    "AudioCall: Failed to resume audio context:",
+                    error
+                  );
+                }
               }
 
-              audioRef.current
-                .play()
-                .then(() => {
-                  console.log("AudioCall: Audio playback started successfully");
-                  setAudioConnected(true);
-                })
-                .catch((err) => {
-                  console.error(
-                    "AudioCall: Failed to start audio playback:",
-                    err
+              try {
+                await audioRef.current.play();
+                console.log("AudioCall: Audio playback started successfully");
+                setAudioConnected(true);
+              } catch (err) {
+                console.error(
+                  "AudioCall: Failed to start audio playback:",
+                  err
+                );
+                setAudioConnected(false);
+
+                // Show user-friendly error message
+                if (err.name === "NotAllowedError") {
+                  console.log(
+                    "AudioCall: Autoplay blocked - user needs to interact with page"
                   );
-                  setAudioConnected(false);
-                  // Try again after user interaction
-                  document.addEventListener(
-                    "click",
-                    () => {
-                      audioRef.current
-                        .play()
-                        .then(() => {
-                          setAudioConnected(true);
-                        })
-                        .catch((e) => {
-                          console.error("AudioCall: Still failed to play:", e);
-                          setAudioConnected(false);
-                        });
-                    },
-                    { once: true }
-                  );
-                });
+                  // Create a visible button for user to click
+                  const playButton = document.createElement("button");
+                  playButton.textContent = "Click to Enable Audio";
+                  playButton.style.cssText = `
+                    position: fixed;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    z-index: 10000;
+                    background: #ff6b6b;
+                    color: white;
+                    border: none;
+                    padding: 15px 30px;
+                    border-radius: 10px;
+                    font-size: 16px;
+                    cursor: pointer;
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+                  `;
+                  playButton.onclick = async () => {
+                    try {
+                      await audioRef.current.play();
+                      console.log(
+                        "AudioCall: Audio playback started after user interaction"
+                      );
+                      setAudioConnected(true);
+                      document.body.removeChild(playButton);
+                    } catch (e) {
+                      console.error("AudioCall: Still failed to play:", e);
+                      setAudioConnected(false);
+                    }
+                  };
+                  document.body.appendChild(playButton);
+                }
+              }
             };
           } else {
             console.error("AudioCall: Audio element not found!");
@@ -744,7 +799,7 @@ const AudioCall = forwardRef(
           "AudioCall: handleOffer called - setting up respondent audio"
         );
 
-        // Resume audio context if suspended
+        // Resume audio context if suspended - CRITICAL for audio to work
         const audioContext = new (window.AudioContext ||
           window.webkitAudioContext)();
         if (audioContext.state === "suspended") {
@@ -755,6 +810,34 @@ const AudioCall = forwardRef(
           console.log(
             "AudioCall: Audio context resumed successfully in handleOffer"
           );
+        }
+
+        // Ensure user has interacted with the page (required for autoplay)
+        if (audioContext.state === "suspended") {
+          console.log(
+            "AudioCall: Audio context still suspended in handleOffer, waiting for user interaction..."
+          );
+          await new Promise((resolve) => {
+            const resumeAudio = async () => {
+              try {
+                await audioContext.resume();
+                console.log(
+                  "AudioCall: Audio context resumed after user interaction in handleOffer"
+                );
+                resolve();
+              } catch (error) {
+                console.error(
+                  "AudioCall: Failed to resume audio context in handleOffer:",
+                  error
+                );
+                resolve();
+              }
+              document.removeEventListener("click", resumeAudio);
+              document.removeEventListener("touchstart", resumeAudio);
+            };
+            document.addEventListener("click", resumeAudio);
+            document.addEventListener("touchstart", resumeAudio);
+          });
         }
 
         // Get microphone access for the respondent
@@ -803,8 +886,8 @@ const AudioCall = forwardRef(
               audioRef.current.volume
             );
 
-            // Ensure audio plays and update connection status
-            audioRef.current.onloadedmetadata = () => {
+            // Ensure audio plays and update connection status with proper error handling
+            audioRef.current.onloadedmetadata = async () => {
               console.log(
                 "AudioCall: Audio metadata loaded in handleOffer, attempting to play"
               );
@@ -817,50 +900,74 @@ const AudioCall = forwardRef(
 
               // Resume audio context again before playing
               if (audioContext.state === "suspended") {
-                audioContext.resume().then(() => {
+                try {
+                  await audioContext.resume();
                   console.log(
                     "AudioCall: Audio context resumed before play in handleOffer"
                   );
-                });
+                } catch (error) {
+                  console.error(
+                    "AudioCall: Failed to resume audio context in handleOffer:",
+                    error
+                  );
+                }
               }
 
-              audioRef.current
-                .play()
-                .then(() => {
+              try {
+                await audioRef.current.play();
+                console.log(
+                  "AudioCall: Audio playback started successfully in handleOffer"
+                );
+                setAudioConnected(true);
+              } catch (err) {
+                console.error(
+                  "AudioCall: Failed to start audio playback in handleOffer:",
+                  err
+                );
+                setAudioConnected(false);
+
+                // Show user-friendly error message
+                if (err.name === "NotAllowedError") {
                   console.log(
-                    "AudioCall: Audio playback started successfully in handleOffer"
+                    "AudioCall: Autoplay blocked in handleOffer - user needs to interact with page"
                   );
-                  setAudioConnected(true);
-                })
-                .catch((err) => {
-                  console.error(
-                    "AudioCall: Failed to start audio playback in handleOffer:",
-                    err
-                  );
-                  setAudioConnected(false);
-                  // Try again after user interaction
-                  document.addEventListener(
-                    "click",
-                    () => {
-                      audioRef.current
-                        .play()
-                        .then(() => {
-                          console.log(
-                            "AudioCall: Audio playback retry successful in handleOffer"
-                          );
-                          setAudioConnected(true);
-                        })
-                        .catch((e) => {
-                          console.error(
-                            "AudioCall: Still failed to play in handleOffer:",
-                            e
-                          );
-                          setAudioConnected(false);
-                        });
-                    },
-                    { once: true }
-                  );
-                });
+                  // Create a visible button for user to click
+                  const playButton = document.createElement("button");
+                  playButton.textContent = "Click to Enable Audio";
+                  playButton.style.cssText = `
+                    position: fixed;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    z-index: 10000;
+                    background: #ff6b6b;
+                    color: white;
+                    border: none;
+                    padding: 15px 30px;
+                    border-radius: 10px;
+                    font-size: 16px;
+                    cursor: pointer;
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+                  `;
+                  playButton.onclick = async () => {
+                    try {
+                      await audioRef.current.play();
+                      console.log(
+                        "AudioCall: Audio playback started after user interaction in handleOffer"
+                      );
+                      setAudioConnected(true);
+                      document.body.removeChild(playButton);
+                    } catch (e) {
+                      console.error(
+                        "AudioCall: Still failed to play in handleOffer:",
+                        e
+                      );
+                      setAudioConnected(false);
+                    }
+                  };
+                  document.body.appendChild(playButton);
+                }
+              }
             };
           } else {
             console.error("AudioCall: Audio element not found in handleOffer!");
