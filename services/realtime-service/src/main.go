@@ -14,12 +14,14 @@ var upgrader = websocket.Upgrader{
 }
 
 type Client struct {
-    ID   string
-    Conn *websocket.Conn
-    Send chan []byte
+    ID       string
+    Username string
+    Conn     *websocket.Conn
+    Send     chan []byte
 }
 
 var clients = make(map[string]*Client)
+var usernameToClientID = make(map[string]string)
 
 func main() {
     r := gin.Default()
@@ -27,6 +29,15 @@ func main() {
     // Health check
     r.GET("/health", func(c *gin.Context) {
         c.JSON(200, gin.H{"status": "healthy"})
+    })
+
+    // Online users endpoint
+    r.GET("/online-users", func(c *gin.Context) {
+        onlineUsers := []string{}
+        for username := range usernameToClientID {
+            onlineUsers = append(onlineUsers, username)
+        }
+        c.JSON(200, gin.H{"online_users": onlineUsers})
     })
 
     r.GET("/ws", handleWebSocket)
@@ -42,13 +53,25 @@ func handleWebSocket(c *gin.Context) {
         return
     }
 
+    // Wait for the first message to be the username (as plain text)
+    _, msg, err := conn.ReadMessage()
+    if err != nil {
+        log.Println("Failed to read username from client:", err)
+        conn.Close()
+        return
+    }
+    username := string(msg)
+    log.Println("WebSocket client connected with username:", username)
+
     client := &Client{
-        ID:   generateID(),
-        Conn: conn,
-        Send: make(chan []byte, 256),
+        ID:       generateID(),
+        Username: username,
+        Conn:     conn,
+        Send:     make(chan []byte, 256),
     }
 
     clients[client.ID] = client
+    usernameToClientID[username] = client.ID
 
     go client.readPump()
     go client.writePump()
@@ -57,6 +80,9 @@ func handleWebSocket(c *gin.Context) {
 func (c *Client) readPump() {
     defer func() {
         delete(clients, c.ID)
+        if c.Username != "" {
+            delete(usernameToClientID, c.Username)
+        }
         c.Conn.Close()
     }()
 
