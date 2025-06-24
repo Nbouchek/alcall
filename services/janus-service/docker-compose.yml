@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   janus:
-    image: ubuntu:20.04
+    image: meetecho/janus-gateway:latest
     container_name: unifiedchat-janus
     ports:
       - "8088:8088"
@@ -14,13 +14,6 @@ services:
     environment:
       - JANUS_LOG_LEVEL=4
       - JANUS_LOG_TIMESTAMPS=true
-    command: >
-      bash -c "
-      apt-get update && apt-get install -y janus curl &&
-      mkdir -p /opt/janus/etc/janus &&
-      cp /opt/janus/etc/janus/*.jcfg /opt/janus/etc/janus/ 2>/dev/null || true &&
-      janus -F /opt/janus/etc/janus -L 4 -d 5
-      "
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8088/janus/info"]
@@ -40,21 +33,7 @@ services:
       - "5349:5349/udp"
     environment:
       - TURN_USERNAME=unifiedchat
-      - TURN_PASSWORD=unifiedchat123
-      - TURN_REALM=unifiedchat.com
-      - TURN_NO_TLS=1
-      - TURN_NO_TCP=1
-    command: >
-      --listening-port=3478
-      --tls-listening-port=5349
-      --listening-ip=0.0.0.0
-      --external-ip=0.0.0.0
-      --realm=unifiedchat.com
-      --user=unifiedchat:unifiedchat123
-      --no-tls
-      --no-tcp
-      --log-file=stdout
-      --verbose
+      - TURN_PASSWORD=changeme
     restart: unless-stopped
     depends_on:
       - janus
