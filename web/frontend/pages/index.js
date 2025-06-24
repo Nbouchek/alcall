@@ -30,7 +30,7 @@ export default function Home() {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [selectedReceiver, setSelectedReceiver] = useState(4); // Default to Linda
+  const [selectedReceiver, setSelectedReceiver] = useState(null); // Start with null instead of hardcoded 4
   const [audioServiceStatus, setAudioServiceStatus] = useState("checking");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [users] = useState([
@@ -52,6 +52,15 @@ export default function Home() {
   const chatEndRef = useRef(null);
   const [popoverUser, setPopoverUser] = useState(null);
   const [popoverAnchor, setPopoverAnchor] = useState(null);
+
+  // Function to set a sensible default receiver when user logs in
+  const setDefaultReceiver = (loggedInUser) => {
+    // Find the first user that's not the logged-in user
+    const availableUsers = users.filter((u) => u.id !== loggedInUser.id);
+    if (availableUsers.length > 0) {
+      setSelectedReceiver(availableUsers[0].id);
+    }
+  };
 
   // Check audio service status
   const checkAudioService = async () => {
@@ -88,6 +97,8 @@ export default function Home() {
       localStorage.setItem("token", response.data.token);
       setUser(response.data.user);
       setIsLoggedIn(true);
+      // Set a sensible default receiver after login
+      setDefaultReceiver(response.data.user);
     } catch (error) {
       console.error("Login error:", error);
       alert("Login failed: " + (error.response?.data?.error || error.message));
@@ -161,6 +172,9 @@ export default function Home() {
     return message.sender_id === user?.id;
   };
 
+  // Don't render chat interface if no receiver is selected
+  const shouldShowChat = isLoggedIn && selectedReceiver !== null;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-100 via-blue-100 to-pink-100 flex flex-col">
       <Head>
@@ -227,6 +241,7 @@ export default function Home() {
                     setIsLoggedIn(false);
                     setUser(null);
                     setMessages([]);
+                    setSelectedReceiver(null);
                   }}
                   className="text-red-500 hover:text-red-700 transition-colors"
                 >
@@ -356,11 +371,11 @@ export default function Home() {
                 )}
                 <div>
                   <span className="text-lg font-bold text-white">
-                    {isLoggedIn
+                    {isLoggedIn && selectedReceiver
                       ? getUserName(selectedReceiver)
                       : "UnifiedChat MVP"}
                   </span>
-                  {isLoggedIn && (
+                  {isLoggedIn && selectedReceiver && (
                     <div className="text-xs text-blue-100">Direct Message</div>
                   )}
                 </div>
@@ -368,8 +383,8 @@ export default function Home() {
             </div>
 
             <div className="flex items-center gap-3">
-              {/* Enhanced Call Button - Only show when logged in */}
-              {isLoggedIn && (
+              {/* Enhanced Call Button - Only show when logged in and receiver selected */}
+              {shouldShowChat && (
                 <button
                   onClick={() => {
                     if (audioServiceStatus === "available") {
@@ -413,7 +428,7 @@ export default function Home() {
               )}
 
               {/* Audio Call Component (hidden but functional) */}
-              {isLoggedIn && (
+              {shouldShowChat && (
                 <div className="hidden">
                   <AudioCall
                     user={user}
@@ -496,8 +511,8 @@ export default function Home() {
             </div>
           )}
 
-          {/* Enhanced Chat Area */}
-          {isLoggedIn && (
+          {/* Enhanced Chat Area - Only show when logged in and receiver selected */}
+          {shouldShowChat && (
             <div className="flex-1 flex flex-col h-full max-h-full">
               <div
                 className="flex-1 overflow-y-auto px-4 py-6 bg-gradient-to-b from-blue-50 via-white to-purple-50"
@@ -580,6 +595,23 @@ export default function Home() {
                   <div className="absolute -inset-1 bg-gradient-to-r from-green-400 to-emerald-500 rounded-xl blur opacity-30 group-hover:opacity-50 transition duration-300"></div>
                   <FaPhone className="w-4 h-4 relative z-10 animate-pulse group-hover:animate-bounce" />
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* Show message when logged in but no receiver selected */}
+          {isLoggedIn && !selectedReceiver && (
+            <div className="flex-1 flex items-center justify-center p-4">
+              <div className="text-center">
+                <div className="w-16 h-16 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+                  <FaUsers className="w-8 h-8 text-white animate-bounce" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-800 mb-2">
+                  Select a User
+                </h3>
+                <p className="text-gray-600">
+                  Choose someone from the sidebar to start chatting
+                </p>
               </div>
             </div>
           )}
