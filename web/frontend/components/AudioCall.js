@@ -67,7 +67,29 @@ const AudioCall = forwardRef(
 
     useEffect(() => {
       if (user) {
-        connectWebSocket();
+        // Test audio service health before connecting WebSocket
+        console.log("AudioCall: Testing audio service health...");
+        fetch(`${AUDIO_SERVICE_URL}/health`)
+          .then((response) => response.json())
+          .then((data) => {
+            console.log("AudioCall: Audio service health check:", data);
+            if (data.status === "healthy") {
+              console.log(
+                "AudioCall: Audio service is healthy, connecting WebSocket..."
+              );
+              connectWebSocket();
+            } else {
+              console.error("AudioCall: Audio service is not healthy:", data);
+            }
+          })
+          .catch((error) => {
+            console.error(
+              "AudioCall: Failed to check audio service health:",
+              error
+            );
+            console.log("AudioCall: Attempting WebSocket connection anyway...");
+            connectWebSocket();
+          });
       }
       return () => {
         if (wsRef.current) {
@@ -117,21 +139,42 @@ const AudioCall = forwardRef(
     }, [callStatus]);
 
     const connectWebSocket = () => {
-      const ws = new WebSocket(
-        `${AUDIO_SERVICE_URL.replace("https", "wss")}/ws/${user.id}`
+      console.log(
+        "AudioCall: Attempting to connect WebSocket for user:",
+        user.id
       );
+      console.log("AudioCall: Audio service URL:", AUDIO_SERVICE_URL);
+
+      const wsUrl = `${AUDIO_SERVICE_URL.replace("https", "wss")}/ws/${
+        user.id
+      }`;
+      console.log("AudioCall: WebSocket URL:", wsUrl);
+
+      const ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
-        console.log("WebSocket connected for audio calls");
+        console.log(
+          "AudioCall: WebSocket connected successfully for user:",
+          user.id
+        );
       };
 
       ws.onmessage = (event) => {
-        const message = JSON.parse(event.data);
-        handleWebSocketMessage(message);
+        console.log("AudioCall: WebSocket message received:", event.data);
+        try {
+          const message = JSON.parse(event.data);
+          handleWebSocketMessage(message);
+        } catch (error) {
+          console.error("AudioCall: Failed to parse WebSocket message:", error);
+        }
       };
 
       ws.onerror = (error) => {
-        console.error("WebSocket error:", error);
+        console.error("AudioCall: WebSocket error:", error);
+      };
+
+      ws.onclose = (event) => {
+        console.log("AudioCall: WebSocket closed:", event.code, event.reason);
       };
 
       wsRef.current = ws;
