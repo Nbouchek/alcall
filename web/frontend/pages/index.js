@@ -257,20 +257,33 @@ export default function Home() {
         console.log("WebSocket connected, sending username:", user.username);
         ws.send(user.username);
       };
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === "presence_update") {
+            console.log(
+              "Received real-time presence update:",
+              data.online_users
+            );
+            setOnlineUsers(data.online_users || []);
+          }
+        } catch (error) {
+          console.log("WebSocket message (not JSON):", event.data);
+        }
+      };
       ws.onclose = () => {
         console.log("WebSocket closed");
       };
       ws.onerror = (err) => {
         console.error("WebSocket error:", err);
       };
-      // No need to handle messages for presence
       return () => {
         ws.close();
       };
     }
   }, [isLoggedIn, user?.username]);
 
-  // Poll /online-users endpoint every 5 seconds
+  // Poll /online-users endpoint every 30 seconds as fallback
   useEffect(() => {
     let interval;
     const fetchOnlineUsers = async () => {
@@ -281,12 +294,14 @@ export default function Home() {
         setOnlineUsers(response.data.online_users || []);
       } catch (error) {
         console.error("Failed to fetch online users:", error);
-        setOnlineUsers([]);
+        // Don't clear onlineUsers on error, keep current state
       }
     };
     if (isLoggedIn) {
+      // Initial fetch
       fetchOnlineUsers();
-      interval = setInterval(fetchOnlineUsers, 5000);
+      // Fallback polling every 30 seconds in case WebSocket fails
+      interval = setInterval(fetchOnlineUsers, 30000);
     }
     return () => interval && clearInterval(interval);
   }, [isLoggedIn]);
@@ -353,11 +368,18 @@ export default function Home() {
                 </div>
                 <button
                   onClick={() => {
+                    // Close WebSocket connection
+                    if (wsRef.current) {
+                      wsRef.current.close();
+                      wsRef.current = null;
+                    }
+                    // Clear all state
                     localStorage.removeItem("token");
                     setIsLoggedIn(false);
                     setUser(null);
                     setMessages([]);
                     setSelectedReceiver(null);
+                    setOnlineUsers([]);
                   }}
                   className="text-red-500 hover:text-red-700 transition-colors"
                 >

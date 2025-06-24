@@ -1,6 +1,7 @@
 package main
 
 import (
+    "encoding/json"
     "log"
     "net/http"
     "os"
@@ -22,8 +23,46 @@ type Client struct {
     Send     chan []byte
 }
 
+type PresenceUpdate struct {
+    Type     string   `json:"type"`
+    Username string   `json:"username,omitempty"`
+    OnlineUsers []string `json:"online_users,omitempty"`
+}
+
 var clients = make(map[string]*Client)
 var usernameToClientID = make(map[string]string)
+
+// Broadcast presence update to all connected clients
+func broadcastPresenceUpdate() {
+    onlineUsers := []string{}
+    for username := range usernameToClientID {
+        onlineUsers = append(onlineUsers, username)
+    }
+
+    update := PresenceUpdate{
+        Type: "presence_update",
+        OnlineUsers: onlineUsers,
+    }
+
+    updateBytes, err := json.Marshal(update)
+    if err != nil {
+        log.Println("Error marshaling presence update:", err)
+        return
+    }
+
+    for _, client := range clients {
+        select {
+        case client.Send <- updateBytes:
+        default:
+            // Channel is full, close connection
+            close(client.Send)
+            delete(clients, client.ID)
+            if client.Username != "" {
+                delete(usernameToClientID, client.Username)
+            }
+        }
+    }
+}
 
 func main() {
     r := gin.Default()
@@ -87,6 +126,9 @@ func handleWebSocket(c *gin.Context) {
     clients[client.ID] = client
     usernameToClientID[username] = client.ID
 
+    // Broadcast presence update to all clients
+    broadcastPresenceUpdate()
+
     go client.readPump()
     go client.writePump()
 }
@@ -98,6 +140,9 @@ func (c *Client) readPump() {
             delete(usernameToClientID, c.Username)
         }
         c.Conn.Close()
+
+        // Broadcast presence update when user disconnects
+        broadcastPresenceUpdate()
     }()
 
     for {
