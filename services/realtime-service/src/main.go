@@ -29,6 +29,11 @@ func main() {
     r := gin.Default()
     r.Use(cors.Default()) // Allow all origins for MVP
 
+    // Root endpoint
+    r.GET("/", func(c *gin.Context) {
+        c.JSON(200, gin.H{"message": "UnifiedChat Realtime Service is running."})
+    })
+
     // Health check
     r.GET("/health", func(c *gin.Context) {
         c.JSON(200, gin.H{"status": "healthy"})
