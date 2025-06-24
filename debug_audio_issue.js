@@ -1,57 +1,43 @@
-// Comprehensive Audio Debug Script - No Audio Issue
-// Run this in your browser console to diagnose why no audio is heard
+// Quick Audio Diagnostic - No Audio Despite Connection
+// Run this in your browser console during an active call
 
-console.log("🔍 Starting comprehensive audio debug - No Audio Issue...");
+console.log("🔍 Quick Audio Diagnostic - No Audio Issue");
 
-// 1. Check AudioCall component state
-console.log("\n📞 AudioCall Component State:");
+// 1. Check if we're in a call
 if (window.audioCallRef && window.audioCallRef.current) {
   const audioCall = window.audioCallRef.current;
-  console.log("AudioCall ref available:", !!audioCall);
-
-  // Get current status
   const status = audioCall.getAudioStatus();
-  console.log("Current audio status:", status);
+  console.log("Call Status:", status);
 
-  // Debug audio setup
-  const audioSetup = audioCall.debugAudioSetup();
-  console.log("Audio setup debug:", audioSetup);
+  if (!status.isInCall) {
+    console.log("❌ Not in a call - start a call first");
+    return;
+  }
 
-  // Check volume
-  const currentVolume = audioCall.getVolume();
-  console.log("Current volume:", currentVolume);
-} else {
-  console.log("❌ AudioCall ref not available");
-}
+  console.log("✅ In a call - checking audio...");
 
-// 2. Check for audio elements and their properties
-console.log("\n🎵 Audio Elements Analysis:");
-const audioElements = document.querySelectorAll("audio");
-console.log("Number of audio elements:", audioElements.length);
+  // 2. Check audio elements
+  const audioElements = document.querySelectorAll("audio");
+  console.log("Audio elements found:", audioElements.length);
 
-if (audioElements.length === 0) {
-  console.log("❌ No audio elements found! This is the problem.");
-} else {
-  audioElements.forEach((audio, index) => {
-    console.log(`\nAudio ${index + 1} Analysis:`);
-    console.log("src:", audio.src);
-    console.log("srcObject:", audio.srcObject);
-    console.log("autoplay:", audio.autoplay);
-    console.log("muted:", audio.muted);
-    console.log("volume:", audio.volume);
-    console.log("readyState:", audio.readyState);
-    console.log("paused:", audio.paused);
-    console.log("currentTime:", audio.currentTime);
-    console.log("duration:", audio.duration);
-    console.log("networkState:", audio.networkState);
-    console.log("error:", audio.error);
+  if (audioElements.length === 0) {
+    console.log("❌ No audio elements found!");
+    return;
+  }
 
-    // Check if srcObject has tracks
+  audioElements.forEach((audio, i) => {
+    console.log(`\nAudio ${i + 1}:`);
+    console.log("- srcObject:", !!audio.srcObject);
+    console.log("- volume:", audio.volume);
+    console.log("- muted:", audio.muted);
+    console.log("- paused:", audio.paused);
+    console.log("- readyState:", audio.readyState);
+
     if (audio.srcObject) {
       const stream = audio.srcObject;
-      console.log("Stream tracks:", stream.getTracks().length);
-      stream.getTracks().forEach((track, i) => {
-        console.log(`Track ${i}:`, {
+      console.log("- stream tracks:", stream.getTracks().length);
+      stream.getTracks().forEach((track, j) => {
+        console.log(`  Track ${j}:`, {
           kind: track.kind,
           enabled: track.enabled,
           muted: track.muted,
@@ -59,79 +45,185 @@ if (audioElements.length === 0) {
         });
       });
     } else {
-      console.log("❌ No srcObject - this is why no audio!");
-    }
-
-    // Try to force play
-    if (audio.srcObject && audio.paused) {
-      console.log("🔧 Attempting to force play audio...");
-      audio
-        .play()
-        .then(() => {
-          console.log("✅ Audio started playing");
-        })
-        .catch((err) => {
-          console.error("❌ Failed to play audio:", err);
-        });
+      console.log("❌ No srcObject - this is the problem!");
     }
   });
+
+  // 3. Try to fix common issues
+  console.log("\n🔧 Attempting fixes...");
+
+  // Resume audio context
+  audioCall.resumeAudioContext().then((success) => {
+    console.log("Audio context resume:", success ? "✅" : "❌");
+  });
+
+  // Force play audio
+  audioCall.forcePlayAudio().then((success) => {
+    console.log("Force play audio:", success ? "✅" : "❌");
+  });
+
+  // Set volume to maximum
+  audioCall.setVolume(1.0);
+
+  // Set audio connected
+  audioCall.setAudioConnected(true);
+
+  // 4. Manual audio test
+  console.log("\n🧪 Manual audio test...");
+  const testAudio = document.createElement("audio");
+  testAudio.volume = 1.0;
+  testAudio.autoplay = true;
+
+  navigator.mediaDevices
+    .getUserMedia({ audio: true })
+    .then((stream) => {
+      testAudio.srcObject = stream;
+      testAudio.onloadedmetadata = () => {
+        testAudio
+          .play()
+          .then(() => {
+            console.log("✅ Test audio playing - you should hear yourself");
+          })
+          .catch((err) => {
+            console.error("❌ Test audio failed:", err);
+          });
+      };
+
+      setTimeout(() => {
+        stream.getTracks().forEach((track) => track.stop());
+        if (document.body.contains(testAudio)) {
+          document.body.removeChild(testAudio);
+        }
+      }, 3000);
+    })
+    .catch((err) => {
+      console.error("❌ Test stream failed:", err);
+    });
+
+  document.body.appendChild(testAudio);
+} else {
+  console.log("❌ AudioCall ref not available");
 }
 
-// 3. Test browser audio output
-console.log("\n🔊 Browser Audio Output Test:");
-try {
-  const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-  console.log("✅ Audio context created");
-  console.log("Audio context state:", audioContext.state);
+console.log("\n💡 If you still can't hear:");
+console.log("1. Check browser/system volume");
+console.log("2. Try clicking on the page");
+console.log("3. Check if audio context is suspended");
+console.log("4. Try refreshing the page");
 
-  if (audioContext.state === "suspended") {
-    console.log("⚠️ Audio context is suspended - user interaction required");
-    console.log("💡 Try clicking anywhere on the page to resume audio context");
+// Detailed Audio Stream Diagnostic
+// Run this during an active call to check audio stream data
+
+console.log("🔍 Detailed Audio Stream Diagnostic");
+
+// 1. Check audio elements in detail
+const audioElements = document.querySelectorAll("audio");
+console.log("Audio elements found:", audioElements.length);
+
+audioElements.forEach((audio, i) => {
+  console.log(`\n=== Audio Element ${i + 1} ===`);
+  console.log("srcObject:", !!audio.srcObject);
+  console.log("volume:", audio.volume);
+  console.log("muted:", audio.muted);
+  console.log("paused:", audio.paused);
+  console.log("readyState:", audio.readyState);
+  console.log("currentTime:", audio.currentTime);
+  console.log("duration:", audio.duration);
+  console.log("error:", audio.error);
+
+  if (audio.srcObject) {
+    const stream = audio.srcObject;
+    console.log("\n--- Stream Analysis ---");
+    console.log("Stream ID:", stream.id);
+    console.log("Stream active:", stream.active);
+    console.log("Tracks count:", stream.getTracks().length);
+
+    stream.getTracks().forEach((track, j) => {
+      console.log(`\nTrack ${j}:`);
+      console.log("- kind:", track.kind);
+      console.log("- enabled:", track.enabled);
+      console.log("- muted:", track.muted);
+      console.log("- readyState:", track.readyState);
+      console.log("- id:", track.id);
+      console.log("- label:", track.label);
+
+      if (track.kind === "audio") {
+        const settings = track.getSettings();
+        console.log("- settings:", settings);
+
+        // Check if track is actually producing audio
+        const constraints = track.getConstraints();
+        console.log("- constraints:", constraints);
+      }
+    });
   }
+});
 
-  // Create a test tone
-  const oscillator = audioContext.createOscillator();
-  const gainNode = audioContext.createGain();
+// 2. Test if we can hear our own microphone
+console.log("\n🧪 Testing microphone feedback...");
+const testAudio = document.createElement("audio");
+testAudio.volume = 1.0;
+testAudio.autoplay = true;
 
-  oscillator.connect(gainNode);
-  gainNode.connect(audioContext.destination);
+navigator.mediaDevices
+  .getUserMedia({ audio: true })
+  .then((stream) => {
+    console.log("✅ Got microphone stream");
+    testAudio.srcObject = stream;
 
-  oscillator.frequency.setValueAtTime(440, audioContext.currentTime); // A4 note
-  gainNode.gain.setValueAtTime(0.3, audioContext.currentTime); // Medium volume
+    testAudio.onloadedmetadata = () => {
+      console.log("✅ Test audio metadata loaded");
+      testAudio
+        .play()
+        .then(() => {
+          console.log(
+            "✅ Test audio playing - you should hear yourself speaking"
+          );
+          console.log(
+            "💡 If you can hear yourself, the issue is with the remote stream"
+          );
+          console.log(
+            "💡 If you cannot hear yourself, it's a system audio issue"
+          );
+        })
+        .catch((err) => {
+          console.error("❌ Test audio play failed:", err);
+        });
+    };
 
-  console.log("🔧 Playing test tone...");
-  oscillator.start();
+    // Clean up after 5 seconds
+    setTimeout(() => {
+      stream.getTracks().forEach((track) => track.stop());
+      if (document.body.contains(testAudio)) {
+        document.body.removeChild(testAudio);
+      }
+      console.log("🧹 Test audio cleaned up");
+    }, 5000);
 
-  setTimeout(() => {
-    oscillator.stop();
-    audioContext.close();
-    console.log("✅ Test tone completed - did you hear it?");
-  }, 2000);
-} catch (error) {
-  console.error("❌ Audio context test failed:", error);
-}
+    document.body.appendChild(testAudio);
+  })
+  .catch((err) => {
+    console.error("❌ Failed to get microphone:", err);
+  });
 
-// 4. Check WebRTC peer connections
-console.log("\n🔗 WebRTC Connection Analysis:");
+// 3. Check WebRTC connection details
 if (window.audioCallRef && window.audioCallRef.current) {
   const audioCall = window.audioCallRef.current;
+  console.log("\n🔗 WebRTC Connection Details:");
 
-  // Access private refs through the component
-  const peerConnection = audioCall.peerConnectionRef?.current;
-  const localStream = audioCall.localStreamRef?.current;
-  const remoteStream = audioCall.remoteStreamRef?.current;
+  // Try to access private refs
+  const debugInfo = audioCall.debugAudioSetup();
+  console.log("Debug info:", debugInfo);
 
-  console.log("Peer connection exists:", !!peerConnection);
-  console.log("Local stream exists:", !!localStream);
-  console.log("Remote stream exists:", !!remoteStream);
-
-  if (peerConnection) {
-    console.log("Peer connection state:", peerConnection.connectionState);
-    console.log("ICE connection state:", peerConnection.iceConnectionState);
-    console.log("Signaling state:", peerConnection.signalingState);
+  // Check if we can access peer connection
+  if (audioCall.peerConnectionRef?.current) {
+    const pc = audioCall.peerConnectionRef.current;
+    console.log("Peer connection state:", pc.connectionState);
+    console.log("ICE connection state:", pc.iceConnectionState);
+    console.log("Signaling state:", pc.signalingState);
 
     // Check transceivers
-    const transceivers = peerConnection.getTransceivers();
+    const transceivers = pc.getTransceivers();
     console.log("Transceivers:", transceivers.length);
     transceivers.forEach((transceiver, i) => {
       console.log(`Transceiver ${i}:`, {
@@ -143,96 +235,208 @@ if (window.audioCallRef && window.audioCallRef.current) {
       });
     });
   }
-
-  if (localStream) {
-    console.log("Local stream tracks:", localStream.getTracks().length);
-    localStream.getTracks().forEach((track, i) => {
-      console.log(`Local track ${i}:`, {
-        kind: track.kind,
-        enabled: track.enabled,
-        muted: track.muted,
-        readyState: track.readyState,
-      });
-    });
-  }
-
-  if (remoteStream) {
-    console.log("Remote stream tracks:", remoteStream.getTracks().length);
-    remoteStream.getTracks().forEach((track, i) => {
-      console.log(`Remote track ${i}:`, {
-        kind: track.kind,
-        enabled: track.enabled,
-        muted: track.muted,
-        readyState: track.readyState,
-      });
-    });
-  }
 }
 
-// 5. Manual audio element test
-console.log("\n🧪 Manual Audio Element Test:");
-if (audioElements.length > 0) {
-  const testAudio = audioElements[0];
-
-  // Create a test audio element
-  const testElement = document.createElement("audio");
-  testElement.volume = 1.0;
-  testElement.autoplay = true;
-
-  // Create a test stream
-  navigator.mediaDevices
-    .getUserMedia({ audio: true })
-    .then((stream) => {
-      console.log("✅ Got test stream, tracks:", stream.getTracks().length);
-      testElement.srcObject = stream;
-
-      testElement.onloadedmetadata = () => {
-        console.log("✅ Test audio metadata loaded");
-        testElement
-          .play()
-          .then(() => {
-            console.log("✅ Test audio playing - you should hear yourself");
-          })
-          .catch((err) => {
-            console.error("❌ Test audio play failed:", err);
-          });
-      };
-
-      // Clean up after 5 seconds
-      setTimeout(() => {
-        stream.getTracks().forEach((track) => track.stop());
-        document.body.removeChild(testElement);
-        console.log("🧹 Test audio cleaned up");
-      }, 5000);
-    })
-    .catch((err) => {
-      console.error("❌ Failed to get test stream:", err);
-    });
-
-  document.body.appendChild(testElement);
-} else {
-  console.log("❌ No audio elements to test with");
-}
-
-// 6. Check for common issues
-console.log("\n🔍 Common Issues Check:");
-console.log("Browser:", navigator.userAgent);
-console.log("Is HTTPS:", window.location.protocol === "https:");
-console.log("Page focused:", document.hasFocus());
+// 4. System audio check
+console.log("\n🔊 System Audio Check:");
+console.log("User agent:", navigator.userAgent);
 console.log(
-  "Audio context state:",
-  new (window.AudioContext || window.webkitAudioContext)().state
+  "Is mobile:",
+  /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+    navigator.userAgent
+  )
 );
 
-// Check if any audio is muted by system
-navigator.permissions.query({ name: "microphone" }).then((result) => {
-  console.log("Microphone permission:", result.state);
+// Check if page is focused
+console.log("Page focused:", document.hasFocus());
+
+// Check if we're in a secure context
+console.log("Secure context:", window.isSecureContext);
+
+// 5. Manual audio context test
+console.log("\n🎵 Manual Audio Context Test:");
+const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+console.log("Audio context state:", audioContext.state);
+console.log("Sample rate:", audioContext.sampleRate);
+
+// Create a simple test tone
+const oscillator = audioContext.createOscillator();
+const gainNode = audioContext.createGain();
+
+oscillator.connect(gainNode);
+gainNode.connect(audioContext.destination);
+
+oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+
+console.log("🔧 Playing test tone (800Hz)...");
+oscillator.start();
+
+setTimeout(() => {
+  oscillator.stop();
+  audioContext.close();
+  console.log("✅ Test tone completed - did you hear a beep?");
+}, 2000);
+
+console.log("\n💡 Analysis:");
+console.log("1. If you heard yourself speaking - remote stream issue");
+console.log("2. If you heard the beep - remote stream issue");
+console.log("3. If you heard nothing - system audio issue");
+console.log("4. Check browser/system volume settings");
+
+// Remote Stream Diagnostic - Check why remote audio isn't working
+// Run this during an active call
+
+console.log("🔍 Remote Stream Diagnostic");
+
+// 1. Check the current audio element's remote stream
+const remoteAudioElements = document.querySelectorAll("audio");
+console.log("Audio elements found:", remoteAudioElements.length);
+
+remoteAudioElements.forEach((audio, i) => {
+  console.log(`\n=== Audio Element ${i + 1} ===`);
+
+  if (audio.srcObject) {
+    const stream = audio.srcObject;
+    console.log("✅ Has remote stream");
+    console.log("Stream ID:", stream.id);
+    console.log("Stream active:", stream.active);
+    console.log("Tracks count:", stream.getTracks().length);
+
+    stream.getTracks().forEach((track, j) => {
+      console.log(`\nTrack ${j}:`);
+      console.log("- kind:", track.kind);
+      console.log("- enabled:", track.enabled);
+      console.log("- muted:", track.muted);
+      console.log("- readyState:", track.readyState);
+      console.log("- id:", track.id);
+      console.log("- label:", track.label);
+
+      if (track.kind === "audio") {
+        console.log("- This is the remote audio track");
+        console.log("- enabled:", track.enabled, "(should be true)");
+        console.log("- muted:", track.muted, "(should be false)");
+        console.log("- readyState:", track.readyState, "(should be live)");
+      }
+    });
+  } else {
+    console.log("❌ No remote stream - this is the problem!");
+  }
 });
 
-console.log("\n🔍 Debug complete! Check the logs above for issues.");
-console.log("💡 Common solutions:");
-console.log("1. Check if audio elements have srcObject set");
-console.log("2. Check if remote stream has audio tracks");
-console.log("3. Check if audio context is suspended");
-console.log("4. Check if browser/system audio is muted");
-console.log("5. Try clicking on the page to resume audio context");
+// 2. Check WebRTC connection state
+if (window.audioCallRef && window.audioCallRef.current) {
+  const audioCall = window.audioCallRef.current;
+  console.log("\n🔗 WebRTC Connection State:");
+
+  // Try to access peer connection through the component
+  const debugInfo = audioCall.debugAudioSetup();
+  console.log("Audio setup debug:", debugInfo);
+
+  // Check if we can access the peer connection directly
+  if (audioCall.peerConnectionRef?.current) {
+    const pc = audioCall.peerConnectionRef.current;
+    console.log("\nPeer Connection Details:");
+    console.log("- connectionState:", pc.connectionState);
+    console.log("- iceConnectionState:", pc.iceConnectionState);
+    console.log("- signalingState:", pc.signalingState);
+
+    // Check transceivers
+    const transceivers = pc.getTransceivers();
+    console.log("- transceivers count:", transceivers.length);
+
+    transceivers.forEach((transceiver, i) => {
+      console.log(`\nTransceiver ${i}:`);
+      console.log("  - mid:", transceiver.mid);
+      console.log("  - direction:", transceiver.direction);
+      console.log("  - currentDirection:", transceiver.currentDirection);
+      console.log("  - has sender:", !!transceiver.sender);
+      console.log("  - has receiver:", !!transceiver.receiver);
+
+      if (transceiver.receiver && transceiver.receiver.track) {
+        console.log(
+          "  - receiver track kind:",
+          transceiver.receiver.track.kind
+        );
+        console.log(
+          "  - receiver track enabled:",
+          transceiver.receiver.track.enabled
+        );
+        console.log(
+          "  - receiver track readyState:",
+          transceiver.receiver.track.readyState
+        );
+      }
+    });
+
+    // Check if connection is properly established
+    if (
+      pc.connectionState === "connected" &&
+      pc.iceConnectionState === "connected"
+    ) {
+      console.log("✅ WebRTC connection is properly established");
+    } else {
+      console.log("❌ WebRTC connection not fully established");
+      console.log('  - connectionState should be "connected"');
+      console.log('  - iceConnectionState should be "connected"');
+    }
+  } else {
+    console.log("❌ No peer connection found");
+  }
+}
+
+// 3. Check if the other person is actually sending audio
+console.log("\n🎤 Remote Audio Check:");
+console.log("The issue is likely one of these:");
+console.log("1. Other person is not speaking");
+console.log("2. Other person's microphone is muted");
+console.log("3. Other person's audio track is not being sent");
+console.log("4. WebRTC connection is not fully established");
+
+// 4. Try to force the audio to play
+console.log("\n🔧 Attempting to force audio playback...");
+if (remoteAudioElements.length > 0) {
+  const audio = remoteAudioElements[0];
+  if (audio.srcObject) {
+    console.log("Trying to force play remote audio...");
+    audio
+      .play()
+      .then(() => {
+        console.log("✅ Remote audio force play successful");
+      })
+      .catch((err) => {
+        console.error("❌ Remote audio force play failed:", err);
+      });
+  }
+}
+
+// 5. Check if we can access the remote stream from the component
+if (window.audioCallRef && window.audioCallRef.current) {
+  const audioCall = window.audioCallRef.current;
+
+  // Try to access the remote stream ref
+  if (audioCall.remoteStreamRef?.current) {
+    const remoteStream = audioCall.remoteStreamRef.current;
+    console.log("\nRemote Stream from Component:");
+    console.log("- exists:", !!remoteStream);
+    console.log("- active:", remoteStream.active);
+    console.log("- tracks:", remoteStream.getTracks().length);
+
+    remoteStream.getTracks().forEach((track, i) => {
+      console.log(`Track ${i}:`, {
+        kind: track.kind,
+        enabled: track.enabled,
+        muted: track.muted,
+        readyState: track.readyState,
+      });
+    });
+  } else {
+    console.log("\n❌ No remote stream ref found in component");
+  }
+}
+
+console.log("\n💡 Next Steps:");
+console.log("1. Ask the other person to speak loudly");
+console.log("2. Check if the other person can hear you");
+console.log("3. Try muting/unmuting on both sides");
+console.log('4. Check if both users see "Audio Connected" status');
