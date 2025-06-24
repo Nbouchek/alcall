@@ -65,6 +65,16 @@ const AudioCall = forwardRef(
       };
     }, [user]);
 
+    // Auto-hide connected status notification
+    useEffect(() => {
+      if (callStatus === "connected") {
+        const timer = setTimeout(() => {
+          setCallStatus("");
+        }, 3000);
+        return () => clearTimeout(timer);
+      }
+    }, [callStatus]);
+
     const connectWebSocket = () => {
       const ws = new WebSocket(
         `${AUDIO_SERVICE_URL.replace("https", "wss")}/ws/${user.id}`
@@ -96,8 +106,10 @@ const AudioCall = forwardRef(
           playRingtone();
           break;
         case "call_answered":
+          console.log("AudioCall: Call answered - updating UI state");
           setCallStatus("connected");
           setIsRinging(false);
+          setIsInCall(true); // Ensure caller sees they are in call
           setIsCallActive(true);
           setCurrentCallId(message.call_id); // Track the call ID
           stopRingtone();
@@ -105,12 +117,16 @@ const AudioCall = forwardRef(
           await establishWebRTCConnection(message.call_id);
           break;
         case "call_rejected":
+          console.log("AudioCall: Call rejected - updating UI state");
           setCallStatus("rejected");
           setIsRinging(false);
+          setIsInCall(false); // Caller is no longer in call
+          setIsCallActive(false);
           stopRingtone();
           setTimeout(() => setCallStatus(""), 3000);
           break;
         case "call_ended":
+          console.log("AudioCall: Call ended - updating UI state");
           setCallStatus("ended");
           setIsInCall(false);
           setIsCallActive(false);
@@ -473,6 +489,11 @@ const AudioCall = forwardRef(
       }
     };
 
+    // Debug: Monitor AudioCall ref
+    useEffect(() => {
+      console.log("AudioCall ref status:", ref ? "Available" : "Not available");
+    }, [ref]);
+
     if (!user) return null;
 
     return (
@@ -622,9 +643,10 @@ const AudioCall = forwardRef(
         )}
 
         {/* Enhanced Call Status Notifications */}
-        {callStatus && !isCallActive && (
+        {callStatus && (
           <div
-            className={`fixed top-4 right-4 p-4 rounded-2xl shadow-2xl z-50 max-w-sm backdrop-blur-sm border-0 ${
+            data-call-status={callStatus}
+            className={`fixed top-4 right-4 p-4 rounded-2xl shadow-2xl z-50 max-w-sm backdrop-blur-sm border-0 transition-all duration-300 ${
               callStatus === "connected"
                 ? "bg-gradient-to-r from-green-400 to-emerald-500 text-white"
                 : callStatus === "ringing"
