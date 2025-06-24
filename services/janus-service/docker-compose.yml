@@ -2,19 +2,25 @@ version: "3.8"
 
 services:
   janus:
-    image: calebbrown/janus-gateway:latest
+    image: ubuntu:20.04
     container_name: unifiedchat-janus
     ports:
       - "8088:8088" # HTTP API
       - "8089:8089" # WebSocket API
       - "8000:8000" # WebRTC (HTTP)
       - "10000-10200:10000-10200/udp" # WebRTC (UDP)
-    volumes:
-      - ./config:/usr/local/etc/janus
-      - ./logs:/opt/janus/logs
     environment:
       - JANUS_LOG_LEVEL=4
       - JANUS_LOG_TIMESTAMPS=true
+    command: >
+      bash -c "
+      apt-get update && apt-get install -y janus janus-plugins curl &&
+      mkdir -p /opt/janus/etc/janus &&
+      echo 'general: { enabled = true, sampling_rate = 48000, opus_bitrate = 32000 }' > /opt/janus/etc/janus/janus.plugin.audiobridge.jcfg &&
+      echo 'general: { base_path = \"/janus\" }' > /opt/janus/etc/janus/janus.transport.http.jcfg &&
+      echo 'general: { enabled = true }' > /opt/janus/etc/janus/janus.transport.websockets.jcfg &&
+      janus -F /opt/janus/etc/janus -L 4 -d 5
+      "
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8088/janus/info"]
