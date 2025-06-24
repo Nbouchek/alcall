@@ -63,6 +63,26 @@ const AudioCall = forwardRef(
           console.error("AudioCall: No audio element found for testing");
         }
       },
+      setAudioConnected: (status) => {
+        console.log("AudioCall: Manually setting audioConnected to:", status);
+        setAudioConnected(status);
+      },
+      getAudioStatus: () => {
+        console.log("AudioCall: Current audio status:", {
+          audioConnected,
+          isInCall,
+          isCallActive,
+          callStatus,
+          currentCallId,
+        });
+        return {
+          audioConnected,
+          isInCall,
+          isCallActive,
+          callStatus,
+          currentCallId,
+        };
+      },
     }));
 
     useEffect(() => {
@@ -265,6 +285,15 @@ const AudioCall = forwardRef(
           setCallStatus("ringing");
           setIsInCall(true);
           setCurrentCallId(data.call_id);
+
+          // Set a timeout to ensure audio connection status is updated for caller
+          setTimeout(() => {
+            console.log(
+              "AudioCall: Timeout fallback for caller - setting audioConnected to true"
+            );
+            setAudioConnected(true);
+          }, 3000);
+
           await establishWebRTCConnection(data.call_id);
         } else {
           console.error("AudioCall: Failed to start call - API error");
@@ -309,6 +338,21 @@ const AudioCall = forwardRef(
           setCallStatus("connected");
           setCurrentCallId(incomingCall.id); // Track the call ID
           startCallTimer();
+
+          // Force audio connection status update for respondent
+          console.log(
+            "AudioCall: Setting audioConnected to true for respondent"
+          );
+          setAudioConnected(true);
+
+          // Set a timeout to ensure audio connection status is updated
+          setTimeout(() => {
+            console.log(
+              "AudioCall: Timeout fallback - setting audioConnected to true"
+            );
+            setAudioConnected(true);
+          }, 2000);
+
           await establishWebRTCConnection(incomingCall.id);
         } else if (!answer) {
           console.log("AudioCall: Call declined");
