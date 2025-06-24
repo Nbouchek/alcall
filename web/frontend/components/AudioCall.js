@@ -104,6 +104,31 @@ const AudioCall = forwardRef(
           return 0;
         }
       },
+      debugAudioSetup: () => {
+        console.log("AudioCall: Debug Audio Setup");
+        console.log("Local stream:", localStreamRef.current);
+        console.log("Remote stream:", remoteStreamRef.current);
+        console.log("Peer connection:", peerConnectionRef.current);
+        console.log("Audio element:", audioRef.current);
+        if (audioRef.current) {
+          console.log("Audio element properties:", {
+            srcObject: audioRef.current.srcObject,
+            volume: audioRef.current.volume,
+            muted: audioRef.current.muted,
+            paused: audioRef.current.paused,
+            readyState: audioRef.current.readyState,
+          });
+        }
+        return {
+          localStream: !!localStreamRef.current,
+          remoteStream: !!remoteStreamRef.current,
+          peerConnection: !!peerConnectionRef.current,
+          audioElement: !!audioRef.current,
+          audioConnected,
+          isInCall,
+          isCallActive,
+        };
+      },
     }));
 
     useEffect(() => {
@@ -648,8 +673,35 @@ const AudioCall = forwardRef(
 
     const handleOffer = async (offer) => {
       try {
+        console.log(
+          "AudioCall: handleOffer called - setting up respondent audio"
+        );
+
+        // Get microphone access for the respondent
+        console.log(
+          "AudioCall: Requesting microphone access for respondent..."
+        );
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+        });
+        console.log(
+          "AudioCall: Respondent microphone access successful, tracks:",
+          stream.getTracks().length
+        );
+
+        localStreamRef.current = stream;
+
         const peerConnection = new RTCPeerConnection({
           iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+        });
+
+        // Add local audio track to peer connection
+        stream.getTracks().forEach((track) => {
+          console.log(
+            "AudioCall: Adding respondent track to peer connection:",
+            track.kind
+          );
+          peerConnection.addTrack(track, stream);
         });
 
         peerConnection.ontrack = (event) => {
@@ -799,6 +851,8 @@ const AudioCall = forwardRef(
             data: answer,
           })
         );
+
+        console.log("AudioCall: handleOffer completed successfully");
       } catch (error) {
         console.error("Failed to handle offer:", error);
       }
