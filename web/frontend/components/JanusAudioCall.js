@@ -34,6 +34,7 @@ const JanusAudioCall = forwardRef(
     const [roomId, setRoomId] = useState(null);
     const [participants, setParticipants] = useState([]);
     const [connectionError, setConnectionError] = useState(null);
+    const [janusLoaded, setJanusLoaded] = useState(false);
 
     // Janus-specific refs
     const janusRef = useRef(null);
@@ -132,6 +133,17 @@ const JanusAudioCall = forwardRef(
     }));
 
     // Initialize Janus connection
+    useEffect(() => {
+      if (
+        typeof window !== "undefined" &&
+        typeof window.Janus !== "undefined"
+      ) {
+        setJanusLoaded(true);
+      } else {
+        setJanusLoaded(false);
+      }
+    }, []);
+
     useEffect(() => {
       if (user && !janusRef.current) {
         initializeJanus();
@@ -546,8 +558,12 @@ const JanusAudioCall = forwardRef(
       };
     }, [janusConnected, user]);
 
-    if (!user) {
-      return null;
+    if (!janusLoaded) {
+      return (
+        <div className="p-4 bg-red-100 text-red-700 rounded-lg">
+          <b>Janus library not loaded. Please include janus.js in your HTML.</b>
+        </div>
+      );
     }
 
     return (

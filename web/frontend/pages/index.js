@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import Head from "next/head";
 import Script from "next/script";
 import axios from "axios";
-import JanusAudioCall from "../components/JanusAudioCall";
+import dynamic from "next/dynamic";
 import UserPopover from "../components/UserPopover";
 import {
   FaPhone,
@@ -26,6 +26,10 @@ const MESSAGE_API_BASE_URL =
   process.env.NEXT_PUBLIC_MESSAGE_API_URL ||
   "https://unifiedchat-message-service.onrender.com";
 const REALTIME_API_BASE_URL = "https://realtime-service-onfn.onrender.com";
+
+const JanusAudioCall = dynamic(() => import("../components/JanusAudioCall"), {
+  ssr: false,
+});
 
 export default function Home() {
   const [user, setUser] = useState(null);
