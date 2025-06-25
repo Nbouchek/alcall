@@ -6,8 +6,6 @@ services:
     plan: starter
     buildCommand: docker build -t janus .
     envVars:
-      - key: PORT
-        value: 10000
       - key: JANUS_LOG_LEVEL
         value: "4"
       - key: JANUS_LOG_TIMESTAMPS
