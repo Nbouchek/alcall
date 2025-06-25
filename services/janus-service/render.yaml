@@ -5,7 +5,6 @@ services:
     region: oregon
     plan: starter
     buildCommand: docker build -t janus .
-    startCommand: docker run -p $PORT:8088 -p 8089:8089 -p 8000:8000 janus
     envVars:
       - key: PORT
         value: 8088
