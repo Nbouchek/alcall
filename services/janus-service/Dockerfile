@@ -49,6 +49,9 @@ COPY config/janus.plugin.videocall.jcfg /opt/janus/etc/janus/
 COPY config/janus.plugin.recordplay.jcfg /opt/janus/etc/janus/
 COPY config/janus.plugin.sip.jcfg /opt/janus/etc/janus/
 COPY config/janus.plugin.textroom.jcfg /opt/janus/etc/janus/
+COPY config/janus.plugin.streaming.jcfg /opt/janus/etc/janus/
+COPY config/janus.plugin.echotest.jcfg /opt/janus/etc/janus/
+COPY config/janus.plugin.nosip.jcfg /opt/janus/etc/janus/
 COPY config/janus.transport.http.jcfg /opt/janus/etc/janus/
 COPY config/janus.transport.websockets.jcfg /opt/janus/etc/janus/
 
