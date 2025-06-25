@@ -26,13 +26,26 @@ echo "Configuring Janus to bind to WebSocket port: $WS_PORT"
 echo "Checking configuration directory..."
 ls -la /opt/janus/etc/janus/
 
+echo "Original HTTP transport configuration:"
+cat /opt/janus/etc/janus/janus.transport.http.jcfg
+
 # Update the HTTP transport config to use the correct ports
 echo "Updating HTTP transport configuration..."
-sed -i "s/port = 10000/port = $JANUS_PORT/" /opt/janus/etc/janus/janus.transport.http.jcfg
-sed -i "s/ws_port = 10001/ws_port = $WS_PORT/" /opt/janus/etc/janus/janus.transport.http.jcfg
+
+# Use more specific patterns and add debug output
+echo "Replacing port = 10000 with port = $JANUS_PORT"
+sed -i "s/port = 10000/port = $JANUS_PORT/g" /opt/janus/etc/janus/janus.transport.http.jcfg
+
+echo "Replacing ws_port = 10001 with ws_port = $WS_PORT"
+sed -i "s/ws_port = 10001/ws_port = $WS_PORT/g" /opt/janus/etc/janus/janus.transport.http.jcfg
 
 echo "Updated Janus HTTP transport configuration:"
 cat /opt/janus/etc/janus/janus.transport.http.jcfg
+
+# Verify the changes took effect
+echo "Verifying port configuration..."
+grep -n "port =" /opt/janus/etc/janus/janus.transport.http.jcfg || echo "No port lines found"
+grep -n "ws_port =" /opt/janus/etc/janus/janus.transport.http.jcfg || echo "No ws_port lines found"
 
 # Check if Janus binary exists and is executable
 echo "Checking Janus binary..."
@@ -47,7 +60,6 @@ echo "Command: /opt/janus/bin/janus -F /opt/janus/etc/janus -L 4 -d 5"
 
 echo "Expected endpoints after startup:"
 echo "- Health check: http://0.0.0.0:$JANUS_PORT/janus/info"
-echo "- Admin API: http://0.0.0.0:$JANUS_PORT/admin/info"
 echo "- Main API: http://0.0.0.0:$JANUS_PORT/janus"
 echo "- WebSocket: ws://0.0.0.0:$WS_PORT/"
 
