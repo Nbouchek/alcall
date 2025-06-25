@@ -4,11 +4,14 @@ services:
     runtime: docker
     region: oregon
     plan: starter
+    port: 8088
     envVars:
       - key: JANUS_LOG_LEVEL
         value: "4"
       - key: JANUS_LOG_TIMESTAMPS
         value: "true"
+      - key: PORT
+        value: "8088"
     healthCheckPath: /janus/info
     autoDeploy: true
     numInstances: 1
