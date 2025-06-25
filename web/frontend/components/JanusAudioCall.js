@@ -134,13 +134,41 @@ const JanusAudioCall = forwardRef(
 
     // Initialize Janus connection
     useEffect(() => {
-      if (
-        typeof window !== "undefined" &&
-        typeof window.Janus !== "undefined"
-      ) {
-        setJanusLoaded(true);
-      } else {
-        setJanusLoaded(false);
+      const checkJanusLoaded = () => {
+        if (
+          typeof window !== "undefined" &&
+          typeof window.Janus !== "undefined"
+        ) {
+          console.log("Janus library detected");
+          setJanusLoaded(true);
+          return true;
+        } else {
+          console.log("Janus library not yet loaded");
+          setJanusLoaded(false);
+          return false;
+        }
+      };
+
+      // Check immediately
+      if (!checkJanusLoaded()) {
+        // If not loaded, check periodically for up to 10 seconds
+        let attempts = 0;
+        const maxAttempts = 20; // 10 seconds with 500ms intervals
+
+        const interval = setInterval(() => {
+          attempts++;
+          if (checkJanusLoaded() || attempts >= maxAttempts) {
+            clearInterval(interval);
+            if (attempts >= maxAttempts && !checkJanusLoaded()) {
+              console.error("Janus library failed to load after 10 seconds");
+              setConnectionError(
+                "Janus library failed to load. Please refresh the page."
+              );
+            }
+          }
+        }, 500);
+
+        return () => clearInterval(interval);
       }
     }, []);
 
