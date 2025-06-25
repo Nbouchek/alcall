@@ -9,6 +9,6 @@ services:
         value: "4"
       - key: JANUS_LOG_TIMESTAMPS
         value: "true"
-    healthCheckPath: /janus/info
+    healthCheckPath: /
     autoDeploy: true
     numInstances: 1
