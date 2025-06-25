@@ -1,6 +1,7 @@
 general: {
     configs_folder = "/opt/janus/etc/janus"
     plugins_folder = "/opt/janus/lib/janus/plugins"
+    lua_plugins_folder = "/opt/janus/etc/janus"
     transports_folder = "/opt/janus/lib/janus/transports"
     log_to_file = false
     debug_level = 4
@@ -14,6 +15,9 @@ general: {
     # Alternative STUN servers as backup
     # stun_server = "stun1.l.google.com"
     # stun_server = "stun2.l.google.com"
+
+    ice_lite = false
+    ice_tcp = false
 }
 
 # NAT configuration for cloud deployment
@@ -27,4 +31,10 @@ nat: {
     full_trickle = true
     ice_lite = false
     ice_tcp = false
+}
+
+plugins: {
+    "janus.plugin.health" = {
+        path = "/opt/janus/etc/janus/janus.plugin.health.lua"
+    }
 }
