@@ -46,12 +46,23 @@ RUN mkdir -p /opt/janus/etc/janus /opt/janus/lib/janus/plugins /opt/janus/lib/ja
 # Copy configuration files
 COPY config/ /opt/janus/etc/janus/
 
-# Copy startup script
-COPY start.sh /opt/janus/start-janus.sh
-RUN chmod +x /opt/janus/start-janus.sh
-
 # Expose port (Render will override this)
 EXPOSE $PORT
 
-# Use inline shell command with explicit bash and debugging
-CMD ["bash", "-c", "echo 'Container starting...'; echo 'PORT=$PORT'; ls -la /opt/janus/start-janus.sh; /opt/janus/start-janus.sh"]
+# Use a simple inline script to debug and configure ports
+CMD echo "=== DEBUG: Container starting ===" && \
+    echo "DEBUG: PORT environment variable = '$PORT'" && \
+    echo "DEBUG: Current working directory = $(pwd)" && \
+    echo "DEBUG: Listing /opt/janus/etc/janus/" && \
+    ls -la /opt/janus/etc/janus/ && \
+    echo "DEBUG: Original config:" && \
+    cat /opt/janus/etc/janus/janus.transport.http.jcfg && \
+    JANUS_PORT=${PORT:-10000} && \
+    WS_PORT=$((JANUS_PORT + 1)) && \
+    echo "DEBUG: Using ports HTTP=$JANUS_PORT, WS=$WS_PORT" && \
+    sed -i "s/RENDER_PORT_PLACEHOLDER/$JANUS_PORT/g" /opt/janus/etc/janus/janus.transport.http.jcfg && \
+    sed -i "s/RENDER_WS_PORT_PLACEHOLDER/$WS_PORT/g" /opt/janus/etc/janus/janus.transport.http.jcfg && \
+    echo "DEBUG: Updated config:" && \
+    cat /opt/janus/etc/janus/janus.transport.http.jcfg && \
+    echo "DEBUG: Starting Janus..." && \
+    exec /opt/janus/bin/janus -F /opt/janus/etc/janus -L 4 -d 5
