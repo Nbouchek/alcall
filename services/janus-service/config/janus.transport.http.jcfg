@@ -31,5 +31,5 @@ admin: {
     admin_https = false
     admin_port = RENDER_PORT_PLACEHOLDER
     admin_interface = "0.0.0.0"
-    admin_base_path = "/janus-admin"
+    admin_base_path = "/admin"
 }

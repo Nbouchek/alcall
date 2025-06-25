@@ -55,7 +55,7 @@ fi
 echo "=== STARTING JANUS ==="
 echo "Expected endpoints:"
 echo "- HTTP API: http://0.0.0.0:$JANUS_PORT/janus"
-echo "- Health check: http://0.0.0.0:$JANUS_PORT/janus/info"
+echo "- Health check: http://0.0.0.0:$JANUS_PORT/admin/info"
 echo "- WebSocket: ws://0.0.0.0:$WS_PORT"
 
 echo "Executing: /opt/janus/bin/janus -F /opt/janus/etc/janus -L 4 -d 5"
