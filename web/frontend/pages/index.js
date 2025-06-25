@@ -67,7 +67,7 @@ export default function Home() {
     const checkJanusService = async () => {
       try {
         const janusUrl =
-          process.env.NEXT_PUBLIC_JANUS_HTTP_URL || "http://localhost:8090";
+          process.env.NEXT_PUBLIC_JANUS_HTTP_URL || "http://localhost:8088";
         const response = await fetch(`${janusUrl}/janus/info`);
         if (response.ok) {
           setAudioServiceStatus("available");

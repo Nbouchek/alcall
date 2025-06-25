@@ -4,36 +4,57 @@ import { useEffect } from "react";
 
 export default function App({ Component, pageProps }) {
   useEffect(() => {
-    // Load Janus library with fallback
+    // Load Janus library with multiple fallbacks
     const loadJanus = () => {
       if (
         typeof window !== "undefined" &&
         typeof window.Janus === "undefined"
       ) {
-        const script = document.createElement("script");
-        script.src = "https://meetecho.com/janus/janus.js";
-        script.async = true;
-        script.onload = () => {
-          console.log("Janus library loaded successfully");
+        console.log("Loading Janus library...");
+
+        const tryLoadScript = (src, description, fallbackFn) => {
+          return new Promise((resolve, reject) => {
+            const script = document.createElement("script");
+            script.src = src;
+            script.async = false; // Load synchronously for better reliability
+            script.onload = () => {
+              console.log(
+                `Janus library loaded successfully from ${description}`
+              );
+              resolve();
+            };
+            script.onerror = () => {
+              console.error(`Failed to load Janus from ${description}: ${src}`);
+              reject();
+            };
+            document.head.appendChild(script);
+          });
         };
-        script.onerror = () => {
-          console.error(
-            "Failed to load Janus from primary source, trying fallback..."
-          );
-          // Fallback CDN
-          const fallbackScript = document.createElement("script");
-          fallbackScript.src =
-            "https://cdn.jsdelivr.net/npm/janus-gateway@1.2.3/html/janus.js";
-          fallbackScript.async = true;
-          fallbackScript.onload = () => {
-            console.log("Janus library loaded from fallback CDN");
-          };
-          fallbackScript.onerror = () => {
+
+        // Try primary source first
+        tryLoadScript(
+          "https://meetecho.com/janus/janus.js",
+          "Meetecho official"
+        )
+          .catch(() => {
+            // Try first fallback
+            return tryLoadScript(
+              "https://cdn.jsdelivr.net/npm/janus-gateway@1.2.3/html/janus.js",
+              "JSDelivr CDN"
+            );
+          })
+          .catch(() => {
+            // Try second fallback
+            return tryLoadScript(
+              "https://unpkg.com/janus-gateway@1.2.3/html/janus.js",
+              "Unpkg CDN"
+            );
+          })
+          .catch(() => {
             console.error("Failed to load Janus from all sources");
-          };
-          document.head.appendChild(fallbackScript);
-        };
-        document.head.appendChild(script);
+          });
+      } else if (typeof window.Janus !== "undefined") {
+        console.log("Janus library already available");
       }
     };
 

@@ -14,9 +14,9 @@ services:
       - key: NEXT_PUBLIC_WS_URL
         value: "wss://unifiedchat-realtime-service.onrender.com"
       - key: NEXT_PUBLIC_JANUS_URL
-        value: "wss://unifiedchat-janus-service.onrender.com:8188"
+        value: "wss://janus-service.onrender.com:8188"
       - key: NEXT_PUBLIC_JANUS_HTTP_URL
-        value: "https://unifiedchat-janus-service.onrender.com:8088"
+        value: "https://janus-service.onrender.com:8088"
     healthCheckPath: /
     autoDeploy: true
     numInstances: 1
