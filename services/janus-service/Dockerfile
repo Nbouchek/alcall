@@ -55,5 +55,5 @@ RUN chmod +x /opt/janus/start.sh
 # Expose ports
 EXPOSE 8088 8089 8000 10000-10200/udp
 
-# Start Janus using the startup script
-CMD ["/opt/janus/start.sh"]
+# Set entrypoint to the startup script
+ENTRYPOINT ["/opt/janus/start.sh"]
