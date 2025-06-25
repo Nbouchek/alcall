@@ -30,7 +30,6 @@ ls -la /opt/janus/etc/janus/
 echo "Updating HTTP transport configuration..."
 sed -i "s/port = 10000/port = $JANUS_PORT/" /opt/janus/etc/janus/janus.transport.http.jcfg
 sed -i "s/ws_port = 10001/ws_port = $WS_PORT/" /opt/janus/etc/janus/janus.transport.http.jcfg
-sed -i "s/admin_port = 10000/admin_port = $JANUS_PORT/" /opt/janus/etc/janus/janus.transport.http.jcfg
 
 echo "Updated Janus HTTP transport configuration:"
 cat /opt/janus/etc/janus/janus.transport.http.jcfg
