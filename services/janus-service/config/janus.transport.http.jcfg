@@ -8,7 +8,7 @@ general: {
     https = false
 
     # Additional HTTP settings
-    base_path = "/"
+    base_path = "/janus"
 
     # CORS settings for web frontend
     cors: {
