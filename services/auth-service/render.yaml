@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: unifiedchat-auth-service
+    runtime: docker
+    region: oregon
+    plan: starter
+    buildCommand: docker build -t auth-service .
+    envVars:
+      - key: PORT
+        value: 8082
+      - key: JWT_SECRET
+        value: "your-super-secret-jwt-key-change-in-production"
+    healthCheckPath: /health
+    autoDeploy: true
+    numInstances: 1

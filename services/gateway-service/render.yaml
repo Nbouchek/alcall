@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: unifiedchat-gateway-service
+    runtime: docker
+    region: oregon
+    plan: starter
+    buildCommand: docker build -t gateway-service .
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: AUTH_SERVICE_URL
+        value: "https://unifiedchat-auth-service.onrender.com"
+      - key: USER_SERVICE_URL
+        value: "https://unifiedchat-user-service.onrender.com"
+      - key: MESSAGE_SERVICE_URL
+        value: "https://unifiedchat-message-service.onrender.com"
+    healthCheckPath: /health
+    autoDeploy: true
+    numInstances: 1

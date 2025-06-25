@@ -1,11 +1,147 @@
 services:
+  # Janus WebRTC Service
   - type: web
-    name: unifiedchat-audio-service
+    name: unifiedchat-janus-service
     runtime: docker
-    plan: free
-    dockerfilePath: services/audio-service/Dockerfile
-    dockerContext: services/audio-service
+    region: oregon
+    plan: starter
+    dockerfilePath: services/janus-service/Dockerfile
+    dockerContext: services/janus-service
+    envVars:
+      - key: PORT
+        value: 8088
+      - key: JANUS_LOG_LEVEL
+        value: "4"
+      - key: JANUS_LOG_TIMESTAMPS
+        value: "true"
+    healthCheckPath: /janus/info
+    autoDeploy: true
+    numInstances: 1
+
+  # Auth Service
+  - type: web
+    name: unifiedchat-auth-service
+    runtime: docker
+    region: oregon
+    plan: starter
+    dockerfilePath: services/auth-service/Dockerfile
+    dockerContext: services/auth-service
+    envVars:
+      - key: PORT
+        value: 8082
+      - key: JWT_SECRET
+        value: "your-super-secret-jwt-key-change-in-production"
     healthCheckPath: /health
+    autoDeploy: true
+    numInstances: 1
+
+  # Gateway Service
+  - type: web
+    name: unifiedchat-gateway-service
+    runtime: docker
+    region: oregon
+    plan: starter
+    dockerfilePath: services/gateway-service/Dockerfile
+    dockerContext: services/gateway-service
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: AUTH_SERVICE_URL
+        value: "https://unifiedchat-auth-service.onrender.com"
+      - key: USER_SERVICE_URL
+        value: "https://unifiedchat-user-service.onrender.com"
+      - key: MESSAGE_SERVICE_URL
+        value: "https://unifiedchat-message-service.onrender.com"
+    healthCheckPath: /health
+    autoDeploy: true
+    numInstances: 1
+
+  # User Service
+  - type: web
+    name: unifiedchat-user-service
+    runtime: docker
+    region: oregon
+    plan: starter
+    dockerfilePath: services/user-service/Dockerfile
+    dockerContext: services/user-service
+    envVars:
+      - key: PORT
+        value: 8081
+      - key: DB_HOST
+        value: "localhost"
+      - key: DB_PORT
+        value: "5432"
+      - key: DB_NAME
+        value: "unifiedchat"
+      - key: DB_USER
+        value: "unifiedchat"
+      - key: DB_PASSWORD
+        value: "password123"
+    healthCheckPath: /health
+    autoDeploy: true
+    numInstances: 1
+
+  # Message Service
+  - type: web
+    name: unifiedchat-message-service
+    runtime: docker
+    region: oregon
+    plan: starter
+    dockerfilePath: services/message-service/Dockerfile
+    dockerContext: services/message-service
+    envVars:
+      - key: PORT
+        value: 8083
+      - key: DB_HOST
+        value: "localhost"
+      - key: DB_PORT
+        value: "5432"
+      - key: DB_NAME
+        value: "unifiedchat"
+      - key: DB_USER
+        value: "unifiedchat"
+      - key: DB_PASSWORD
+        value: "password123"
+    healthCheckPath: /health
+    autoDeploy: true
+    numInstances: 1
+
+  # Realtime Service
+  - type: web
+    name: unifiedchat-realtime-service
+    runtime: docker
+    region: oregon
+    plan: starter
+    dockerfilePath: services/realtime-service/Dockerfile
+    dockerContext: services/realtime-service
     envVars:
       - key: PORT
         value: 8084
+      - key: MESSAGE_SERVICE_URL
+        value: "https://unifiedchat-message-service.onrender.com"
+    healthCheckPath: /health
+    autoDeploy: true
+    numInstances: 1
+
+  # Frontend
+  - type: web
+    name: unifiedchat-frontend
+    runtime: node
+    region: oregon
+    plan: starter
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: NEXT_PUBLIC_API_URL
+        value: "https://unifiedchat-gateway-service.onrender.com/api/v1"
+      - key: NEXT_PUBLIC_WS_URL
+        value: "wss://unifiedchat-realtime-service.onrender.com"
+      - key: NEXT_PUBLIC_JANUS_URL
+        value: "wss://unifiedchat-janus-service.onrender.com:8089"
+      - key: NEXT_PUBLIC_JANUS_HTTP_URL
+        value: "https://unifiedchat-janus-service.onrender.com"
+    healthCheckPath: /
+    autoDeploy: true
+    numInstances: 1

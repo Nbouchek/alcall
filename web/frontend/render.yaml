@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: unifiedchat-frontend
+    runtime: node
+    region: oregon
+    plan: starter
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: NEXT_PUBLIC_API_URL
+        value: "https://unifiedchat-gateway-service.onrender.com/api/v1"
+      - key: NEXT_PUBLIC_WS_URL
+        value: "wss://unifiedchat-realtime-service.onrender.com"
+      - key: NEXT_PUBLIC_JANUS_URL
+        value: "wss://unifiedchat-janus-service.onrender.com:8089"
+      - key: NEXT_PUBLIC_JANUS_HTTP_URL
+        value: "https://unifiedchat-janus-service.onrender.com"
+    healthCheckPath: /
+    autoDeploy: true
+    numInstances: 1
