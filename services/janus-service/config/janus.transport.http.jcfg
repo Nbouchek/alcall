@@ -2,7 +2,25 @@ general: {
     enabled = true
     port = 10000
     interface = "0.0.0.0"
+    ip = "0.0.0.0"
     threads = 4
     http = true
     https = false
+
+    # Additional HTTP settings
+    base_path = "/janus"
+
+    # CORS settings for web frontend
+    cors: {
+        enabled = true
+        origin = "*"
+        methods = "GET,POST,PUT,DELETE,OPTIONS"
+        headers = "Content-Type,Authorization"
+    }
+
+    # WebSocket settings
+    ws = true
+    ws_port = 10001
+    ws_interface = "0.0.0.0"
+    ws_ip = "0.0.0.0"
 }

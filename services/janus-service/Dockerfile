@@ -37,8 +37,11 @@ RUN cd /tmp && \
     make install && \
     rm -rf /tmp/janus-gateway
 
-# Create necessary directories
-RUN mkdir -p /opt/janus/etc/janus
+# Create necessary directories and verify installation
+RUN mkdir -p /opt/janus/etc/janus /opt/janus/lib/janus/plugins /opt/janus/lib/janus/transports && \
+    ls -la /opt/janus/bin/ && \
+    ls -la /opt/janus/lib/janus/ && \
+    echo "Janus installation verification complete"
 
 # Copy configuration files
 COPY config/ /opt/janus/etc/janus/

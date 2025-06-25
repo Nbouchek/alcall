@@ -1,5 +1,30 @@
 general: {
     configs_folder = "/opt/janus/etc/janus"
+    plugins_folder = "/opt/janus/lib/janus/plugins"
+    transports_folder = "/opt/janus/lib/janus/transports"
     log_to_file = false
     debug_level = 4
+    debug_timestamps = true
+    debug_colors = false
+
+    # STUN servers for NAT traversal (required for internet deployment)
+    stun_server = "stun.l.google.com"
+    stun_port = 19302
+
+    # Alternative STUN servers as backup
+    # stun_server = "stun1.l.google.com"
+    # stun_server = "stun2.l.google.com"
+}
+
+# NAT configuration for cloud deployment
+nat: {
+    # Use STUN for NAT detection
+    stun_server = "stun.l.google.com"
+    stun_port = 19302
+
+    # Enable TURN relay (optional, for better connectivity)
+    nice_debug = false
+    full_trickle = true
+    ice_lite = false
+    ice_tcp = false
 }
