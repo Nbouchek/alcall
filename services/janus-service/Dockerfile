@@ -48,12 +48,8 @@ COPY config/janus.plugin.videoroom.jcfg /opt/janus/etc/janus/
 COPY config/janus.transport.http.jcfg /opt/janus/etc/janus/
 COPY config/janus.transport.websockets.jcfg /opt/janus/etc/janus/
 
-# Copy startup script
-COPY start.sh /opt/janus/start.sh
-RUN chmod +x /opt/janus/start.sh
-
 # Expose ports
 EXPOSE 8088 8089 8000 10000-10200/udp
 
-# Set entrypoint to the startup script
-ENTRYPOINT ["/opt/janus/start.sh"]
+# Start Janus with port configuration
+CMD bash -c "echo 'PORT: $PORT' && if [ ! -z \"\$PORT\" ]; then sed -i \"s/port = 8088/port = \$PORT/\" /opt/janus/etc/janus/janus.transport.http.jcfg; echo 'Updated port to $PORT'; fi && /opt/janus/bin/janus -F /opt/janus/etc/janus -L 4 -d 5"
