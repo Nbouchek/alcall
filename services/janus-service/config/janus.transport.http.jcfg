@@ -1,6 +1,6 @@
 general: {
     enabled = true
-    port = 8088
+    port = 0
     interface = "0.0.0.0"
     threads = 4
     http = true

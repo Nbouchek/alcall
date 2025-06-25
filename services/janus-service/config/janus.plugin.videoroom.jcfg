@@ -25,10 +25,4 @@ general: {
     video_rtcp_sdes_group = true
     video_rtcp_sdes_ssrc = true
     video_rtcp_sdes_csrc = true
-    video_rtcp_sdes_cname = true
-    video_rtcp_sdes_msid = true
-    video_rtcp_sdes_label = true
-    video_rtcp_sdes_group = true
-    video_rtcp_sdes_ssrc = true
-    video_rtcp_sdes_csrc = true
 }
