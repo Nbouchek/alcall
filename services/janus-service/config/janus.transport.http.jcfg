@@ -1,6 +1,6 @@
 general: {
     enabled = true
-    port = RENDER_PORT_PLACEHOLDER
+    port = 8088
     interface = "0.0.0.0"
     ip = "0.0.0.0"
     threads = 4
@@ -20,7 +20,7 @@ general: {
 
     # WebSocket settings
     ws = true
-    ws_port = RENDER_WS_PORT_PLACEHOLDER
+    ws_port = 8188
     ws_interface = "0.0.0.0"
     ws_ip = "0.0.0.0"
     # Redirect root to admin info
