@@ -32,7 +32,7 @@ RUN cd /tmp && \
     git clone https://github.com/meetecho/janus-gateway.git && \
     cd janus-gateway && \
     ./autogen.sh && \
-    ./configure --prefix=/opt/janus --enable-plugin-lua && \
+    ./configure --prefix=/opt/janus && \
     make && \
     make install && \
     rm -rf /tmp/janus-gateway
