@@ -41,6 +41,7 @@ export default function Home() {
   const [users, setUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState([]);
+  const [audioServiceStatus, setAudioServiceStatus] = useState("checking");
 
   const [loginForm, setLoginForm] = useState({
     username: "",
@@ -60,6 +61,32 @@ export default function Home() {
       audioCallRef.current ? "Available" : "Not available"
     );
   }, [audioCallRef.current]);
+
+  // Check Janus service availability
+  useEffect(() => {
+    const checkJanusService = async () => {
+      try {
+        const janusUrl =
+          process.env.NEXT_PUBLIC_JANUS_HTTP_URL || "http://localhost:8090";
+        const response = await fetch(`${janusUrl}/janus/info`);
+        if (response.ok) {
+          setAudioServiceStatus("available");
+        } else {
+          setAudioServiceStatus("unavailable");
+        }
+      } catch (error) {
+        console.log("Janus service not available:", error);
+        setAudioServiceStatus("unavailable");
+      }
+    };
+
+    if (isLoggedIn) {
+      checkJanusService();
+      // Check every 30 seconds
+      const interval = setInterval(checkJanusService, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [isLoggedIn]);
 
   // Function to fetch users from backend
   const fetchUsers = async () => {

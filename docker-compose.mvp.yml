@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   postgres:
@@ -27,6 +27,46 @@ services:
       timeout: 5s
       retries: 5
 
+  # Janus WebRTC Server for audio calling
+  janus:
+    image: meetecho/janus-gateway:latest
+    container_name: unifiedchat-janus
+    ports:
+      - "8090:8090" # HTTP API
+      - "8088:8088" # HTTP API (alternative)
+      - "8089:8089" # WebSocket API
+      - "8188:8188" # WebSocket API (alternative)
+      - "8000:8000" # WebRTC
+      - "10000-10200:10000-10200/udp" # RTP/RTCP ports
+    volumes:
+      - ./services/janus-service/config:/opt/janus/etc/janus
+    environment:
+      - JANUS_LOG_LEVEL=4
+      - JANUS_LOG_TIMESTAMPS=true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8090/janus/info"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # TURN server for better connectivity
+  coturn:
+    image: coturn/coturn:latest
+    container_name: unifiedchat-turn
+    ports:
+      - "3478:3478"
+      - "3478:3478/udp"
+      - "5349:5349"
+      - "5349:5349/udp"
+    environment:
+      - TURN_USERNAME=unifiedchat
+      - TURN_PASSWORD=changeme
+    restart: unless-stopped
+    depends_on:
+      - janus
+
   user-service:
     build: ./services/user-service
     ports:
@@ -41,7 +81,15 @@ services:
       DB_USER: unifiedchat
       DB_PASSWORD: password123
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/health"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:8081/health",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -56,7 +104,15 @@ services:
     environment:
       JWT_SECRET: your-super-secret-jwt-key-change-in-production
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8082/health"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:8082/health",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -75,7 +131,15 @@ services:
       DB_USER: unifiedchat
       DB_PASSWORD: password123
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8083/health"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:8083/health",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -88,7 +152,15 @@ services:
       message-service:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8084/health"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:8084/health",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -109,7 +181,15 @@ services:
       USER_SERVICE_URL: http://user-service:8081
       MESSAGE_SERVICE_URL: http://message-service:8083
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:8080/health",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -121,9 +201,13 @@ services:
     depends_on:
       gateway-service:
         condition: service_healthy
+      janus:
+        condition: service_healthy
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:8080/api/v1
       NEXT_PUBLIC_WS_URL: ws://localhost:8084
+      NEXT_PUBLIC_JANUS_URL: ws://localhost:8089
+      NEXT_PUBLIC_JANUS_HTTP_URL: http://localhost:8090
 
 volumes:
   postgres_data:
