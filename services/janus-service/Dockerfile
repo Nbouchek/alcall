@@ -52,8 +52,12 @@ COPY config/janus.plugin.textroom.jcfg /opt/janus/etc/janus/
 COPY config/janus.transport.http.jcfg /opt/janus/etc/janus/
 COPY config/janus.transport.websockets.jcfg /opt/janus/etc/janus/
 
+# Copy startup script
+COPY start.sh /opt/janus/start.sh
+RUN chmod +x /opt/janus/start.sh
+
 # Expose ports
 EXPOSE 8088 8089 8000 10000-10200/udp
 
 # Start Janus with port configuration
-CMD bash -c "echo 'PORT: $PORT' && if [ ! -z \"\$PORT\" ]; then sed -i \"s/port = 8088/port = \$PORT/\" /opt/janus/etc/janus/janus.transport.http.jcfg; echo 'Updated port to $PORT'; cat /opt/janus/etc/janus/janus.transport.http.jcfg; fi && /opt/janus/bin/janus -F /opt/janus/etc/janus -L 4 -d 5"
+ENTRYPOINT ["/opt/janus/start.sh"]
