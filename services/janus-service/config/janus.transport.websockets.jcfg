@@ -1,3 +1,5 @@
+// WebSocket transport DISABLED - using HTTP transport with WebSocket upgrades instead
+/*
 general: {
     enabled = false
     port = 8188
@@ -6,3 +8,4 @@ general: {
     ws = true
     wss = false
 }
+*/
