@@ -23,9 +23,6 @@ general: {
     ws_port = 8188
     ws_interface = "0.0.0.0"
     ws_ip = "0.0.0.0"
-
-    # Serve static files for health check
-    doc_root = "/usr/local/share/janus"
 }
 
 /* admin: {
