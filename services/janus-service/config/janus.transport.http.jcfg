@@ -18,9 +18,9 @@ general: {
         headers = "Content-Type,Authorization"
     }
 
-    # WebSocket settings
+    # WebSocket settings - enable WebSocket upgrades on HTTP port
     ws = true
-    ws_port = 8188
+    ws_port = 8088
     ws_interface = "0.0.0.0"
     ws_ip = "0.0.0.0"
 }
