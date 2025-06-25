@@ -18,15 +18,12 @@ RUN apt-get update && apt-get install -y \
     liblua5.3-dev \
     libconfig-dev \
     libnice-dev \
-    libssl-dev \
     zlib1g-dev \
     pkg-config \
     gengetopt \
     libtool \
     automake \
     git \
-    wget \
-    sed \
     && rm -rf /var/lib/apt/lists/*
 
 # Clone and build Janus WebRTC
@@ -43,24 +40,10 @@ RUN cd /tmp && \
 RUN mkdir -p /opt/janus/etc/janus
 
 # Copy configuration files
-COPY config/janus.plugin.audiobridge.jcfg /opt/janus/etc/janus/
-COPY config/janus.plugin.videoroom.jcfg /opt/janus/etc/janus/
-COPY config/janus.plugin.videocall.jcfg /opt/janus/etc/janus/
-COPY config/janus.plugin.recordplay.jcfg /opt/janus/etc/janus/
-COPY config/janus.plugin.sip.jcfg /opt/janus/etc/janus/
-COPY config/janus.plugin.textroom.jcfg /opt/janus/etc/janus/
-COPY config/janus.plugin.streaming.jcfg /opt/janus/etc/janus/
-COPY config/janus.plugin.echotest.jcfg /opt/janus/etc/janus/
-COPY config/janus.plugin.nosip.jcfg /opt/janus/etc/janus/
-COPY config/janus.transport.http.jcfg /opt/janus/etc/janus/
-COPY config/janus.transport.websockets.jcfg /opt/janus/etc/janus/
+COPY config/ /opt/janus/etc/janus/
 
-# Copy startup script
-COPY start.sh /opt/janus/start.sh
-RUN chmod +x /opt/janus/start.sh
+# Expose port (will be overridden by Render)
+EXPOSE 8088
 
-# Expose ports
-EXPOSE 8088 8089 8000 10000-10200/udp
-
-# Start Janus with port configuration
-ENTRYPOINT ["/opt/janus/start.sh"]
+# Simple startup command
+CMD ["/opt/janus/bin/janus", "-F", "/opt/janus/etc/janus", "-L", "4", "-d", "5"]

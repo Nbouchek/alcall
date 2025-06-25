@@ -5,6 +5,7 @@ services:
     region: oregon
     plan: starter
     buildCommand: docker build -t janus .
+    startCommand: sed -i "s/port = 8088/port = $PORT/" /opt/janus/etc/janus/janus.transport.http.jcfg && /opt/janus/bin/janus -F /opt/janus/etc/janus -L 4 -d 5
     envVars:
       - key: JANUS_LOG_LEVEL
         value: "4"
