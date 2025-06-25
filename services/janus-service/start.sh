@@ -1,17 +1,18 @@
 #!/bin/bash
 
-echo "Starting Janus with PORT: $PORT"
+echo "=== Janus Startup Script ==="
+echo "PORT environment variable: $PORT"
+echo "Current working directory: $(pwd)"
 
-# Update the port in the HTTP transport config
+# Update the port in the config file
 if [ ! -z "$PORT" ]; then
     echo "Updating port from 8088 to $PORT"
     sed -i "s/port = 8088/port = $PORT/" /opt/janus/etc/janus/janus.transport.http.jcfg
-    echo "Updated config file:"
+    echo "Config file updated:"
     cat /opt/janus/etc/janus/janus.transport.http.jcfg
 else
-    echo "No PORT environment variable set, using default port 8088"
+    echo "No PORT environment variable found"
 fi
 
-# Start Janus
 echo "Starting Janus..."
 exec /opt/janus/bin/janus -F /opt/janus/etc/janus -L 4 -d 5
