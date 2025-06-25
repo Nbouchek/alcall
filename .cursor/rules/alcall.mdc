@@ -38,4 +38,4 @@ unified-chat/
 
 Always write code that follows the highest standards.
 YOU MUST ALWAYS keep your project well-documented.
-RUN git commit and git push at the same time.
+RUN git add, git commit and git push at the same time.

@@ -46,12 +46,12 @@ RUN mkdir -p /opt/janus/etc/janus /opt/janus/lib/janus/plugins /opt/janus/lib/ja
 # Copy configuration files
 COPY config/ /opt/janus/etc/janus/
 
-# Create startup script that MUST handle Render's PORT environment variable
+# Copy startup script
 COPY start.sh /opt/janus/start-janus.sh
 RUN chmod +x /opt/janus/start-janus.sh
 
 # Expose port (Render will override this)
 EXPOSE $PORT
 
-# Use the startup script
-CMD ["/opt/janus/start-janus.sh"]
+# Use inline shell command with explicit bash and debugging
+CMD ["bash", "-c", "echo 'Container starting...'; echo 'PORT=$PORT'; ls -la /opt/janus/start-janus.sh; /opt/janus/start-janus.sh"]

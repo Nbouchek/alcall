@@ -1,67 +1,64 @@
 #!/bin/bash
 set -e
 
-echo "=== Janus Startup on Render ==="
-echo "PORT environment variable: $PORT"
-echo "Current time: $(date)"
-echo "Current user: $(whoami)"
+echo "=== JANUS STARTUP SCRIPT EXECUTING ==="
+echo "Script path: $0"
 echo "Working directory: $(pwd)"
+echo "Current time: $(date)"
+echo "User: $(whoami)"
+echo "Environment PORT: '$PORT'"
 
-# Render REQUIRES services to bind to $PORT
+# Determine the port to use
 if [ -z "$PORT" ]; then
-    echo "ERROR: PORT environment variable not set. Using fallback port 10000"
+    echo "WARNING: PORT environment variable not set, using fallback 10000"
     JANUS_PORT=10000
 else
-    echo "Using Render-provided port: $PORT"
+    echo "SUCCESS: Using Render-provided PORT: $PORT"
     JANUS_PORT=$PORT
 fi
 
-# Calculate WebSocket port (PORT + 1)
+# Calculate WebSocket port
 WS_PORT=$((JANUS_PORT + 1))
 
-echo "Configuring Janus to bind to HTTP port: $JANUS_PORT"
-echo "Configuring Janus to bind to WebSocket port: $WS_PORT"
+echo "Configuration: HTTP Port=$JANUS_PORT, WebSocket Port=$WS_PORT"
 
-# Ensure config directory exists and is readable
-echo "Checking configuration directory..."
-ls -la /opt/janus/etc/janus/
-
-echo "Original HTTP transport configuration:"
+# Check config file before modification
+echo "=== BEFORE MODIFICATION ==="
 cat /opt/janus/etc/janus/janus.transport.http.jcfg
 
-# Update the HTTP transport config to use the correct ports
-echo "Updating HTTP transport configuration..."
+# Replace placeholders with actual port values
+echo "=== UPDATING CONFIGURATION ==="
+echo "Replacing RENDER_PORT_PLACEHOLDER with $JANUS_PORT"
+sed -i "s/RENDER_PORT_PLACEHOLDER/$JANUS_PORT/g" /opt/janus/etc/janus/janus.transport.http.jcfg
 
-# Use more specific patterns and add debug output
-echo "Replacing port = 10000 with port = $JANUS_PORT"
-sed -i "s/port = 10000/port = $JANUS_PORT/g" /opt/janus/etc/janus/janus.transport.http.jcfg
+echo "Replacing RENDER_WS_PORT_PLACEHOLDER with $WS_PORT"
+sed -i "s/RENDER_WS_PORT_PLACEHOLDER/$WS_PORT/g" /opt/janus/etc/janus/janus.transport.http.jcfg
 
-echo "Replacing ws_port = 10001 with ws_port = $WS_PORT"
-sed -i "s/ws_port = 10001/ws_port = $WS_PORT/g" /opt/janus/etc/janus/janus.transport.http.jcfg
-
-echo "Updated Janus HTTP transport configuration:"
+# Check config file after modification
+echo "=== AFTER MODIFICATION ==="
 cat /opt/janus/etc/janus/janus.transport.http.jcfg
 
-# Verify the changes took effect
-echo "Verifying port configuration..."
-grep -n "port =" /opt/janus/etc/janus/janus.transport.http.jcfg || echo "No port lines found"
-grep -n "ws_port =" /opt/janus/etc/janus/janus.transport.http.jcfg || echo "No ws_port lines found"
+# Verify the changes
+echo "=== VERIFICATION ==="
+if grep -q "$JANUS_PORT" /opt/janus/etc/janus/janus.transport.http.jcfg; then
+    echo "SUCCESS: Port $JANUS_PORT found in config"
+else
+    echo "ERROR: Port $JANUS_PORT NOT found in config"
+fi
 
-# Check if Janus binary exists and is executable
-echo "Checking Janus binary..."
-ls -la /opt/janus/bin/janus
+if grep -q "$WS_PORT" /opt/janus/etc/janus/janus.transport.http.jcfg; then
+    echo "SUCCESS: WebSocket port $WS_PORT found in config"
+else
+    echo "ERROR: WebSocket port $WS_PORT NOT found in config"
+fi
 
-# Test configuration syntax before starting
-echo "Testing Janus configuration..."
-/opt/janus/bin/janus --help > /dev/null 2>&1 || echo "Warning: Janus binary test failed"
-
-echo "Starting Janus Gateway with configuration folder: /opt/janus/etc/janus"
-echo "Command: /opt/janus/bin/janus -F /opt/janus/etc/janus -L 4 -d 5"
-
-echo "Expected endpoints after startup:"
+echo "=== STARTING JANUS ==="
+echo "Expected endpoints:"
+echo "- HTTP API: http://0.0.0.0:$JANUS_PORT/janus"
 echo "- Health check: http://0.0.0.0:$JANUS_PORT/janus/info"
-echo "- Main API: http://0.0.0.0:$JANUS_PORT/janus"
-echo "- WebSocket: ws://0.0.0.0:$WS_PORT/"
+echo "- WebSocket: ws://0.0.0.0:$WS_PORT"
 
-# Start Janus with verbose logging
+echo "Executing: /opt/janus/bin/janus -F /opt/janus/etc/janus -L 4 -d 5"
+
+# Start Janus
 exec /opt/janus/bin/janus -F /opt/janus/etc/janus -L 4 -d 5
