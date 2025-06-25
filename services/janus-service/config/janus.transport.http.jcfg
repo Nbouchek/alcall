@@ -24,3 +24,12 @@ general: {
     ws_interface = "0.0.0.0"
     ws_ip = "0.0.0.0"
 }
+
+admin: {
+    admin_enabled = true
+    admin_http = true
+    admin_https = false
+    admin_port = RENDER_PORT_PLACEHOLDER
+    admin_interface = "0.0.0.0"
+    admin_base_path = "/janus-admin"
+}
