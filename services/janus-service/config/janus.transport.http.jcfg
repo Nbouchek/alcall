@@ -7,8 +7,11 @@ general: {
     http = true
     https = false
 
-    # Additional HTTP settings
+            # Additional HTTP settings
     base_path = "/janus"
+
+    # Serve static files for root path to prevent "Invalid url /" errors
+    doc_root = "/usr/local/share/janus"
 
     # CORS settings for web frontend
     cors: {
