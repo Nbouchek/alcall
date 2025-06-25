@@ -1,3 +1,4 @@
 general: {
     enabled = false
+    recordings_path = "/tmp/janus-recordings"
 }
