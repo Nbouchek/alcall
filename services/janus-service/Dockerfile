@@ -17,6 +17,9 @@ RUN apt-get update && apt-get install -y \
     libcurl4-openssl-dev \
     liblua5.3-dev \
     libconfig-dev \
+    libnice-dev \
+    libssl-dev \
+    zlib1g-dev \
     pkg-config \
     gengetopt \
     libtool \
