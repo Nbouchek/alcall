@@ -26,6 +26,11 @@ const MESSAGE_API_BASE_URL =
 const REALTIME_API_BASE_URL =
   process.env.NEXT_PUBLIC_REALTIME_API_URL || "http://localhost:8084";
 
+// Check if we're running on Render (no backend services available)
+const IS_RENDER_DEPLOYMENT =
+  typeof window !== "undefined" &&
+  window.location.hostname.includes("onrender.com");
+
 const JanusAudioCall = dynamic(() => import("../components/JanusAudioCall"), {
   ssr: false,
 });
@@ -156,6 +161,27 @@ export default function Home() {
   const login = async (e) => {
     e.preventDefault();
     console.log("Login button clicked", loginForm);
+
+    // Demo mode for Render deployment
+    if (IS_RENDER_DEPLOYMENT) {
+      console.log("Demo mode: Simulating login for Render deployment");
+      const demoUser = {
+        id: loginForm.username === "admin" ? 1 : 10,
+        username: loginForm.username,
+      };
+      setUser(demoUser);
+      setIsLoggedIn(true);
+      // Set demo users
+      setUsers([
+        { id: 1, username: "admin" },
+        { id: 10, username: "Nacer" },
+        { id: 2, username: "user2" },
+        { id: 3, username: "user3" },
+      ]);
+      setDefaultReceiver(demoUser);
+      return;
+    }
+
     try {
       console.log("Sending login request to:", `${AUTH_API_BASE_URL}/login`);
       const response = await axios.post(
@@ -178,6 +204,21 @@ export default function Home() {
   const sendMessage = async () => {
     if (!newMessage.trim()) return;
 
+    // Demo mode for Render deployment
+    if (IS_RENDER_DEPLOYMENT) {
+      const demoMessage = {
+        id: Date.now(),
+        sender_id: user.id,
+        receiver_id: selectedReceiver,
+        content: newMessage,
+        timestamp: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, demoMessage]);
+      setNewMessage("");
+      scrollToBottom();
+      return;
+    }
+
     try {
       const response = await axios.post(`${MESSAGE_API_BASE_URL}/messages`, {
         sender_id: user.id,
@@ -197,6 +238,11 @@ export default function Home() {
   };
 
   const loadMessages = async () => {
+    // Skip loading messages in demo mode
+    if (IS_RENDER_DEPLOYMENT) {
+      return;
+    }
+
     try {
       const response = await axios.get(
         `${MESSAGE_API_BASE_URL}/messages/${user.id}`
@@ -331,6 +377,14 @@ export default function Home() {
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
+
+      {/* Demo Mode Banner */}
+      {IS_RENDER_DEPLOYMENT && (
+        <div className="bg-yellow-500 text-black px-4 py-2 text-center text-sm font-semibold">
+          🚀 DEMO MODE: Audio calling testing on Render.com - Login with any
+          username/password
+        </div>
+      )}
 
       <main className="flex flex-1 h-screen max-h-screen overflow-hidden">
         {/* Mobile Sidebar Overlay - Only show when logged in */}
