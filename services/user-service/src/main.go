@@ -9,6 +9,7 @@ import (
     "gorm.io/gorm"
     "gorm.io/driver/postgres"
     "golang.org/x/crypto/bcrypt"
+    "github.com/gin-contrib/cors"
 )
 
 type User struct {
@@ -58,6 +59,13 @@ func main() {
 
     // Router setup
     r := gin.Default()
+
+    // CORS configuration - Allow external access
+    config := cors.DefaultConfig()
+    config.AllowAllOrigins = true  // Allow all origins for external testing
+    config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
+    config.AllowHeaders = []string{"Origin", "Content-Type", "Authorization"}
+    r.Use(cors.New(config))
 
     // Health check
     r.GET("/health", func(c *gin.Context) {

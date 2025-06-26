@@ -8,10 +8,10 @@ import (
 func main() {
     r := gin.Default()
 
-    // CORS configuration
+    // CORS configuration - Allow external access
     config := cors.DefaultConfig()
-    config.AllowOrigins = []string{"http://localhost:3000"}
-    config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE"}
+    config.AllowAllOrigins = true  // Allow all origins for external testing
+    config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
     config.AllowHeaders = []string{"Origin", "Content-Type", "Authorization"}
     r.Use(cors.New(config))
 

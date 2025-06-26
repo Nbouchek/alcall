@@ -66,7 +66,13 @@ func broadcastPresenceUpdate() {
 
 func main() {
     r := gin.Default()
-    r.Use(cors.Default()) // Allow all origins for MVP
+
+    // CORS configuration - Allow external access
+    config := cors.DefaultConfig()
+    config.AllowAllOrigins = true  // Allow all origins for external testing
+    config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
+    config.AllowHeaders = []string{"Origin", "Content-Type", "Authorization"}
+    r.Use(cors.New(config))
 
     // Root endpoint
     r.GET("/", func(c *gin.Context) {
