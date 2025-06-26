@@ -100,6 +100,22 @@ export default function Home() {
   const fetchUsers = async () => {
     setLoadingUsers(true);
     try {
+      // Skip backend call in demo mode
+      if (IS_RENDER_DEPLOYMENT) {
+        console.log("Demo mode: Using hardcoded users");
+        setUsers([
+          { id: 1, username: "admin" },
+          { id: 4, username: "Linda" },
+          { id: 5, username: "Hana" },
+          { id: 6, username: "Adam" },
+          { id: 7, username: "Ahmed" },
+          { id: 8, username: "Hamid" },
+          { id: 9, username: "Mueen" },
+          { id: 10, username: "Nacer" },
+        ]);
+        return;
+      }
+
       const response = await axios.get(`${AUTH_API_BASE_URL}/users`);
       if (response.data && Array.isArray(response.data)) {
         setUsers(response.data);
@@ -305,6 +321,12 @@ export default function Home() {
   // Connect to unifiedchat-realtime-service WebSocket and send username
   useEffect(() => {
     if (isLoggedIn && user?.username) {
+      // Skip WebSocket in demo mode
+      if (IS_RENDER_DEPLOYMENT) {
+        console.log("Demo mode: Skipping WebSocket connection");
+        return;
+      }
+
       // Close any previous connection
       if (wsRef.current) {
         wsRef.current.close();
@@ -347,6 +369,13 @@ export default function Home() {
     let interval;
     const fetchOnlineUsers = async () => {
       try {
+        // Skip backend call in demo mode
+        if (IS_RENDER_DEPLOYMENT) {
+          console.log("Demo mode: Using demo online users");
+          setOnlineUsers(["admin", "Nacer", "user2", "user3"]);
+          return;
+        }
+
         const response = await axios.get(
           `${REALTIME_API_BASE_URL}/online-users`
         );
@@ -781,7 +810,9 @@ export default function Home() {
                           <span className="font-bold">
                             {getUserName(msg.sender_id)}
                           </span>
-                          <span className="">{formatTime(msg.created_at)}</span>
+                          <span className="">
+                            {formatTime(msg.timestamp || msg.created_at)}
+                          </span>
                         </div>
                         <div className="break-words whitespace-pre-wrap">
                           {msg.content}
