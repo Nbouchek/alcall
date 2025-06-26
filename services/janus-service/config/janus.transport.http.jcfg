@@ -13,6 +13,9 @@ general: {
     # Serve static content for root path
     doc_root = "/usr/local/share/janus"
 
+    # Enable index file serving for health checks
+    index_files = ["index.html"]
+
     # Enable CORS for all origins
     cors: {
         enabled = true

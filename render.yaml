@@ -8,6 +8,8 @@ services:
     dockerfilePath: services/janus-service/Dockerfile
     dockerContext: services/janus-service
     envVars:
+      - key: PORT
+        value: 8088
       - key: JANUS_LOG_LEVEL
         value: "4"
       - key: JANUS_LOG_TIMESTAMPS
