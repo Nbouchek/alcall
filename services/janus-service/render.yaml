@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: janus-service
+    name: unifiedchat-janus-service
     runtime: docker
     region: oregon
     plan: starter

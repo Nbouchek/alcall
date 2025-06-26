@@ -34,9 +34,9 @@ NEXT_PUBLIC_JANUS_URL=ws://localhost:8089
 NEXT_PUBLIC_JANUS_HTTP_URL=http://localhost:8088
 
 # Existing services
-NEXT_PUBLIC_AUTH_API_URL=https://unifiedchat-auth.onrender.com
+NEXT_PUBLIC_AUTH_API_URL=https://unifiedchat-auth-service.onrender.com
 NEXT_PUBLIC_MESSAGE_API_URL=https://unifiedchat-message-service.onrender.com
-NEXT_PUBLIC_REALTIME_API_URL=https://realtime-service-onfn.onrender.com
+NEXT_PUBLIC_REALTIME_API_URL=https://unifiedchat-realtime-service.onrender.com
 EOF
 
 echo "✅ Cleanup completed!"

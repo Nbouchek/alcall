@@ -1,7 +1,7 @@
 services:
   # Janus WebRTC Service
   - type: web
-    name: janus-service
+    name: unifiedchat-janus-service
     runtime: docker
     region: oregon
     plan: starter
@@ -140,9 +140,9 @@ services:
       - key: NEXT_PUBLIC_REALTIME_API_URL
         value: "https://unifiedchat-realtime-service.onrender.com"
       - key: NEXT_PUBLIC_JANUS_URL
-        value: "wss://janus-service.onrender.com/janus"
+        value: "wss://unifiedchat-janus-service.onrender.com/janus"
       - key: NEXT_PUBLIC_JANUS_HTTP_URL
-        value: "https://janus-service.onrender.com"
+        value: "https://unifiedchat-janus-service.onrender.com"
     healthCheckPath: /
     autoDeploy: true
     numInstances: 1

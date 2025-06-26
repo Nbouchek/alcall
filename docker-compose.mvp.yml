@@ -26,16 +26,16 @@ services:
       retries: 5
 
   # Janus WebRTC Server for audio calling
-  janus:
+  unifiedchat-janus-service:
     build: ./services/janus-service
-    container_name: unifiedchat-janus
+    container_name: unifiedchat-janus-service
     ports:
-      - "8090:8090" # HTTP API
-      - "8088:8088" # HTTP API (alternative)
-      - "8089:8089" # WebSocket API
-      - "8188:8188" # WebSocket API (alternative)
-      - "8000:8000" # WebRTC
-      - "10000-10200:10000-10200/udp" # RTP/RTCP ports
+      - "8090:8090"
+      - "8088:8088"
+      - "8089:8089"
+      - "8188:8188"
+      - "8000:8000"
+      - "10000-10200:10000-10200/udp"
     volumes:
       - ./services/janus-service/config:/usr/local/etc/janus
     environment:
@@ -51,7 +51,7 @@ services:
   #   start_period: 40s
 
   # TURN server for better connectivity
-  coturn:
+  unifiedchat-turn:
     image: coturn/coturn:latest
     container_name: unifiedchat-turn
     ports:
@@ -64,9 +64,9 @@ services:
       - TURN_PASSWORD=changeme
     restart: unless-stopped
     depends_on:
-      - janus
+      - unifiedchat-janus-service
 
-  user-service:
+  unifiedchat-user-service:
     build: ./services/user-service
     ports:
       - "8081:8081"
@@ -93,12 +93,12 @@ services:
       timeout: 10s
       retries: 3
 
-  auth-service:
+  unifiedchat-auth-service:
     build: ./services/auth-service
     ports:
       - "8082:8082"
     depends_on:
-      user-service:
+      unifiedchat-user-service:
         condition: service_healthy
     environment:
       JWT_SECRET: your-super-secret-jwt-key-change-in-production
@@ -116,7 +116,7 @@ services:
       timeout: 10s
       retries: 3
 
-  message-service:
+  unifiedchat-message-service:
     build: ./services/message-service
     ports:
       - "8083:8083"
@@ -143,12 +143,12 @@ services:
       timeout: 10s
       retries: 3
 
-  realtime-service:
+  unifiedchat-realtime-service:
     build: ./services/realtime-service
     ports:
       - "8084:8084"
     depends_on:
-      message-service:
+      unifiedchat-message-service:
         condition: service_healthy
     healthcheck:
       test:
@@ -164,21 +164,21 @@ services:
       timeout: 10s
       retries: 3
 
-  gateway-service:
+  unifiedchat-gateway-service:
     build: ./services/gateway-service
     ports:
       - "8080:8080"
     depends_on:
-      auth-service:
+      unifiedchat-auth-service:
         condition: service_healthy
-      user-service:
+      unifiedchat-user-service:
         condition: service_healthy
-      message-service:
+      unifiedchat-message-service:
         condition: service_healthy
     environment:
-      AUTH_SERVICE_URL: http://auth-service:8082
-      USER_SERVICE_URL: http://user-service:8081
-      MESSAGE_SERVICE_URL: http://message-service:8083
+      AUTH_SERVICE_URL: http://unifiedchat-auth-service:8082
+      USER_SERVICE_URL: http://unifiedchat-user-service:8081
+      MESSAGE_SERVICE_URL: http://unifiedchat-message-service:8083
     healthcheck:
       test:
         [
@@ -193,14 +193,14 @@ services:
       timeout: 10s
       retries: 3
 
-  frontend:
+  unifiedchat-frontend:
     build: ./web/frontend
     ports:
       - "3000:3000"
     depends_on:
-      gateway-service:
+      unifiedchat-gateway-service:
         condition: service_healthy
-      janus:
+      unifiedchat-janus-service:
         condition: service_started
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:8080/api/v1

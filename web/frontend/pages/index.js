@@ -302,7 +302,7 @@ export default function Home() {
     });
   }, [isLoggedIn, selectedReceiver, shouldShowChat, user, audioServiceStatus]);
 
-  // Connect to realtime-service WebSocket and send username
+  // Connect to unifiedchat-realtime-service WebSocket and send username
   useEffect(() => {
     if (isLoggedIn && user?.username) {
       // Close any previous connection
