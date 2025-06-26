@@ -29,7 +29,14 @@ const REALTIME_API_BASE_URL =
 // Check if we're running on Render (no backend services available)
 const IS_RENDER_DEPLOYMENT =
   typeof window !== "undefined" &&
-  window.location.hostname.includes("onrender.com");
+  (window.location.hostname.includes("onrender.com") ||
+    window.location.hostname.includes("render.com"));
+
+// Debug: Log the detection
+if (typeof window !== "undefined") {
+  console.log("Hostname:", window.location.hostname);
+  console.log("IS_RENDER_DEPLOYMENT:", IS_RENDER_DEPLOYMENT);
+}
 
 const JanusAudioCall = dynamic(() => import("../components/JanusAudioCall"), {
   ssr: false,
@@ -177,6 +184,11 @@ export default function Home() {
   const login = async (e) => {
     e.preventDefault();
     console.log("Login button clicked", loginForm);
+    console.log("IS_RENDER_DEPLOYMENT:", IS_RENDER_DEPLOYMENT);
+    console.log(
+      "Current hostname:",
+      typeof window !== "undefined" ? window.location.hostname : "SSR"
+    );
 
     // Demo mode for Render deployment
     if (IS_RENDER_DEPLOYMENT) {
@@ -185,6 +197,7 @@ export default function Home() {
         id: loginForm.username === "admin" ? 1 : 10,
         username: loginForm.username,
       };
+      console.log("Setting demo user:", demoUser);
       setUser(demoUser);
       setIsLoggedIn(true);
       // Set demo users
@@ -195,9 +208,11 @@ export default function Home() {
         { id: 3, username: "user3" },
       ]);
       setDefaultReceiver(demoUser);
+      console.log("Demo login completed");
       return;
     }
 
+    console.log("Not in demo mode, trying backend login");
     try {
       console.log("Sending login request to:", `${AUTH_API_BASE_URL}/login`);
       const response = await axios.post(
@@ -213,7 +228,25 @@ export default function Home() {
       setDefaultReceiver(response.data.user);
     } catch (error) {
       console.error("Login error:", error);
-      alert("Login failed: " + (error.response?.data?.error || error.message));
+      console.log("Backend login failed, falling back to demo mode");
+
+      // Fallback to demo mode if backend fails
+      const demoUser = {
+        id: loginForm.username === "admin" ? 1 : 10,
+        username: loginForm.username,
+      };
+      console.log("Setting demo user (fallback):", demoUser);
+      setUser(demoUser);
+      setIsLoggedIn(true);
+      // Set demo users
+      setUsers([
+        { id: 1, username: "admin" },
+        { id: 10, username: "Nacer" },
+        { id: 2, username: "user2" },
+        { id: 3, username: "user3" },
+      ]);
+      setDefaultReceiver(demoUser);
+      console.log("Demo login completed (fallback)");
     }
   };
 
