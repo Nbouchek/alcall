@@ -20,12 +20,11 @@ import {
 } from "react-icons/fa";
 
 const AUTH_API_BASE_URL =
-  process.env.NEXT_PUBLIC_AUTH_API_URL ||
-  "https://unifiedchat-auth.onrender.com";
+  process.env.NEXT_PUBLIC_AUTH_API_URL || "http://localhost:8082";
 const MESSAGE_API_BASE_URL =
-  process.env.NEXT_PUBLIC_MESSAGE_API_URL ||
-  "https://unifiedchat-message-service.onrender.com";
-const REALTIME_API_BASE_URL = "https://realtime-service-onfn.onrender.com";
+  process.env.NEXT_PUBLIC_MESSAGE_API_URL || "http://localhost:8083";
+const REALTIME_API_BASE_URL =
+  process.env.NEXT_PUBLIC_REALTIME_API_URL || "http://localhost:8084";
 
 const JanusAudioCall = dynamic(() => import("../components/JanusAudioCall"), {
   ssr: false,
@@ -68,14 +67,18 @@ export default function Home() {
       try {
         const janusUrl =
           process.env.NEXT_PUBLIC_JANUS_HTTP_URL || "http://localhost:8088";
+        console.log("Checking Janus service at:", janusUrl);
         const response = await fetch(`${janusUrl}/janus/info`);
+        console.log("Janus response status:", response.status);
         if (response.ok) {
+          console.log("Janus service available - setting status to available");
           setAudioServiceStatus("available");
         } else {
+          console.log("Janus service unavailable - bad response");
           setAudioServiceStatus("unavailable");
         }
       } catch (error) {
-        console.log("Janus service not available:", error);
+        console.log("Janus service not available - error:", error);
         setAudioServiceStatus("unavailable");
       }
     };
@@ -249,8 +252,9 @@ export default function Home() {
       selectedReceiver,
       shouldShowChat,
       user,
+      audioServiceStatus,
     });
-  }, [isLoggedIn, selectedReceiver, shouldShowChat, user]);
+  }, [isLoggedIn, selectedReceiver, shouldShowChat, user, audioServiceStatus]);
 
   // Connect to realtime-service WebSocket and send username
   useEffect(() => {
