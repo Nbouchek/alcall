@@ -1,20 +1,19 @@
 services:
   # Janus WebRTC Service
   - type: web
-    name: unifiedchat-janus-service
+    name: janus-service
     runtime: docker
     region: oregon
     plan: starter
     dockerfilePath: services/janus-service/Dockerfile
     dockerContext: services/janus-service
     envVars:
-      - key: PORT
-        value: 8088
       - key: JANUS_LOG_LEVEL
         value: "4"
       - key: JANUS_LOG_TIMESTAMPS
         value: "true"
-    healthCheckPath: /janus/info
+      - key: PORT
+        value: "8088"
     autoDeploy: true
     numInstances: 1
 
