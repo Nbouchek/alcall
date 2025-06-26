@@ -1,0 +1,6 @@
+{
+  "url": "https://nacer.app.n8n.cloud/webhook/cursor-trigger",
+  "timeout": 30000,
+  "language": "python",
+  "project_name": "alcall"
+}

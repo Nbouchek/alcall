@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   postgres:
     image: postgres:15
@@ -29,7 +27,7 @@ services:
 
   # Janus WebRTC Server for audio calling
   janus:
-    image: meetecho/janus-gateway:latest
+    build: ./services/janus-service
     container_name: unifiedchat-janus
     ports:
       - "8090:8090" # HTTP API
