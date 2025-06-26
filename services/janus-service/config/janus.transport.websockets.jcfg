@@ -1,11 +1,9 @@
-// WebSocket transport DISABLED - using HTTP transport with WebSocket upgrades instead
-/*
+// WebSocket transport enabled for MVP
 general: {
-    enabled = false
-    port = 8188
+    enabled = true
+    port = 8089
     interface = "0.0.0.0"
     threads = 4
     ws = true
     wss = false
 }
-*/

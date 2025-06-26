@@ -37,17 +37,18 @@ services:
       - "8000:8000" # WebRTC
       - "10000-10200:10000-10200/udp" # RTP/RTCP ports
     volumes:
-      - ./services/janus-service/config:/opt/janus/etc/janus
+      - ./services/janus-service/config:/usr/local/etc/janus
     environment:
       - JANUS_LOG_LEVEL=4
       - JANUS_LOG_TIMESTAMPS=true
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8090/janus/info"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+  # healthcheck temporarily disabled - janus is working but container lacks curl/wget
+  # healthcheck:
+  #   test: ["CMD", "curl", "-f", "http://localhost:8088/janus/info"]
+  #   interval: 30s
+  #   timeout: 10s
+  #   retries: 3
+  #   start_period: 40s
 
   # TURN server for better connectivity
   coturn:
@@ -200,12 +201,12 @@ services:
       gateway-service:
         condition: service_healthy
       janus:
-        condition: service_healthy
+        condition: service_started
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:8080/api/v1
       NEXT_PUBLIC_WS_URL: ws://localhost:8084
-      NEXT_PUBLIC_JANUS_URL: ws://localhost:8089
-      NEXT_PUBLIC_JANUS_HTTP_URL: http://localhost:8090
+      NEXT_PUBLIC_JANUS_URL: ws://localhost:8188
+      NEXT_PUBLIC_JANUS_HTTP_URL: http://localhost:8088
 
 volumes:
   postgres_data:
