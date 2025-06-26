@@ -1,13 +1,26 @@
 # Use the official, pre-built Janus Gateway image
 FROM canyan/janus-gateway:latest
 
-# Create directory for static files and add a simple index page
-RUN mkdir -p /usr/local/share/janus && \
-    echo '<!DOCTYPE html><html><head><title>Janus WebRTC Server</title></head><body><h1>Janus WebRTC Server</h1><p>Status: Running</p><a href="/janus/info">API Info</a></body></html>' > /usr/local/share/janus/index.html
+# Install curl for health checks and create static content
+RUN apt-get update && apt-get install -y curl && \
+    mkdir -p /usr/local/share/janus && \
+    echo '<!DOCTYPE html><html><head><title>Janus WebRTC Server</title></head><body><h1>Janus WebRTC Server</h1><p>Status: Running</p><a href="/janus/info">API Info</a></body></html>' > /usr/local/share/janus/index.html && \
+    echo 'OK' > /usr/local/share/janus/health && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Copy our custom configuration files into the container
 COPY config/ /usr/local/etc/janus/
 
-# The canyan/janus-gateway image has its own entrypoint.
-# We just need to ensure our config is in the right place.
-# The default command will pick up the config automatically.
+# Create a startup script that ensures Janus handles root requests
+RUN echo '#!/bin/bash\n\
+echo "Starting Janus WebRTC Server..."\n\
+echo "Creating health check endpoints..."\n\
+mkdir -p /usr/local/share/janus\n\
+echo "OK" > /usr/local/share/janus/health\n\
+echo "{\\"status\\":\\"ok\\",\\"timestamp\\":\\"$(date -Iseconds)\\"}" > /usr/local/share/janus/status.json\n\
+echo "Starting Janus daemon..."\n\
+exec /usr/local/bin/janus "$@"\n\
+' > /usr/local/bin/start-janus.sh && chmod +x /usr/local/bin/start-janus.sh
+
+# Use our custom startup script
+ENTRYPOINT ["/usr/local/bin/start-janus.sh"]

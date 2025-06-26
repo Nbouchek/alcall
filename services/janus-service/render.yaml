@@ -11,5 +11,6 @@ services:
         value: "true"
       - key: PORT
         value: "8088"
+    healthCheckPath: /health
     autoDeploy: true
     numInstances: 1

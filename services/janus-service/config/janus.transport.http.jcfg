@@ -7,14 +7,17 @@ general: {
     http = true
     https = false
 
-    # Minimal settings for Render compatibility
+    # Base path for Janus API
     base_path = "/janus"
 
-    # Serve static content for root path
+    # Serve static content for root path health checks
     doc_root = "/usr/local/share/janus"
 
     # Enable index file serving for health checks
     index_files = ["index.html"]
+
+    # Handle root path requests properly
+    root_redirect = false
 
     # Enable CORS for all origins
     cors: {
@@ -24,8 +27,12 @@ general: {
         headers = "Content-Type,Authorization,X-Requested-With"
     }
 
-    # Disable WebSocket on HTTP transport to avoid conflicts
+    # Disable WebSocket on HTTP transport to avoid conflicts with dedicated WebSocket transport
     ws = false
+
+    # Additional security and stability settings
+    timeout = 60
+    max_connections = 1000
 }
 
 /* admin: {
