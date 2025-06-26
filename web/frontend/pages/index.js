@@ -25,6 +25,7 @@ const MESSAGE_API_BASE_URL =
   process.env.NEXT_PUBLIC_MESSAGE_API_URL || "http://localhost:8083";
 const REALTIME_API_BASE_URL =
   process.env.NEXT_PUBLIC_REALTIME_API_URL || "http://localhost:8084";
+const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
 // Check if we're running on Render (no backend services available)
 const IS_RENDER_DEPLOYMENT =
@@ -191,15 +192,15 @@ export default function Home() {
   const login = async (e) => {
     e.preventDefault();
     console.log("Login button clicked", loginForm);
-    console.log("IS_RENDER_DEPLOYMENT:", IS_RENDER_DEPLOYMENT);
+    console.log("DEMO_MODE:", DEMO_MODE);
     console.log(
       "Current hostname:",
       typeof window !== "undefined" ? window.location.hostname : "SSR"
     );
 
-    // Demo mode for Render deployment
-    if (IS_RENDER_DEPLOYMENT) {
-      console.log("Demo mode: Simulating login for Render deployment");
+    // Demo mode for explicit testing only
+    if (DEMO_MODE) {
+      console.log("Demo mode: Simulating login for demo/testing");
       const demoUser = {
         id: loginForm.username === "admin" ? 1 : 10,
         username: loginForm.username,
@@ -219,7 +220,7 @@ export default function Home() {
       return;
     }
 
-    console.log("Not in demo mode, trying backend login");
+    // Always use backend for login in production
     try {
       console.log("Sending login request to:", `${AUTH_API_BASE_URL}/login`);
       const response = await axios.post(
@@ -235,25 +236,7 @@ export default function Home() {
       setDefaultReceiver(response.data.user);
     } catch (error) {
       console.error("Login error:", error);
-      console.log("Backend login failed, falling back to demo mode");
-
-      // Fallback to demo mode if backend fails
-      const demoUser = {
-        id: loginForm.username === "admin" ? 1 : 10,
-        username: loginForm.username,
-      };
-      console.log("Setting demo user (fallback):", demoUser);
-      setUser(demoUser);
-      setIsLoggedIn(true);
-      // Set demo users
-      setUsers([
-        { id: 1, username: "admin" },
-        { id: 10, username: "Nacer" },
-        { id: 2, username: "user2" },
-        { id: 3, username: "user3" },
-      ]);
-      setDefaultReceiver(demoUser);
-      console.log("Demo login completed (fallback)");
+      alert("Login failed: " + (error.response?.data?.error || error.message));
     }
   };
 
