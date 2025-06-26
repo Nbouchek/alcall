@@ -65,6 +65,13 @@ export default function Home() {
   const audioCallRef = useRef(null);
   const wsRef = useRef(null);
 
+  // Debug: Component mount
+  useEffect(() => {
+    console.log("Component mounted");
+    console.log("Initial loginForm state:", loginForm);
+    console.log("Initial isLoggedIn state:", isLoggedIn);
+  }, []);
+
   // Debug: Monitor AudioCall ref
   useEffect(() => {
     console.log(
@@ -742,7 +749,11 @@ export default function Home() {
           {!isLoggedIn && (
             <div className="flex flex-1 items-center justify-center p-4 bg-gradient-to-br from-blue-50 to-purple-50">
               <form
-                onSubmit={login}
+                onSubmit={(e) => {
+                  console.log("Form onSubmit triggered");
+                  console.log("Event:", e);
+                  login(e);
+                }}
                 className="relative w-full max-w-md bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-2xl p-8 space-y-6 border-0"
               >
                 {/* Glowing ring effect */}
@@ -764,12 +775,13 @@ export default function Home() {
                     <input
                       type="text"
                       value={loginForm.username}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        console.log("Username input changed:", e.target.value);
                         setLoginForm((prev) => ({
                           ...prev,
                           username: e.target.value,
-                        }))
-                      }
+                        }));
+                      }}
                       className="w-full p-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all duration-300"
                       required
                     />
@@ -781,12 +793,13 @@ export default function Home() {
                     <input
                       type="password"
                       value={loginForm.password}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        console.log("Password input changed:", e.target.value);
                         setLoginForm((prev) => ({
                           ...prev,
                           password: e.target.value,
-                        }))
-                      }
+                        }));
+                      }}
                       className="w-full p-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all duration-300"
                       required
                     />
@@ -795,6 +808,10 @@ export default function Home() {
 
                 <button
                   type="submit"
+                  onClick={() => {
+                    console.log("Button clicked - manual click handler");
+                    console.log("Current loginForm state:", loginForm);
+                  }}
                   className="group relative w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white p-3 rounded-xl font-bold shadow-lg transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95"
                 >
                   {/* Glowing effect */}
