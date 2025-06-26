@@ -222,11 +222,10 @@ export default function Home() {
 
     // Always use backend for login in production
     try {
-      console.log("Sending login request to:", `${AUTH_API_BASE_URL}/login`);
-      const response = await axios.post(
-        `${AUTH_API_BASE_URL}/login`,
-        loginForm
-      );
+      const loginUrl = `${AUTH_API_BASE_URL}/login`;
+      console.log("Sending login request to:", loginUrl);
+      console.log("Login request body:", loginForm);
+      const response = await axios.post(loginUrl, loginForm);
       console.log("Login response:", response);
       if (response.data && response.data.token && response.data.user) {
         localStorage.setItem("token", response.data.token);
@@ -236,6 +235,7 @@ export default function Home() {
         await fetchUsers();
         setDefaultReceiver(response.data.user);
       } else {
+        console.error("Login failed: Invalid response from server.", response);
         alert("Login failed: Invalid response from server.");
       }
     } catch (error) {
@@ -243,6 +243,7 @@ export default function Home() {
       let msg = "Login failed: ";
       if (error.response && error.response.data && error.response.data.error) {
         msg += error.response.data.error;
+        console.error("Backend error response:", error.response.data);
       } else if (error.message) {
         msg += error.message;
       } else {
