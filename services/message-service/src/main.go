@@ -44,6 +44,8 @@ func main() {
         dbPassword = "password123"
     }
 
+    log.Printf("Attempting to connect to database with host: %s, port: %s, user: %s, dbname: %s", dbHost, dbPort, dbUser, dbName)
+
     dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable",
         dbHost, dbUser, dbPassword, dbName, dbPort)
 

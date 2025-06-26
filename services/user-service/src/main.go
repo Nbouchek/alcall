@@ -1,7 +1,9 @@
 package main
 
 import (
+    "fmt"
     "log"
+    "os"
     "time"
     "github.com/gin-gonic/gin"
     "gorm.io/gorm"
@@ -21,8 +23,30 @@ type User struct {
 var db *gorm.DB
 
 func main() {
-    // Database connection - use Docker service name
-    dsn := "host=postgres user=unifiedchat password=password123 dbname=unifiedchat port=5432 sslmode=disable"
+    dbHost := os.Getenv("DB_HOST")
+    dbPort := os.Getenv("DB_PORT")
+    dbUser := os.Getenv("DB_USER")
+    dbPassword := os.Getenv("DB_PASSWORD")
+    dbName := os.Getenv("DB_NAME")
+
+    if dbHost == "" {
+        dbHost = "localhost" // Default for local development
+    }
+    if dbPort == "" {
+        dbPort = "5432"
+    }
+    if dbUser == "" {
+        dbUser = "unifiedchat"
+    }
+    if dbPassword == "" {
+        dbPassword = "password123"
+    }
+    if dbName == "" {
+        dbName = "unifiedchat"
+    }
+
+    dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable",
+        dbHost, dbUser, dbPassword, dbName, dbPort)
     var err error
     db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
     if err != nil {
