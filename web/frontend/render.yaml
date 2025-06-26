@@ -10,11 +10,11 @@ services:
       - key: PORT
         value: 3000
       - key: NEXT_PUBLIC_AUTH_API_URL
-        value: "https://auth-service-6pcp.onrender.com"
+        value: "https://unifiedchat-auth-service.onrender.com"
       - key: NEXT_PUBLIC_MESSAGE_API_URL
-        value: "https://message-service-j7kz.onrender.com"
+        value: "https://unifiedchat-message-service.onrender.com"
       - key: NEXT_PUBLIC_REALTIME_API_URL
-        value: "https://realtime-service-onfn.onrender.com"
+        value: "https://unifiedchat-realtime-service.onrender.com"
       - key: NEXT_PUBLIC_JANUS_URL
         value: "wss://janus-service.onrender.com/janus"
       - key: NEXT_PUBLIC_JANUS_HTTP_URL
