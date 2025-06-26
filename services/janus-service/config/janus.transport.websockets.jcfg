@@ -5,5 +5,7 @@ general: {
     interface = "0.0.0.0"
     threads = 4
     ws = true
-    wss = false
+    wss = true
+    wss_port = 443
+    wss_interface = "0.0.0.0"
 }

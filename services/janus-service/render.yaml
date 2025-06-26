@@ -10,7 +10,8 @@ services:
       - key: JANUS_LOG_TIMESTAMPS
         value: "true"
       - key: PORT
-        value: "8088"
+        value: "8088" # HTTP API port; Render will also expose 443 for WSS
 
     autoDeploy: true
     numInstances: 1
+# Note: Render will route HTTPS/WSS traffic to port 443 automatically

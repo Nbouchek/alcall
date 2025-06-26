@@ -24,3 +24,7 @@ exec /usr/local/bin/janus "$@"\n\
 
 # Use our custom startup script
 ENTRYPOINT ["/usr/local/bin/start-janus.sh"]
+
+# Expose HTTP API and WSS ports for Render
+EXPOSE 8088
+EXPOSE 443
