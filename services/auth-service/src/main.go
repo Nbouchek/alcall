@@ -9,6 +9,8 @@ import (
     "github.com/gin-contrib/cors"
 )
 
+// Trigger redeploy: stateless, no database version
+
 type LoginRequest struct {
     Username string `json:"username"`
     Password string `json:"password"`
