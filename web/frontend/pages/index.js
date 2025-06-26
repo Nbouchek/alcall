@@ -228,15 +228,27 @@ export default function Home() {
         loginForm
       );
       console.log("Login response:", response);
-      localStorage.setItem("token", response.data.token);
-      setUser(response.data.user);
-      setIsLoggedIn(true);
-      // Fetch users first, then set default receiver
-      await fetchUsers();
-      setDefaultReceiver(response.data.user);
+      if (response.data && response.data.token && response.data.user) {
+        localStorage.setItem("token", response.data.token);
+        setUser(response.data.user);
+        setIsLoggedIn(true);
+        // Fetch users first, then set default receiver
+        await fetchUsers();
+        setDefaultReceiver(response.data.user);
+      } else {
+        alert("Login failed: Invalid response from server.");
+      }
     } catch (error) {
       console.error("Login error:", error);
-      alert("Login failed: " + (error.response?.data?.error || error.message));
+      let msg = "Login failed: ";
+      if (error.response && error.response.data && error.response.data.error) {
+        msg += error.response.data.error;
+      } else if (error.message) {
+        msg += error.message;
+      } else {
+        msg += "Unknown error.";
+      }
+      alert(msg);
     }
   };
 
