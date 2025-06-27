@@ -66,16 +66,6 @@ services:
     envVars:
       - key: PORT
         value: 8081
-      - key: DB_HOST
-        value: "localhost"
-      - key: DB_PORT
-        value: "5432"
-      - key: DB_NAME
-        value: "unifiedchat"
-      - key: DB_USER
-        value: "unifiedchat"
-      - key: DB_PASSWORD
-        value: "password123"
     healthCheckPath: /health
     autoDeploy: true
     numInstances: 1
@@ -91,16 +81,6 @@ services:
     envVars:
       - key: PORT
         value: 8083
-      - key: DB_HOST
-        value: "localhost"
-      - key: DB_PORT
-        value: "5432"
-      - key: DB_NAME
-        value: "unifiedchat"
-      - key: DB_USER
-        value: "unifiedchat"
-      - key: DB_PASSWORD
-        value: "password123"
     healthCheckPath: /health
     autoDeploy: true
     numInstances: 1

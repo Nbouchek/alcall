@@ -1,63 +1,29 @@
 package main
 
 import (
-    "fmt"
     "log"
     "os"
+    "strconv"
     "time"
     "github.com/gin-gonic/gin"
-    "gorm.io/gorm"
-    "gorm.io/driver/postgres"
     "github.com/gin-contrib/cors"
 )
 
+// Trigger redeploy: stateless, no database version - RESTART
+
 type Message struct {
-    ID         uint      `json:"id" gorm:"primaryKey"`
-    SenderID   uint      `json:"sender_id" gorm:"not null"`
-    ReceiverID uint      `json:"receiver_id" gorm:"not null"`
-    Content    string    `json:"content" gorm:"not null"`
+    ID         uint      `json:"id"`
+    SenderID   uint      `json:"sender_id"`
+    ReceiverID uint      `json:"receiver_id"`
+    Content    string    `json:"content"`
     CreatedAt  time.Time `json:"created_at"`
 }
 
-var db *gorm.DB
+// In-memory message storage for MVP
+var messages []Message
+var nextMessageID uint = 1
 
 func main() {
-    // Database connection - use environment variables for Render
-    dbHost := os.Getenv("DB_HOST")
-    if dbHost == "" {
-        dbHost = "postgres" // fallback for local development
-    }
-    dbPort := os.Getenv("DB_PORT")
-    if dbPort == "" {
-        dbPort = "5432"
-    }
-    dbName := os.Getenv("DB_NAME")
-    if dbName == "" {
-        dbName = "unifiedchat"
-    }
-    dbUser := os.Getenv("DB_USER")
-    if dbUser == "" {
-        dbUser = "unifiedchat"
-    }
-    dbPassword := os.Getenv("DB_PASSWORD")
-    if dbPassword == "" {
-        dbPassword = "password123"
-    }
-
-    log.Printf("Attempting to connect to database with host: %s, port: %s, user: %s, dbname: %s", dbHost, dbPort, dbUser, dbName)
-
-    dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable",
-        dbHost, dbUser, dbPassword, dbName, dbPort)
-
-    var err error
-    db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
-    if err != nil {
-        log.Fatal("Failed to connect to database:", err)
-    }
-
-    // Auto migrate
-    db.AutoMigrate(&Message{})
-
     r := gin.Default()
 
     // CORS configuration - Allow external access
@@ -86,20 +52,31 @@ func createMessage(c *gin.Context) {
         return
     }
 
-    if err := db.Create(&message).Error; err != nil {
-        c.JSON(500, gin.H{"error": "Failed to create message"})
-        return
-    }
+    // Set message ID and timestamp
+    message.ID = nextMessageID
+    message.CreatedAt = time.Now()
+    nextMessageID++
+
+    // Add to in-memory storage
+    messages = append(messages, message)
 
     c.JSON(201, message)
 }
 
 func getMessages(c *gin.Context) {
-    userID := c.Param("user_id")
-    var messages []Message
-    if err := db.Where("sender_id = ? OR receiver_id = ?", userID, userID).Find(&messages).Error; err != nil {
-        c.JSON(500, gin.H{"error": "Failed to fetch messages"})
+    userIDStr := c.Param("user_id")
+    userID, err := strconv.ParseUint(userIDStr, 10, 32)
+    if err != nil {
+        c.JSON(400, gin.H{"error": "Invalid user ID"})
         return
     }
-    c.JSON(200, messages)
+
+    var userMessages []Message
+    for _, msg := range messages {
+        if msg.SenderID == uint(userID) || msg.ReceiverID == uint(userID) {
+            userMessages = append(userMessages, msg)
+        }
+    }
+
+    c.JSON(200, userMessages)
 }
