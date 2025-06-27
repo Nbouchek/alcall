@@ -209,6 +209,33 @@ test_user_flow() {
     return 0
 }
 
+# Test function
+test_endpoint() {
+    local name=$1
+    local url=$2
+    local method=${3:-GET}
+    local data=${4:-""}
+
+    echo -n "Testing $name... "
+
+    if [ "$method" = "POST" ] && [ -n "$data" ]; then
+        response=$(curl -s -w "%{http_code}" -X POST "$url" -H "Content-Type: application/json" -d "$data")
+    else
+        response=$(curl -s -w "%{http_code}" "$url")
+    fi
+
+    http_code="${response: -3}"
+    body="${response%???}"
+
+    if [ "$http_code" = "200" ]; then
+        echo -e "${GREEN}✅ OK${NC}"
+        return 0
+    else
+        echo -e "${RED}❌ FAILED (HTTP $http_code)${NC}"
+        return 1
+    fi
+}
+
 # Main test execution
 main() {
     echo "Starting comprehensive MVP tests..."
@@ -252,6 +279,59 @@ main() {
     echo "----------------"
     test_user_flow
     echo ""
+
+    # Test all services
+    echo ""
+    echo "📡 Testing Backend Services:"
+    echo "----------------------------"
+
+    # Auth Service
+    test_endpoint "Auth Service Login" "https://unifiedchat-auth-service.onrender.com/login" "POST" '{"username":"Nacer","password":"Nacer"}'
+
+    # User Service
+    test_endpoint "User Service" "https://unifiedchat-user-service.onrender.com/users"
+
+    # Message Service
+    test_endpoint "Message Service Health" "https://unifiedchat-message-service.onrender.com/health"
+    test_endpoint "Message Service Create" "https://unifiedchat-message-service.onrender.com/messages" "POST" '{"sender_id":10,"receiver_id":1,"content":"Test message"}'
+    test_endpoint "Message Service Get" "https://unifiedchat-message-service.onrender.com/messages/10"
+
+    # Frontend
+    echo ""
+    echo "🌐 Testing Frontend:"
+    echo "-------------------"
+    test_endpoint "Frontend" "https://unifiedchat-frontend.onrender.com"
+
+    echo ""
+    echo "🎯 Testing Complete Login Flow:"
+    echo "------------------------------"
+
+    # Test complete login flow
+    echo -n "1. Login with Nacer/Nacer... "
+    login_response=$(curl -s -X POST https://unifiedchat-auth-service.onrender.com/login -H "Content-Type: application/json" -d '{"username":"Nacer","password":"Nacer"}')
+    if echo "$login_response" | jq -e '.token' > /dev/null 2>&1; then
+        echo -e "${GREEN}✅ OK${NC}"
+        token=$(echo "$login_response" | jq -r '.token')
+        echo "   Token: ${token:0:50}..."
+    else
+        echo -e "${RED}❌ FAILED${NC}"
+    fi
+
+    echo -n "2. Get users list... "
+    users_count=$(curl -s https://unifiedchat-user-service.onrender.com/users | jq 'length' 2>/dev/null)
+    if [ "$users_count" -gt 0 ]; then
+        echo -e "${GREEN}✅ OK ($users_count users)${NC}"
+    else
+        echo -e "${RED}❌ FAILED${NC}"
+    fi
+
+    echo -n "3. Get messages... "
+    messages_count=$(curl -s https://unifiedchat-message-service.onrender.com/messages/10 | jq 'length' 2>/dev/null)
+    if [ "$messages_count" -ge 0 ]; then
+        echo -e "${GREEN}✅ OK ($messages_count messages)${NC}"
+    else
+        echo -e "${RED}❌ FAILED${NC}"
+    fi
 
     # Summary
     echo "📊 Test Summary"
