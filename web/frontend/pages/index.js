@@ -36,10 +36,14 @@ const IS_RENDER_DEPLOYMENT =
   (window.location.hostname.includes("onrender.com") ||
     window.location.hostname.includes("render.com"));
 
+// Force normal mode for now - backend services are working
+const FORCE_NORMAL_MODE = true;
+
 // Debug: Log the detection
 if (typeof window !== "undefined") {
   console.log("Hostname:", window.location.hostname);
   console.log("IS_RENDER_DEPLOYMENT:", IS_RENDER_DEPLOYMENT);
+  console.log("FORCE_NORMAL_MODE:", FORCE_NORMAL_MODE);
 }
 
 const JanusAudioCall = dynamic(() => import("../components/JanusAudioCall"), {
@@ -98,7 +102,7 @@ export default function Home() {
   useEffect(() => {
     const checkJanusService = async () => {
       // Skip Janus checks in demo mode
-      if (IS_RENDER_DEPLOYMENT) {
+      if (IS_RENDER_DEPLOYMENT && !FORCE_NORMAL_MODE) {
         console.log("Demo mode: Skipping Janus service check");
         setAudioServiceStatus("available"); // Assume available in demo
         return;
@@ -127,7 +131,7 @@ export default function Home() {
     if (isLoggedIn) {
       checkJanusService();
       // Check every 30 seconds only if not in demo mode
-      if (!IS_RENDER_DEPLOYMENT) {
+      if (!IS_RENDER_DEPLOYMENT || FORCE_NORMAL_MODE) {
         const interval = setInterval(checkJanusService, 30000);
         return () => clearInterval(interval);
       }
@@ -136,6 +140,50 @@ export default function Home() {
 
   // Function to fetch users from backend
   const fetchUsers = async () => {
+    // Use backend in normal mode
+    if (FORCE_NORMAL_MODE || !IS_RENDER_DEPLOYMENT) {
+      setLoadingUsers(true);
+      try {
+        const response = await axios.get(`${AUTH_API_BASE_URL}/users`);
+        if (response.data && Array.isArray(response.data)) {
+          setUsers(response.data);
+          console.log("Fetched users from backend:", response.data);
+        } else {
+          console.error("Invalid users response:", response.data);
+          // Fallback to hardcoded users if backend doesn't work
+          setUsers([
+            { id: 1, username: "admin" },
+            { id: 4, username: "Linda" },
+            { id: 5, username: "Hana" },
+            { id: 6, username: "Adam" },
+            { id: 7, username: "Ahmed" },
+            { id: 8, username: "Hamid" },
+            { id: 9, username: "Mueen" },
+            { id: 10, username: "Nacer" },
+          ]);
+        }
+      } catch (error) {
+        console.error("Failed to fetch users:", error);
+        if (error.response && error.response.status === 404) {
+          console.log("Users endpoint not available yet, using fallback");
+        }
+        // Fallback to hardcoded users if backend doesn't work
+        setUsers([
+          { id: 1, username: "admin" },
+          { id: 4, username: "Linda" },
+          { id: 5, username: "Hana" },
+          { id: 6, username: "Adam" },
+          { id: 7, username: "Ahmed" },
+          { id: 8, username: "Hamid" },
+          { id: 9, username: "Mueen" },
+          { id: 10, username: "Nacer" },
+        ]);
+      } finally {
+        setLoadingUsers(false);
+      }
+      return;
+    }
+
     // Skip backend call in demo mode and set users immediately
     if (IS_RENDER_DEPLOYMENT) {
       console.log("Demo mode: Using hardcoded users (fast path)");
@@ -150,46 +198,6 @@ export default function Home() {
         { id: 10, username: "Nacer" },
       ]);
       return;
-    }
-
-    setLoadingUsers(true);
-    try {
-      const response = await axios.get(`${AUTH_API_BASE_URL}/users`);
-      if (response.data && Array.isArray(response.data)) {
-        setUsers(response.data);
-        console.log("Fetched users from backend:", response.data);
-      } else {
-        console.error("Invalid users response:", response.data);
-        // Fallback to hardcoded users if backend doesn't work
-        setUsers([
-          { id: 1, username: "admin" },
-          { id: 4, username: "Linda" },
-          { id: 5, username: "Hana" },
-          { id: 6, username: "Adam" },
-          { id: 7, username: "Ahmed" },
-          { id: 8, username: "Hamid" },
-          { id: 9, username: "Mueen" },
-          { id: 10, username: "Nacer" },
-        ]);
-      }
-    } catch (error) {
-      console.error("Failed to fetch users:", error);
-      if (error.response && error.response.status === 404) {
-        console.log("Users endpoint not available yet, using fallback");
-      }
-      // Fallback to hardcoded users if backend doesn't work
-      setUsers([
-        { id: 1, username: "admin" },
-        { id: 4, username: "Linda" },
-        { id: 5, username: "Hana" },
-        { id: 6, username: "Adam" },
-        { id: 7, username: "Ahmed" },
-        { id: 8, username: "Hamid" },
-        { id: 9, username: "Mueen" },
-        { id: 10, username: "Nacer" },
-      ]);
-    } finally {
-      setLoadingUsers(false);
     }
   };
 
@@ -206,11 +214,11 @@ export default function Home() {
   useEffect(() => {
     if (isLoggedIn) {
       fetchUsers();
-      // Refresh users list less frequently in demo mode
+      // Refresh users list more frequently in normal mode
       const interval = setInterval(
         fetchUsers,
-        IS_RENDER_DEPLOYMENT ? 60000 : 30000
-      ); // 60s vs 30s
+        FORCE_NORMAL_MODE ? 30000 : IS_RENDER_DEPLOYMENT ? 60000 : 30000
+      );
       return () => clearInterval(interval);
     }
   }, [isLoggedIn]);
@@ -221,6 +229,7 @@ export default function Home() {
       console.log("Login button clicked", loginForm);
       console.log("DEMO_MODE:", DEMO_MODE);
       console.log("IS_RENDER_DEPLOYMENT:", IS_RENDER_DEPLOYMENT);
+      console.log("FORCE_NORMAL_MODE:", FORCE_NORMAL_MODE);
       console.log("AUTH_API_BASE_URL:", AUTH_API_BASE_URL);
       console.log(
         "Current hostname:",
@@ -256,91 +265,73 @@ export default function Home() {
         return;
       }
 
-      // Check if we're on Render deployment and should use demo mode
-      if (IS_RENDER_DEPLOYMENT) {
-        console.log("Render deployment detected, using demo mode for login");
-        const demoUser = {
-          id: loginForm.username === "admin" ? 1 : 10,
-          username: loginForm.username,
-        };
-        console.log("Setting demo user:", demoUser);
-        setUser(demoUser);
-        setIsLoggedIn(true);
-        // Set demo users
-        setUsers([
-          { id: 1, username: "admin" },
-          { id: 4, username: "Linda" },
-          { id: 5, username: "Hana" },
-          { id: 6, username: "Adam" },
-          { id: 7, username: "Ahmed" },
-          { id: 8, username: "Hamid" },
-          { id: 9, username: "Mueen" },
-          { id: 10, username: "Nacer" },
-        ]);
-        setDefaultReceiver(demoUser);
-        console.log("Demo login completed for Render deployment");
+      // Use normal backend mode (not demo mode)
+      if (FORCE_NORMAL_MODE || !IS_RENDER_DEPLOYMENT) {
+        console.log("Using normal backend mode for login");
+
+        try {
+          const loginUrl = `${AUTH_API_BASE_URL}/login`;
+          console.log("Sending login request to:", loginUrl);
+          console.log("Login request body:", loginForm);
+          const response = await axios.post(loginUrl, loginForm);
+          console.log("Login response:", response);
+          if (response.data && response.data.token && response.data.user) {
+            localStorage.setItem("token", response.data.token);
+            setUser(response.data.user);
+            setIsLoggedIn(true);
+            // Fetch users first, then set default receiver
+            await fetchUsers();
+            setDefaultReceiver(response.data.user);
+            console.log("Normal login completed successfully");
+          } else {
+            console.error(
+              "Login failed: Invalid response from server.",
+              response
+            );
+            alert("Login failed: Invalid response from server.");
+          }
+        } catch (error) {
+          console.error("Login error:", error);
+          let msg = "Login failed: ";
+          if (
+            error.response &&
+            error.response.data &&
+            error.response.data.error
+          ) {
+            msg += error.response.data.error;
+            console.error("Backend error response:", error.response.data);
+          } else if (error.message) {
+            msg += error.message;
+          } else {
+            msg += "Unknown error.";
+          }
+          alert(msg);
+        }
         return;
       }
 
-      // Always use backend for login in production
-      try {
-        const loginUrl = `${AUTH_API_BASE_URL}/login`;
-        console.log("Sending login request to:", loginUrl);
-        console.log("Login request body:", loginForm);
-        const response = await axios.post(loginUrl, loginForm);
-        console.log("Login response:", response);
-        if (response.data && response.data.token && response.data.user) {
-          localStorage.setItem("token", response.data.token);
-          setUser(response.data.user);
-          setIsLoggedIn(true);
-          // Fetch users first, then set default receiver
-          await fetchUsers();
-          setDefaultReceiver(response.data.user);
-        } else {
-          console.error(
-            "Login failed: Invalid response from server.",
-            response
-          );
-          alert("Login failed: Invalid response from server.");
-        }
-      } catch (error) {
-        console.error("Login error:", error);
-        console.log("Falling back to demo mode due to backend error");
-
-        // Fallback to demo mode if backend fails
-        const demoUser = {
-          id: loginForm.username === "admin" ? 1 : 10,
-          username: loginForm.username,
-        };
-        console.log("Setting demo user as fallback:", demoUser);
-        setUser(demoUser);
-        setIsLoggedIn(true);
-        // Set demo users
-        setUsers([
-          { id: 1, username: "admin" },
-          { id: 4, username: "Linda" },
-          { id: 5, username: "Hana" },
-          { id: 6, username: "Adam" },
-          { id: 7, username: "Ahmed" },
-          { id: 8, username: "Hamid" },
-          { id: 9, username: "Mueen" },
-          { id: 10, username: "Nacer" },
-        ]);
-        setDefaultReceiver(demoUser);
-        console.log("Demo login completed as fallback");
-
-        // Don't show error alert since we're falling back to demo mode
-        // let msg = "Login failed: ";
-        // if (error.response && error.response.data && error.response.data.error) {
-        //   msg += error.response.data.error;
-        //   console.error("Backend error response:", error.response.data);
-        // } else if (error.message) {
-        //   msg += error.message;
-        // } else {
-        //   msg += "Unknown error.";
-        // }
-        // alert(msg);
-      }
+      // Fallback to demo mode only if backend fails and we're on Render
+      console.log("Render deployment detected, using demo mode for login");
+      const demoUser = {
+        id: loginForm.username === "admin" ? 1 : 10,
+        username: loginForm.username,
+      };
+      console.log("Setting demo user:", demoUser);
+      setUser(demoUser);
+      setIsLoggedIn(true);
+      // Set demo users
+      setUsers([
+        { id: 1, username: "admin" },
+        { id: 4, username: "Linda" },
+        { id: 5, username: "Hana" },
+        { id: 6, username: "Adam" },
+        { id: 7, username: "Ahmed" },
+        { id: 8, username: "Hamid" },
+        { id: 9, username: "Mueen" },
+        { id: 10, username: "Nacer" },
+      ]);
+      setDefaultReceiver(demoUser);
+      console.log("Demo login completed for Render deployment");
     } catch (error) {
       console.error("Unexpected error in login function:", error);
       alert("An unexpected error occurred during login. Please try again.");
