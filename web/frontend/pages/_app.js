@@ -47,6 +47,9 @@ export default function App({ Component, pageProps }) {
             "Unpkg CDN (minified)"
           )
             .catch(() => {
+              return tryLoadScript("/janus.min.js", "Local fallback");
+            })
+            .catch(() => {
               return tryLoadScript(
                 "https://cdn.jsdelivr.net/npm/janus-gateway@1.2.3/html/janus.js",
                 "JSDelivr CDN"
@@ -63,9 +66,6 @@ export default function App({ Component, pageProps }) {
                 "https://gitcdn.xyz/repo/meetecho/janus-gateway/master/html/janus.js",
                 "GitCDN"
               );
-            })
-            .catch(() => {
-              return tryLoadScript("/janus.js", "Local fallback");
             })
             .catch(() => {
               console.error(
