@@ -204,119 +204,134 @@ export default function Home() {
   }, [isLoggedIn]);
 
   const login = async (e) => {
-    e.preventDefault();
-    console.log("Login button clicked", loginForm);
-    console.log("DEMO_MODE:", DEMO_MODE);
-    console.log("IS_RENDER_DEPLOYMENT:", IS_RENDER_DEPLOYMENT);
-    console.log("AUTH_API_BASE_URL:", AUTH_API_BASE_URL);
-    console.log(
-      "Current hostname:",
-      typeof window !== "undefined" ? window.location.hostname : "SSR"
-    );
-
-    // Demo mode for explicit testing only
-    if (DEMO_MODE) {
-      console.log("Demo mode: Simulating login for demo/testing");
-      const demoUser = {
-        id: loginForm.username === "admin" ? 1 : 10,
-        username: loginForm.username,
-      };
-      console.log("Setting demo user:", demoUser);
-      setUser(demoUser);
-      setIsLoggedIn(true);
-      // Set demo users
-      setUsers([
-        { id: 1, username: "admin" },
-        { id: 10, username: "Nacer" },
-        { id: 2, username: "user2" },
-        { id: 3, username: "user3" },
-      ]);
-      setDefaultReceiver(demoUser);
-      console.log("Demo login completed");
-      return;
-    }
-
-    // Check if we're on Render deployment and should use demo mode
-    if (IS_RENDER_DEPLOYMENT) {
-      console.log("Render deployment detected, using demo mode for login");
-      const demoUser = {
-        id: loginForm.username === "admin" ? 1 : 10,
-        username: loginForm.username,
-      };
-      console.log("Setting demo user:", demoUser);
-      setUser(demoUser);
-      setIsLoggedIn(true);
-      // Set demo users
-      setUsers([
-        { id: 1, username: "admin" },
-        { id: 4, username: "Linda" },
-        { id: 5, username: "Hana" },
-        { id: 6, username: "Adam" },
-        { id: 7, username: "Ahmed" },
-        { id: 8, username: "Hamid" },
-        { id: 9, username: "Mueen" },
-        { id: 10, username: "Nacer" },
-      ]);
-      setDefaultReceiver(demoUser);
-      console.log("Demo login completed for Render deployment");
-      return;
-    }
-
-    // Always use backend for login in production
     try {
-      const loginUrl = `${AUTH_API_BASE_URL}/login`;
-      console.log("Sending login request to:", loginUrl);
-      console.log("Login request body:", loginForm);
-      const response = await axios.post(loginUrl, loginForm);
-      console.log("Login response:", response);
-      if (response.data && response.data.token && response.data.user) {
-        localStorage.setItem("token", response.data.token);
-        setUser(response.data.user);
+      e.preventDefault();
+      console.log("Login button clicked", loginForm);
+      console.log("DEMO_MODE:", DEMO_MODE);
+      console.log("IS_RENDER_DEPLOYMENT:", IS_RENDER_DEPLOYMENT);
+      console.log("AUTH_API_BASE_URL:", AUTH_API_BASE_URL);
+      console.log(
+        "Current hostname:",
+        typeof window !== "undefined" ? window.location.hostname : "SSR"
+      );
+
+      // Validate input
+      if (!loginForm.username || !loginForm.password) {
+        console.log("Login validation failed - missing credentials");
+        alert("Please enter both username and password");
+        return;
+      }
+
+      // Demo mode for explicit testing only
+      if (DEMO_MODE) {
+        console.log("Demo mode: Simulating login for demo/testing");
+        const demoUser = {
+          id: loginForm.username === "admin" ? 1 : 10,
+          username: loginForm.username,
+        };
+        console.log("Setting demo user:", demoUser);
+        setUser(demoUser);
         setIsLoggedIn(true);
-        // Fetch users first, then set default receiver
-        await fetchUsers();
-        setDefaultReceiver(response.data.user);
-      } else {
-        console.error("Login failed: Invalid response from server.", response);
-        alert("Login failed: Invalid response from server.");
+        // Set demo users
+        setUsers([
+          { id: 1, username: "admin" },
+          { id: 10, username: "Nacer" },
+          { id: 2, username: "user2" },
+          { id: 3, username: "user3" },
+        ]);
+        setDefaultReceiver(demoUser);
+        console.log("Demo login completed");
+        return;
+      }
+
+      // Check if we're on Render deployment and should use demo mode
+      if (IS_RENDER_DEPLOYMENT) {
+        console.log("Render deployment detected, using demo mode for login");
+        const demoUser = {
+          id: loginForm.username === "admin" ? 1 : 10,
+          username: loginForm.username,
+        };
+        console.log("Setting demo user:", demoUser);
+        setUser(demoUser);
+        setIsLoggedIn(true);
+        // Set demo users
+        setUsers([
+          { id: 1, username: "admin" },
+          { id: 4, username: "Linda" },
+          { id: 5, username: "Hana" },
+          { id: 6, username: "Adam" },
+          { id: 7, username: "Ahmed" },
+          { id: 8, username: "Hamid" },
+          { id: 9, username: "Mueen" },
+          { id: 10, username: "Nacer" },
+        ]);
+        setDefaultReceiver(demoUser);
+        console.log("Demo login completed for Render deployment");
+        return;
+      }
+
+      // Always use backend for login in production
+      try {
+        const loginUrl = `${AUTH_API_BASE_URL}/login`;
+        console.log("Sending login request to:", loginUrl);
+        console.log("Login request body:", loginForm);
+        const response = await axios.post(loginUrl, loginForm);
+        console.log("Login response:", response);
+        if (response.data && response.data.token && response.data.user) {
+          localStorage.setItem("token", response.data.token);
+          setUser(response.data.user);
+          setIsLoggedIn(true);
+          // Fetch users first, then set default receiver
+          await fetchUsers();
+          setDefaultReceiver(response.data.user);
+        } else {
+          console.error(
+            "Login failed: Invalid response from server.",
+            response
+          );
+          alert("Login failed: Invalid response from server.");
+        }
+      } catch (error) {
+        console.error("Login error:", error);
+        console.log("Falling back to demo mode due to backend error");
+
+        // Fallback to demo mode if backend fails
+        const demoUser = {
+          id: loginForm.username === "admin" ? 1 : 10,
+          username: loginForm.username,
+        };
+        console.log("Setting demo user as fallback:", demoUser);
+        setUser(demoUser);
+        setIsLoggedIn(true);
+        // Set demo users
+        setUsers([
+          { id: 1, username: "admin" },
+          { id: 4, username: "Linda" },
+          { id: 5, username: "Hana" },
+          { id: 6, username: "Adam" },
+          { id: 7, username: "Ahmed" },
+          { id: 8, username: "Hamid" },
+          { id: 9, username: "Mueen" },
+          { id: 10, username: "Nacer" },
+        ]);
+        setDefaultReceiver(demoUser);
+        console.log("Demo login completed as fallback");
+
+        // Don't show error alert since we're falling back to demo mode
+        // let msg = "Login failed: ";
+        // if (error.response && error.response.data && error.response.data.error) {
+        //   msg += error.response.data.error;
+        //   console.error("Backend error response:", error.response.data);
+        // } else if (error.message) {
+        //   msg += error.message;
+        // } else {
+        //   msg += "Unknown error.";
+        // }
+        // alert(msg);
       }
     } catch (error) {
-      console.error("Login error:", error);
-      console.log("Falling back to demo mode due to backend error");
-
-      // Fallback to demo mode if backend fails
-      const demoUser = {
-        id: loginForm.username === "admin" ? 1 : 10,
-        username: loginForm.username,
-      };
-      console.log("Setting demo user as fallback:", demoUser);
-      setUser(demoUser);
-      setIsLoggedIn(true);
-      // Set demo users
-      setUsers([
-        { id: 1, username: "admin" },
-        { id: 4, username: "Linda" },
-        { id: 5, username: "Hana" },
-        { id: 6, username: "Adam" },
-        { id: 7, username: "Ahmed" },
-        { id: 8, username: "Hamid" },
-        { id: 9, username: "Mueen" },
-        { id: 10, username: "Nacer" },
-      ]);
-      setDefaultReceiver(demoUser);
-      console.log("Demo login completed as fallback");
-
-      // Don't show error alert since we're falling back to demo mode
-      // let msg = "Login failed: ";
-      // if (error.response && error.response.data && error.response.data.error) {
-      //   msg += error.response.data.error;
-      //   console.error("Backend error response:", error.response.data);
-      // } else if (error.message) {
-      //   msg += error.message;
-      // } else {
-      //   msg += "Unknown error.";
-      // }
-      // alert(msg);
+      console.error("Unexpected error in login function:", error);
+      alert("An unexpected error occurred during login. Please try again.");
     }
   };
 
@@ -813,9 +828,26 @@ export default function Home() {
             <div className="flex flex-1 items-center justify-center p-4 bg-gradient-to-br from-blue-50 to-purple-50">
               <form
                 onSubmit={(e) => {
+                  e.preventDefault();
                   console.log("Form onSubmit triggered");
                   console.log("Event:", e);
-                  login(e);
+                  console.log("LoginForm state:", loginForm);
+
+                  // Validate form before proceeding
+                  if (!loginForm.username || !loginForm.password) {
+                    console.log(
+                      "Form validation failed - missing username or password"
+                    );
+                    alert("Please enter both username and password");
+                    return;
+                  }
+
+                  try {
+                    login(e);
+                  } catch (error) {
+                    console.error("Error in form submission:", error);
+                    alert("An error occurred during login. Please try again.");
+                  }
                 }}
                 className="relative w-full max-w-md bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-2xl p-8 space-y-6 border-0"
               >
@@ -837,6 +869,8 @@ export default function Home() {
                     </label>
                     <input
                       type="text"
+                      name="username"
+                      autoComplete="username"
                       value={loginForm.username}
                       onChange={(e) => {
                         console.log("Username input changed:", e.target.value);
@@ -855,6 +889,8 @@ export default function Home() {
                     </label>
                     <input
                       type="password"
+                      name="password"
+                      autoComplete="current-password"
                       value={loginForm.password}
                       onChange={(e) => {
                         console.log("Password input changed:", e.target.value);
@@ -871,10 +907,6 @@ export default function Home() {
 
                 <button
                   type="submit"
-                  onClick={() => {
-                    console.log("Button clicked - manual click handler");
-                    console.log("Current loginForm state:", loginForm);
-                  }}
                   className="group relative w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white p-3 rounded-xl font-bold shadow-lg transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95"
                 >
                   {/* Glowing effect */}
