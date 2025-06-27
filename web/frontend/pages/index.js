@@ -97,6 +97,13 @@ export default function Home() {
   // Check Janus service availability
   useEffect(() => {
     const checkJanusService = async () => {
+      // Skip Janus checks in demo mode
+      if (IS_RENDER_DEPLOYMENT) {
+        console.log("Demo mode: Skipping Janus service check");
+        setAudioServiceStatus("available"); // Assume available in demo
+        return;
+      }
+
       try {
         const janusUrl =
           process.env.NEXT_PUBLIC_JANUS_HTTP_URL ||
@@ -119,32 +126,34 @@ export default function Home() {
 
     if (isLoggedIn) {
       checkJanusService();
-      // Check every 30 seconds
-      const interval = setInterval(checkJanusService, 30000);
-      return () => clearInterval(interval);
+      // Check every 30 seconds only if not in demo mode
+      if (!IS_RENDER_DEPLOYMENT) {
+        const interval = setInterval(checkJanusService, 30000);
+        return () => clearInterval(interval);
+      }
     }
   }, [isLoggedIn]);
 
   // Function to fetch users from backend
   const fetchUsers = async () => {
+    // Skip backend call in demo mode and set users immediately
+    if (IS_RENDER_DEPLOYMENT) {
+      console.log("Demo mode: Using hardcoded users (fast path)");
+      setUsers([
+        { id: 1, username: "admin" },
+        { id: 4, username: "Linda" },
+        { id: 5, username: "Hana" },
+        { id: 6, username: "Adam" },
+        { id: 7, username: "Ahmed" },
+        { id: 8, username: "Hamid" },
+        { id: 9, username: "Mueen" },
+        { id: 10, username: "Nacer" },
+      ]);
+      return;
+    }
+
     setLoadingUsers(true);
     try {
-      // Skip backend call in demo mode
-      if (IS_RENDER_DEPLOYMENT) {
-        console.log("Demo mode: Using hardcoded users");
-        setUsers([
-          { id: 1, username: "admin" },
-          { id: 4, username: "Linda" },
-          { id: 5, username: "Hana" },
-          { id: 6, username: "Adam" },
-          { id: 7, username: "Ahmed" },
-          { id: 8, username: "Hamid" },
-          { id: 9, username: "Mueen" },
-          { id: 10, username: "Nacer" },
-        ]);
-        return;
-      }
-
       const response = await axios.get(`${AUTH_API_BASE_URL}/users`);
       if (response.data && Array.isArray(response.data)) {
         setUsers(response.data);
@@ -197,8 +206,11 @@ export default function Home() {
   useEffect(() => {
     if (isLoggedIn) {
       fetchUsers();
-      // Refresh users list every 30 seconds to catch new logins
-      const interval = setInterval(fetchUsers, 30000);
+      // Refresh users list less frequently in demo mode
+      const interval = setInterval(
+        fetchUsers,
+        IS_RENDER_DEPLOYMENT ? 60000 : 30000
+      ); // 60s vs 30s
       return () => clearInterval(interval);
     }
   }, [isLoggedIn]);

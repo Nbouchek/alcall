@@ -36,6 +36,12 @@ const JanusAudioCall = forwardRef(
     const [connectionError, setConnectionError] = useState(null);
     const [janusLoaded, setJanusLoaded] = useState(false);
 
+    // Check if we're in demo mode (Render deployment)
+    const IS_DEMO_MODE =
+      typeof window !== "undefined" &&
+      (window.location.hostname.includes("onrender.com") ||
+        window.location.hostname.includes("render.com"));
+
     // Janus-specific refs
     const janusRef = useRef(null);
     const pluginHandleRef = useRef(null);
@@ -76,12 +82,12 @@ const JanusAudioCall = forwardRef(
       },
       getAudioStatus: () => {
         return {
-          audioConnected,
+          audioConnected: IS_DEMO_MODE ? true : audioConnected,
           isInCall,
           isCallActive,
           callStatus,
           currentCallId,
-          janusConnected,
+          janusConnected: IS_DEMO_MODE ? true : janusConnected,
           roomId,
         };
       },
@@ -299,6 +305,7 @@ const JanusAudioCall = forwardRef(
           setCallStatus("Connected");
           setIsCallActive(true);
           setAudioConnected(true);
+          setParticipants(result.room.participants);
           startCallTimer();
         } else if (result.event === "room") {
           console.log("JanusAudioCall: Room info:", result);
@@ -355,6 +362,25 @@ const JanusAudioCall = forwardRef(
     };
 
     const startCall = async () => {
+      // Demo mode - simulate call without Janus
+      if (IS_DEMO_MODE) {
+        console.log("JanusAudioCall: Demo mode - simulating call");
+        setCallStatus("Demo Call Active");
+        setIsInCall(true);
+        setIsCallActive(true);
+        setAudioConnected(true);
+        setParticipants([
+          { id: user.id, username: user.username, publisher: true },
+          {
+            id: selectedReceiver,
+            username: getUserName(selectedReceiver),
+            publisher: false,
+          },
+        ]);
+        startCallTimer();
+        return;
+      }
+
       if (!pluginHandleRef.current) {
         console.error("JanusAudioCall: Plugin not attached");
         return;
@@ -433,6 +459,16 @@ const JanusAudioCall = forwardRef(
     const endCall = async () => {
       console.log("JanusAudioCall: Ending call...");
 
+      // Demo mode - just cleanup
+      if (IS_DEMO_MODE) {
+        console.log("JanusAudioCall: Demo mode - ending simulated call");
+        cleanupCall();
+        if (onCallEnd) {
+          onCallEnd();
+        }
+        return;
+      }
+
       if (pluginHandleRef.current && roomId) {
         pluginHandleRef.current.send({
           message: {
@@ -449,6 +485,13 @@ const JanusAudioCall = forwardRef(
     };
 
     const toggleMute = () => {
+      // Demo mode - just toggle mute state
+      if (IS_DEMO_MODE) {
+        console.log("JanusAudioCall: Demo mode - toggling mute");
+        setIsMuted(!isMuted);
+        return;
+      }
+
       if (localStreamRef.current) {
         const audioTrack = localStreamRef.current.getAudioTracks()[0];
         if (audioTrack) {
