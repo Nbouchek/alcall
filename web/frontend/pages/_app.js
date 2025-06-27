@@ -42,13 +42,7 @@ export default function App({ Component, pageProps }) {
           };
 
           // Try fallback sources in order of reliability
-          tryLoadScript(
-            "https://unpkg.com/janus-gateway@1.2.3/dist/janus.min.js",
-            "Unpkg CDN (minified)"
-          )
-            .catch(() => {
-              return tryLoadScript("/janus.js", "Local fallback");
-            })
+          tryLoadScript("/janus.js", "Local fallback")
             .catch(() => {
               return tryLoadScript(
                 "https://cdn.jsdelivr.net/npm/janus-gateway@1.2.3/html/janus.js",
