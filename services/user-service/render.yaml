@@ -4,7 +4,8 @@ services:
     runtime: docker
     region: oregon
     plan: starter
-    buildCommand: docker build -t user-service .
+    dockerfilePath: Dockerfile
+    dockerContext: .
     envVars:
       - key: PORT
         value: 8081
