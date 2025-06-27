@@ -20,11 +20,14 @@ import {
 } from "react-icons/fa";
 
 const AUTH_API_BASE_URL =
-  process.env.NEXT_PUBLIC_AUTH_API_URL || "http://localhost:8082";
+  process.env.NEXT_PUBLIC_AUTH_API_URL ||
+  "https://unifiedchat-auth-service.onrender.com";
 const MESSAGE_API_BASE_URL =
-  process.env.NEXT_PUBLIC_MESSAGE_API_URL || "http://localhost:8083";
+  process.env.NEXT_PUBLIC_MESSAGE_API_URL ||
+  "https://unifiedchat-message-service.onrender.com";
 const REALTIME_API_BASE_URL =
-  process.env.NEXT_PUBLIC_REALTIME_API_URL || "http://localhost:8084";
+  process.env.NEXT_PUBLIC_REALTIME_API_URL ||
+  "https://unifiedchat-realtime-service.onrender.com";
 const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
 // Check if we're running on Render (no backend services available)
@@ -86,7 +89,8 @@ export default function Home() {
     const checkJanusService = async () => {
       try {
         const janusUrl =
-          process.env.NEXT_PUBLIC_JANUS_HTTP_URL || "http://localhost:8088";
+          process.env.NEXT_PUBLIC_JANUS_HTTP_URL ||
+          "https://unifiedchat-janus-service.onrender.com";
         console.log("Checking Janus service at:", janusUrl);
         const response = await fetch(`${janusUrl}/janus/info`);
         console.log("Janus response status:", response.status);
