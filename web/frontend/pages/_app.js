@@ -47,7 +47,7 @@ export default function App({ Component, pageProps }) {
             "Unpkg CDN (minified)"
           )
             .catch(() => {
-              return tryLoadScript("/janus.min.js", "Local fallback");
+              return tryLoadScript("/janus.js", "Local fallback");
             })
             .catch(() => {
               return tryLoadScript(
