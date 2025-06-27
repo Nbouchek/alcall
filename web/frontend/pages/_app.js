@@ -5,7 +5,7 @@ import Script from "next/script";
 
 export default function App({ Component, pageProps }) {
   useEffect(() => {
-    // Enhanced Janus library loading with fallbacks
+    // Enhanced Janus library loading with better fallbacks
     const loadJanus = () => {
       if (typeof window !== "undefined") {
         // Check if Janus is already loaded
@@ -41,15 +41,21 @@ export default function App({ Component, pageProps }) {
             });
           };
 
-          // Try fallback sources
+          // Try fallback sources in order of reliability
           tryLoadScript(
-            "https://cdn.jsdelivr.net/npm/janus-gateway@1.2.3/html/janus.js",
-            "JSDelivr CDN"
+            "https://unpkg.com/janus-gateway@1.2.3/dist/janus.min.js",
+            "Unpkg CDN (minified)"
           )
             .catch(() => {
               return tryLoadScript(
-                "https://unpkg.com/janus-gateway@1.2.3/html/janus.js",
-                "Unpkg CDN"
+                "https://cdn.jsdelivr.net/npm/janus-gateway@1.2.3/html/janus.js",
+                "JSDelivr CDN"
+              );
+            })
+            .catch(() => {
+              return tryLoadScript(
+                "https://meetecho.com/janus/janus.js",
+                "Meetecho official"
               );
             })
             .catch(() => {
@@ -68,13 +74,15 @@ export default function App({ Component, pageProps }) {
               console.log(
                 "Please ensure janus.js is available or check your internet connection"
               );
+              // Set a flag to indicate Janus failed to load
+              window.janusLoadFailed = true;
             });
         }
       }
     };
 
     // Wait a bit for the primary script to load, then try fallbacks if needed
-    const timer = setTimeout(loadJanus, 1000);
+    const timer = setTimeout(loadJanus, 2000);
     return () => clearTimeout(timer);
   }, []);
 
@@ -88,24 +96,20 @@ export default function App({ Component, pageProps }) {
         />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.ico" />
-
-        {/* Additional Janus loading attempt via script tag */}
-        <script
-          src="https://unpkg.com/janus-gateway@1.2.3/dist/janus.min.js"
-          async
-        />
       </Head>
 
-      {/* Load Janus library with multiple fallbacks */}
+      {/* Load Janus library with primary source */}
       <Script
-        src="https://meetecho.com/janus/janus.js"
+        src="https://unpkg.com/janus-gateway@1.2.3/dist/janus.min.js"
         strategy="beforeInteractive"
         onLoad={() => {
-          console.log("Janus library loaded successfully from Meetecho");
+          console.log("Janus library loaded successfully from Unpkg CDN");
           window.janusLoaded = true;
         }}
         onError={() => {
-          console.log("Primary Janus source failed, trying fallback...");
+          console.log(
+            "Primary Janus source failed, fallback will be triggered..."
+          );
           // Fallback will be handled by the existing useEffect logic
         }}
       />
