@@ -36,7 +36,8 @@ const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 // IS_RENDER_DEPLOYMENT is now handled as state to avoid hydration issues
 
 // Force normal mode for now - backend services are working
-const FORCE_NORMAL_MODE = true;
+const FORCE_NORMAL_MODE =
+  process.env.NEXT_PUBLIC_FORCE_NORMAL_MODE === "true" || true;
 
 // Debug: Log the detection will happen in useEffect after component mounts
 
@@ -82,6 +83,8 @@ export default function Home() {
     setIsRenderDeployment(isRender);
     console.log("Hostname:", hostname);
     console.log("Is Render deployment:", isRender);
+    console.log("FORCE_NORMAL_MODE:", FORCE_NORMAL_MODE);
+    console.log("Will use normal mode:", FORCE_NORMAL_MODE || !isRender);
 
     // Check for existing login state
     const token = localStorage.getItem("token");
@@ -540,8 +543,15 @@ export default function Home() {
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
+      {/* Load WebRTC adapter and Janus library */}
+      <Script
+        src="https://webrtc.github.io/adapter/adapter-latest.js"
+        strategy="beforeInteractive"
+      />
+      <Script src="/janus.js" strategy="beforeInteractive" />
+
       {/* Demo Mode Banner */}
-      {isRenderDeployment && (
+      {isRenderDeployment && !FORCE_NORMAL_MODE && (
         <div className="bg-yellow-500 text-black px-4 py-2 text-center text-sm font-semibold">
           🚀 DEMO MODE: Audio calling testing on Render.com - Login with any
           username/password
