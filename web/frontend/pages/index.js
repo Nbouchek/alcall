@@ -2,8 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import Head from "next/head";
 import Script from "next/script";
 import axios from "axios";
-import dynamic from "next/dynamic";
 import UserPopover from "../components/UserPopover";
+import JanusAudioCall from "../components/JanusAudioCall";
 import {
   FaPhone,
   FaPaperPlane,
@@ -46,11 +46,6 @@ if (typeof window !== "undefined") {
   console.log("FORCE_NORMAL_MODE:", FORCE_NORMAL_MODE);
 }
 
-const JanusAudioCall = dynamic(() => import("../components/JanusAudioCall"), {
-  ssr: false,
-  loading: () => null,
-});
-
 export default function Home() {
   const [user, setUser] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -62,6 +57,7 @@ export default function Home() {
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [audioServiceStatus, setAudioServiceStatus] = useState("checking");
+  const [isClient, setIsClient] = useState(false);
 
   const [loginForm, setLoginForm] = useState({
     username: "",
@@ -79,6 +75,9 @@ export default function Home() {
     console.log("Component mounted");
     console.log("Initial loginForm state:", loginForm);
     console.log("Initial isLoggedIn state:", isLoggedIn);
+
+    // Set client state
+    setIsClient(true);
 
     // Check for existing login state
     const token = localStorage.getItem("token");
@@ -811,7 +810,7 @@ export default function Home() {
               )}
 
               {/* Audio Call Component */}
-              {isLoggedIn && (
+              {isLoggedIn && isClient && (
                 <JanusAudioCall
                   ref={audioCallRef}
                   user={user}
