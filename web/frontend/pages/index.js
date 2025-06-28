@@ -48,6 +48,7 @@ if (typeof window !== "undefined") {
 
 const JanusAudioCall = dynamic(() => import("../components/JanusAudioCall"), {
   ssr: false,
+  loading: () => null,
 });
 
 export default function Home() {

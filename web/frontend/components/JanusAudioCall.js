@@ -140,6 +140,31 @@ const JanusAudioCall = forwardRef(
 
     // Initialize Janus connection
     useEffect(() => {
+      const loadJanusLibrary = () => {
+        if (typeof window !== "undefined" && !window.Janus) {
+          console.log("JanusAudioCall: Loading Janus library...");
+
+          const script = document.createElement("script");
+          script.src = "/janus.js";
+          script.async = false;
+          script.onload = () => {
+            console.log("JanusAudioCall: Janus library loaded successfully");
+            setJanusLoaded(true);
+            window.janusLoaded = true;
+          };
+          script.onerror = () => {
+            console.error("JanusAudioCall: Failed to load Janus library");
+            setJanusLoaded(false);
+            window.janusLoadFailed = true;
+          };
+          document.head.appendChild(script);
+        } else if (typeof window !== "undefined" && window.Janus) {
+          console.log("JanusAudioCall: Janus library already available");
+          setJanusLoaded(true);
+          window.janusLoaded = true;
+        }
+      };
+
       const checkJanusLoaded = () => {
         if (
           typeof window !== "undefined" &&
@@ -165,8 +190,10 @@ const JanusAudioCall = forwardRef(
         return;
       }
 
-      // Check immediately
+      // Try to load Janus if not already loaded
       if (!checkJanusLoaded()) {
+        loadJanusLibrary();
+
         // If not loaded, check periodically for up to 15 seconds
         let attempts = 0;
         const maxAttempts = 30; // 15 seconds with 500ms intervals
@@ -677,7 +704,10 @@ const JanusAudioCall = forwardRef(
       };
     }, [janusConnected, user]);
 
-    if (!janusLoaded && !window.janusLoadFailed) {
+    if (
+      !janusLoaded &&
+      !(typeof window !== "undefined" && window.janusLoadFailed)
+    ) {
       return (
         <div className="p-4 bg-blue-100 text-blue-700 rounded-lg">
           <div className="flex items-center">
@@ -692,7 +722,8 @@ const JanusAudioCall = forwardRef(
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
           {/* Demo Mode Notice */}
-          {(IS_DEMO_MODE || window.janusLoadFailed) && (
+          {(IS_DEMO_MODE ||
+            (typeof window !== "undefined" && window.janusLoadFailed)) && (
             <div className="mb-4 p-3 bg-yellow-100 border border-yellow-400 text-yellow-700 rounded flex items-center">
               <FaRocket className="mr-2" />
               <span className="text-sm">
@@ -702,12 +733,14 @@ const JanusAudioCall = forwardRef(
           )}
 
           {/* Connection Status */}
-          {connectionError && !IS_DEMO_MODE && !window.janusLoadFailed && (
-            <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded flex items-center">
-              <FaExclamationTriangle className="mr-2" />
-              <span className="text-sm">{connectionError}</span>
-            </div>
-          )}
+          {connectionError &&
+            !IS_DEMO_MODE &&
+            !(typeof window !== "undefined" && window.janusLoadFailed) && (
+              <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded flex items-center">
+                <FaExclamationTriangle className="mr-2" />
+                <span className="text-sm">{connectionError}</span>
+              </div>
+            )}
 
           {/* Janus Connection Status */}
           <div className="mb-4 p-2 bg-gray-100 rounded flex items-center justify-between">
@@ -717,7 +750,8 @@ const JanusAudioCall = forwardRef(
                 janusConnected ? "text-green-600" : "text-red-600"
               }`}
             >
-              {IS_DEMO_MODE || window.janusLoadFailed
+              {IS_DEMO_MODE ||
+              (typeof window !== "undefined" && window.janusLoadFailed)
                 ? "Demo Mode"
                 : janusConnected
                 ? "Connected"
