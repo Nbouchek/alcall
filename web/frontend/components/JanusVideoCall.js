@@ -93,8 +93,14 @@ const JanusVideoCall = forwardRef(
       }
 
       const initializeJanus = () => {
-        if (typeof window !== "undefined" && window.Janus) {
-          console.log("JanusVideoCall: Initializing Janus...");
+        if (
+          typeof window !== "undefined" &&
+          window.Janus &&
+          window.adapterLoaded
+        ) {
+          console.log(
+            "JanusVideoCall: Both adapter and Janus loaded, initializing..."
+          );
 
           window.Janus.init({
             debug: "all",
@@ -102,9 +108,19 @@ const JanusVideoCall = forwardRef(
               console.log("JanusVideoCall: Janus initialized");
               connectToJanus();
             },
+            error: (error) => {
+              console.error(
+                "JanusVideoCall: Janus initialization failed:",
+                error
+              );
+              setConnectionError("Failed to initialize Janus library");
+            },
           });
         } else {
-          console.log("JanusVideoCall: Janus library not loaded");
+          console.log("JanusVideoCall: Waiting for libraries to load...", {
+            janus: !!window.Janus,
+            adapter: !!window.adapterLoaded,
+          });
           setTimeout(initializeJanus, 1000);
         }
       };

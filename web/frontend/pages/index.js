@@ -545,10 +545,29 @@ export default function Home() {
 
       {/* Load WebRTC adapter and Janus library */}
       <Script
-        src="https://webrtc.github.io/adapter/adapter-latest.js"
+        src="/adapter.js"
         strategy="beforeInteractive"
+        onLoad={() => {
+          console.log("WebRTC adapter loaded locally");
+          window.adapterLoaded = true;
+        }}
+        onError={() => {
+          console.error("Failed to load local adapter.js");
+          // Still mark as loaded to try Janus anyway
+          window.adapterLoaded = true;
+        }}
       />
-      <Script src="/janus.js" strategy="beforeInteractive" />
+      <Script
+        src="/janus.js"
+        strategy="beforeInteractive"
+        onLoad={() => {
+          console.log("Janus library loaded");
+          window.janusLoaded = true;
+        }}
+        onError={() => {
+          console.error("Failed to load Janus library");
+        }}
+      />
 
       {/* Demo Mode Banner */}
       {isRenderDeployment && !FORCE_NORMAL_MODE && (
