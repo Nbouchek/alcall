@@ -85,6 +85,11 @@ export default function Home() {
     console.log("Is Render deployment:", isRender);
     console.log("FORCE_NORMAL_MODE:", FORCE_NORMAL_MODE);
     console.log("Will use normal mode:", FORCE_NORMAL_MODE || !isRender);
+    console.log("API URLs:", {
+      AUTH_API_BASE_URL,
+      MESSAGE_API_BASE_URL,
+      REALTIME_API_BASE_URL,
+    });
 
     // Check for existing login state
     const token = localStorage.getItem("token");
