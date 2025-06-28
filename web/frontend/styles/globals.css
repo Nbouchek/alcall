@@ -2,6 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
+html,
+body {
+  padding: 0;
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen,
+    Ubuntu, Cantarell, Fira Sans, Droid Sans, Helvetica Neue, sans-serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
 /* Custom animations */
 @keyframes fade-in {
   from {
@@ -150,4 +167,129 @@
   100% {
     transform: rotate(360deg);
   }
+}
+
+/* Video calling specific styles */
+.video-call-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.video-grid {
+  display: grid;
+  gap: 1rem;
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+}
+
+/* Single participant (1x1 grid) */
+.video-grid:has(> div:nth-child(1):last-child) {
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+}
+
+/* Two participants (1x2 grid) */
+.video-grid:has(> div:nth-child(2):last-child) {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr;
+}
+
+/* Three participants (2x2 grid with one empty) */
+.video-grid:has(> div:nth-child(3):last-child) {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+
+/* Four participants (2x2 grid) */
+.video-grid:has(> div:nth-child(4):last-child) {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+
+/* Five participants (3x2 grid) */
+.video-grid:has(> div:nth-child(5):last-child) {
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+
+/* Six participants (3x2 grid) */
+.video-grid:has(> div:nth-child(6):last-child) {
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+
+/* Fallback for browsers that don't support :has() */
+@supports not selector(:has(*)) {
+  .video-grid {
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    grid-auto-rows: minmax(200px, 1fr);
+  }
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 768px) {
+  .video-grid {
+    grid-template-columns: 1fr !important;
+    grid-auto-rows: minmax(200px, 1fr);
+    gap: 0.5rem;
+  }
+
+  .video-call-container.fixed {
+    padding: 0.5rem;
+  }
+}
+
+/* Video element styles */
+.video-grid video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 0.5rem;
+  background-color: #1f2937;
+}
+
+/* Echo test specific styles */
+.echo-test-container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.echo-test-container .aspect-video {
+  aspect-ratio: 16 / 9;
+}
+
+/* Animation for call buttons */
+@keyframes pulse-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 5px rgba(59, 130, 246, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.8);
+  }
+}
+
+.call-button-glow {
+  animation: pulse-glow 2s infinite;
+}
+
+/* Custom scrollbar for chat */
+.chat-messages::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
 }

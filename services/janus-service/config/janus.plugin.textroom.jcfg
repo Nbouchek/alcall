@@ -1,0 +1,29 @@
+general: {
+	admin_key = "supersecret"
+	string_ids = false
+}
+
+# Demo room configurations
+room-1234: {
+	description = "Demo General Chat"
+	secret = "adminpwd"
+	pin = ""
+	is_private = false
+	history = 50
+}
+
+room-5678: {
+	description = "Demo Tech Talk"
+	secret = "adminpwd"
+	pin = ""
+	is_private = false
+	history = 100
+}
+
+room-9999: {
+	description = "Demo Random"
+	secret = "adminpwd"
+	pin = ""
+	is_private = false
+	history = 25
+}

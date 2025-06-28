@@ -4,6 +4,7 @@ import Script from "next/script";
 import axios from "axios";
 import UserPopover from "../components/UserPopover";
 import JanusAudioCall from "../components/JanusAudioCall";
+import JanusVideoCall from "../components/JanusVideoCall";
 import {
   FaPhone,
   FaPaperPlane,
@@ -17,6 +18,7 @@ import {
   FaTimes,
   FaSearch,
   FaUsers,
+  FaVideo,
 } from "react-icons/fa";
 
 const AUTH_API_BASE_URL =
@@ -68,6 +70,7 @@ export default function Home() {
   const [popoverUser, setPopoverUser] = useState(null);
   const [popoverAnchor, setPopoverAnchor] = useState(null);
   const audioCallRef = useRef(null);
+  const videoCallRef = useRef(null);
   const wsRef = useRef(null);
 
   // Debug: Component mount
@@ -754,70 +757,154 @@ export default function Home() {
             </div>
 
             <div className="flex items-center gap-3">
-              {/* Enhanced Call Button - Only show when logged in and receiver selected */}
+              {/* Call Buttons - Only show when logged in and receiver selected */}
               {shouldShowChat && (
-                <button
-                  onClick={() => {
-                    console.log("Call button clicked");
-                    console.log("Audio service status:", audioServiceStatus);
-                    console.log("AudioCall ref:", audioCallRef.current);
-                    console.log("User:", user);
-                    console.log("Selected receiver:", selectedReceiver);
+                <div className="flex items-center gap-2">
+                  {/* Audio Call Button */}
+                  <button
+                    onClick={() => {
+                      console.log("Audio call button clicked");
+                      console.log("Audio service status:", audioServiceStatus);
+                      console.log("AudioCall ref:", audioCallRef.current);
+                      console.log("User:", user);
+                      console.log("Selected receiver:", selectedReceiver);
 
-                    if (audioServiceStatus === "available") {
-                      // Use the ref to call startCall directly
-                      if (audioCallRef.current) {
-                        console.log("Calling startCall via ref");
-                        audioCallRef.current.startCall();
+                      if (audioServiceStatus === "available") {
+                        // Use the ref to call startCall directly
+                        if (audioCallRef.current) {
+                          console.log("Calling startCall via ref");
+                          audioCallRef.current.startCall();
+                        } else {
+                          console.error("AudioCall ref not available");
+                          console.log("AudioCall ref details:", {
+                            ref: audioCallRef,
+                            current: audioCallRef.current,
+                            shouldShowChat,
+                          });
+                          alert(
+                            "Audio call feature is loading... Please wait a moment and try again."
+                          );
+                        }
                       } else {
-                        console.error("AudioCall ref not available");
-                        console.log("AudioCall ref details:", {
-                          ref: audioCallRef,
-                          current: audioCallRef.current,
-                          shouldShowChat,
-                        });
                         alert(
-                          "Audio call feature is loading... Please wait a moment and try again."
+                          "Audio service is not available. Please check if the audio service is deployed."
                         );
                       }
-                    } else {
-                      alert(
-                        "Audio service is not available. Please check if the audio service is deployed."
-                      );
+                    }}
+                    className={`group relative px-3 py-2 sm:px-4 sm:py-3 rounded-xl transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 flex items-center gap-2 font-bold shadow-lg ${
+                      audioServiceStatus === "available"
+                        ? "bg-gradient-to-r from-green-400 to-emerald-500 hover:from-green-500 hover:to-emerald-600 text-white"
+                        : "bg-gradient-to-r from-gray-400 to-gray-500 text-gray-600 cursor-not-allowed"
+                    }`}
+                    title={
+                      audioServiceStatus === "available"
+                        ? "Start audio call"
+                        : "Audio service unavailable"
                     }
-                  }}
-                  className={`group relative px-4 py-2 sm:px-6 sm:py-3 rounded-xl transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 flex items-center gap-2 font-bold shadow-lg ${
-                    audioServiceStatus === "available"
-                      ? "bg-gradient-to-r from-green-400 to-emerald-500 hover:from-green-500 hover:to-emerald-600 text-white"
-                      : "bg-gradient-to-r from-gray-400 to-gray-500 text-gray-600 cursor-not-allowed"
-                  }`}
-                  title={
-                    audioServiceStatus === "available"
-                      ? "Start audio call"
-                      : "Audio service unavailable"
-                  }
-                  disabled={audioServiceStatus !== "available"}
-                >
-                  {/* Glowing effect */}
-                  {audioServiceStatus === "available" && (
-                    <div className="absolute -inset-1 bg-gradient-to-r from-green-400 to-emerald-500 rounded-xl blur opacity-30 group-hover:opacity-50 transition duration-300"></div>
-                  )}
-                  <FaPhone className="w-4 h-4 sm:w-5 sm:h-5 relative z-10 animate-pulse group-hover:animate-bounce" />
-                  <span className="relative z-10 hidden sm:inline">
-                    {audioServiceStatus === "checking" ? "..." : "Start Huddle"}
-                  </span>
-                </button>
+                    disabled={audioServiceStatus !== "available"}
+                  >
+                    {/* Glowing effect */}
+                    {audioServiceStatus === "available" && (
+                      <div className="absolute -inset-1 bg-gradient-to-r from-green-400 to-emerald-500 rounded-xl blur opacity-30 group-hover:opacity-50 transition duration-300"></div>
+                    )}
+                    <FaPhone className="w-4 h-4 sm:w-5 sm:h-5 relative z-10 animate-pulse group-hover:animate-bounce" />
+                    <span className="relative z-10 hidden sm:inline">
+                      {audioServiceStatus === "checking" ? "..." : "Audio"}
+                    </span>
+                  </button>
+
+                  {/* Video Call Button */}
+                  <button
+                    onClick={() => {
+                      console.log("Video call button clicked");
+                      console.log("Audio service status:", audioServiceStatus);
+                      console.log("VideoCall ref:", videoCallRef.current);
+                      console.log("User:", user);
+                      console.log("Selected receiver:", selectedReceiver);
+
+                      if (audioServiceStatus === "available") {
+                        // Use the ref to call startVideoCall directly
+                        if (videoCallRef.current) {
+                          console.log("Calling startVideoCall via ref");
+                          videoCallRef.current.startVideoCall();
+                        } else {
+                          console.error("VideoCall ref not available");
+                          console.log("VideoCall ref details:", {
+                            ref: videoCallRef,
+                            current: videoCallRef.current,
+                            shouldShowChat,
+                          });
+                          alert(
+                            "Video call feature is loading... Please wait a moment and try again."
+                          );
+                        }
+                      } else {
+                        alert(
+                          "Video service is not available. Please check if the video service is deployed."
+                        );
+                      }
+                    }}
+                    className={`group relative px-3 py-2 sm:px-4 sm:py-3 rounded-xl transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 flex items-center gap-2 font-bold shadow-lg ${
+                      audioServiceStatus === "available"
+                        ? "bg-gradient-to-r from-blue-400 to-indigo-500 hover:from-blue-500 hover:to-indigo-600 text-white"
+                        : "bg-gradient-to-r from-gray-400 to-gray-500 text-gray-600 cursor-not-allowed"
+                    }`}
+                    title={
+                      audioServiceStatus === "available"
+                        ? "Start video call"
+                        : "Video service unavailable"
+                    }
+                    disabled={audioServiceStatus !== "available"}
+                  >
+                    {/* Glowing effect */}
+                    {audioServiceStatus === "available" && (
+                      <div className="absolute -inset-1 bg-gradient-to-r from-blue-400 to-indigo-500 rounded-xl blur opacity-30 group-hover:opacity-50 transition duration-300"></div>
+                    )}
+                    <FaVideo className="w-4 h-4 sm:w-5 sm:h-5 relative z-10 animate-pulse group-hover:animate-bounce" />
+                    <span className="relative z-10 hidden sm:inline">
+                      {audioServiceStatus === "checking" ? "..." : "Video"}
+                    </span>
+                  </button>
+
+                  {/* All Features Button */}
+                  <button
+                    onClick={() => {
+                      console.log(
+                        "All Features button clicked - opening test page"
+                      );
+                      window.open("/test-calls", "_blank");
+                    }}
+                    className="group relative px-3 py-2 sm:px-4 sm:py-3 rounded-xl transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 flex items-center gap-2 font-bold shadow-lg bg-gradient-to-r from-purple-400 to-pink-500 hover:from-purple-500 hover:to-pink-600 text-white"
+                    title="Open comprehensive feature testing suite"
+                  >
+                    {/* Glowing effect */}
+                    <div className="absolute -inset-1 bg-gradient-to-r from-purple-400 to-pink-500 rounded-xl blur opacity-30 group-hover:opacity-50 transition duration-300"></div>
+                    <FaCog className="w-4 h-4 sm:w-5 sm:h-5 relative z-10 animate-pulse group-hover:animate-spin" />
+                    <span className="relative z-10 hidden sm:inline">
+                      Features
+                    </span>
+                  </button>
+                </div>
               )}
 
-              {/* Audio Call Component */}
+              {/* Call Components */}
               {isLoggedIn && isClient && (
-                <JanusAudioCall
-                  ref={audioCallRef}
-                  user={user}
-                  selectedReceiver={selectedReceiver}
-                  onCallEnd={() => {}}
-                  getUserName={getUserName}
-                />
+                <>
+                  <JanusAudioCall
+                    ref={audioCallRef}
+                    user={user}
+                    selectedReceiver={selectedReceiver}
+                    onCallEnd={() => {}}
+                    getUserName={getUserName}
+                  />
+                  <JanusVideoCall
+                    ref={videoCallRef}
+                    user={user}
+                    selectedReceiver={selectedReceiver}
+                    onCallEnd={() => {}}
+                    getUserName={getUserName}
+                  />
+                </>
               )}
             </div>
           </header>

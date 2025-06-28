@@ -1,0 +1,4 @@
+general: {
+	admin_key = "supersecret"
+	string_ids = false
+}
