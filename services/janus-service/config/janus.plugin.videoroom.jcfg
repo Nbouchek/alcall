@@ -26,3 +26,11 @@ general: {
     video_rtcp_sdes_ssrc = true
     video_rtcp_sdes_csrc = true
 }
+room: 1234
+description: Test Room
+publishers: 6
+bitrate: 128000
+fir_freq: 10
+audiocodec: opus
+videocodec: vp8
+

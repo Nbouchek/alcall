@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   janus:
-    image: meetecho/janus-gateway:latest
+    image: canyan/janus-gateway:master
     container_name: unifiedchat-janus
     ports:
       - "8090:8090"
