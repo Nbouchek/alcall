@@ -19,6 +19,7 @@ import {
   FaSearch,
   FaUsers,
   FaVideo,
+  FaCog,
 } from "react-icons/fa";
 
 const AUTH_API_BASE_URL =
@@ -32,21 +33,12 @@ const REALTIME_API_BASE_URL =
   "https://unifiedchat-realtime-service.onrender.com";
 const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
-// Check if we're running on Render (no backend services available)
-const IS_RENDER_DEPLOYMENT =
-  typeof window !== "undefined" &&
-  (window.location.hostname.includes("onrender.com") ||
-    window.location.hostname.includes("render.com"));
+// IS_RENDER_DEPLOYMENT is now handled as state to avoid hydration issues
 
 // Force normal mode for now - backend services are working
 const FORCE_NORMAL_MODE = true;
 
-// Debug: Log the detection
-if (typeof window !== "undefined") {
-  console.log("Hostname:", window.location.hostname);
-  console.log("IS_RENDER_DEPLOYMENT:", IS_RENDER_DEPLOYMENT);
-  console.log("FORCE_NORMAL_MODE:", FORCE_NORMAL_MODE);
-}
+// Debug: Log the detection will happen in useEffect after component mounts
 
 export default function Home() {
   const [user, setUser] = useState(null);
@@ -60,6 +52,7 @@ export default function Home() {
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [audioServiceStatus, setAudioServiceStatus] = useState("checking");
   const [isClient, setIsClient] = useState(false);
+  const [isRenderDeployment, setIsRenderDeployment] = useState(false);
 
   const [loginForm, setLoginForm] = useState({
     username: "",
@@ -81,6 +74,14 @@ export default function Home() {
 
     // Set client state
     setIsClient(true);
+
+    // Check if we're on Render deployment
+    const hostname = window.location.hostname;
+    const isRender =
+      hostname.includes("onrender.com") || hostname.includes("render.com");
+    setIsRenderDeployment(isRender);
+    console.log("Hostname:", hostname);
+    console.log("Is Render deployment:", isRender);
 
     // Check for existing login state
     const token = localStorage.getItem("token");
@@ -105,7 +106,7 @@ export default function Home() {
   useEffect(() => {
     const checkJanusService = async () => {
       // Skip Janus checks in demo mode
-      if (IS_RENDER_DEPLOYMENT && !FORCE_NORMAL_MODE) {
+      if (isRenderDeployment && !FORCE_NORMAL_MODE) {
         console.log("Demo mode: Skipping Janus service check");
         setAudioServiceStatus("available"); // Assume available in demo
         return;
@@ -134,17 +135,17 @@ export default function Home() {
     if (isLoggedIn) {
       checkJanusService();
       // Check every 30 seconds only if not in demo mode
-      if (!IS_RENDER_DEPLOYMENT || FORCE_NORMAL_MODE) {
+      if (!isRenderDeployment || FORCE_NORMAL_MODE) {
         const interval = setInterval(checkJanusService, 30000);
         return () => clearInterval(interval);
       }
     }
-  }, [isLoggedIn]);
+  }, [isLoggedIn, isRenderDeployment]);
 
   // Function to fetch users from backend
   const fetchUsers = async () => {
     // Use backend in normal mode
-    if (FORCE_NORMAL_MODE || !IS_RENDER_DEPLOYMENT) {
+    if (FORCE_NORMAL_MODE || !isRenderDeployment) {
       setLoadingUsers(true);
       try {
         const response = await axios.get(`${AUTH_API_BASE_URL}/users`);
@@ -188,7 +189,7 @@ export default function Home() {
     }
 
     // Skip backend call in demo mode and set users immediately
-    if (IS_RENDER_DEPLOYMENT) {
+    if (isRenderDeployment) {
       console.log("Demo mode: Using hardcoded users (fast path)");
       setUsers([
         { id: 1, username: "admin" },
@@ -220,18 +221,18 @@ export default function Home() {
       // Refresh users list more frequently in normal mode
       const interval = setInterval(
         fetchUsers,
-        FORCE_NORMAL_MODE ? 30000 : IS_RENDER_DEPLOYMENT ? 60000 : 30000
+        FORCE_NORMAL_MODE ? 30000 : isRenderDeployment ? 60000 : 30000
       );
       return () => clearInterval(interval);
     }
-  }, [isLoggedIn]);
+  }, [isLoggedIn, isRenderDeployment]);
 
   const login = async (e) => {
     try {
       e.preventDefault();
       console.log("Login button clicked", loginForm);
       console.log("DEMO_MODE:", DEMO_MODE);
-      console.log("IS_RENDER_DEPLOYMENT:", IS_RENDER_DEPLOYMENT);
+      console.log("IS_RENDER_DEPLOYMENT:", isRenderDeployment);
       console.log("FORCE_NORMAL_MODE:", FORCE_NORMAL_MODE);
       console.log("AUTH_API_BASE_URL:", AUTH_API_BASE_URL);
       console.log(
@@ -269,7 +270,7 @@ export default function Home() {
       }
 
       // Use normal backend mode (not demo mode)
-      if (FORCE_NORMAL_MODE || !IS_RENDER_DEPLOYMENT) {
+      if (FORCE_NORMAL_MODE || !isRenderDeployment) {
         console.log("Using normal backend mode for login");
 
         try {
@@ -345,7 +346,7 @@ export default function Home() {
     if (!newMessage.trim()) return;
 
     // Demo mode for Render deployment
-    if (IS_RENDER_DEPLOYMENT) {
+    if (isRenderDeployment) {
       const demoMessage = {
         id: Date.now(),
         sender_id: user.id,
@@ -379,7 +380,7 @@ export default function Home() {
 
   const loadMessages = async () => {
     // Skip loading messages in demo mode
-    if (IS_RENDER_DEPLOYMENT) {
+    if (isRenderDeployment) {
       return;
     }
 
@@ -400,7 +401,7 @@ export default function Home() {
       const interval = setInterval(loadMessages, 3000); // Poll every 3 seconds
       return () => clearInterval(interval);
     }
-  }, [isLoggedIn, user, selectedReceiver]);
+  }, [isLoggedIn, user, selectedReceiver, isRenderDeployment]);
 
   useEffect(() => {
     scrollToBottom();
@@ -446,7 +447,7 @@ export default function Home() {
   useEffect(() => {
     if (isLoggedIn && user?.username) {
       // Skip WebSocket in demo mode
-      if (IS_RENDER_DEPLOYMENT) {
+      if (isRenderDeployment) {
         console.log("Demo mode: Skipping WebSocket connection");
         return;
       }
@@ -486,7 +487,7 @@ export default function Home() {
         ws.close();
       };
     }
-  }, [isLoggedIn, user?.username]);
+  }, [isLoggedIn, user?.username, isRenderDeployment]);
 
   // Poll /online-users endpoint every 30 seconds as fallback
   useEffect(() => {
@@ -494,7 +495,7 @@ export default function Home() {
     const fetchOnlineUsers = async () => {
       try {
         // Skip backend call in demo mode
-        if (IS_RENDER_DEPLOYMENT) {
+        if (isRenderDeployment) {
           console.log("Demo mode: Using demo online users");
           setOnlineUsers(["admin", "Nacer", "user2", "user3"]);
           return;
@@ -516,7 +517,19 @@ export default function Home() {
       interval = setInterval(fetchOnlineUsers, 30000);
     }
     return () => interval && clearInterval(interval);
-  }, [isLoggedIn]);
+  }, [isLoggedIn, isRenderDeployment]);
+
+  // Prevent hydration issues by only rendering after client-side initialization
+  if (!isClient) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-100 via-blue-100 to-pink-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-100 via-blue-100 to-pink-100 flex flex-col">
@@ -528,7 +541,7 @@ export default function Home() {
       </Head>
 
       {/* Demo Mode Banner */}
-      {IS_RENDER_DEPLOYMENT && (
+      {isRenderDeployment && (
         <div className="bg-yellow-500 text-black px-4 py-2 text-center text-sm font-semibold">
           🚀 DEMO MODE: Audio calling testing on Render.com - Login with any
           username/password
