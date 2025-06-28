@@ -809,7 +809,7 @@ export default function Home() {
                 </button>
               )}
 
-              {/* Audio Call Component - Always available for ref access when logged in */}
+              {/* Audio Call Component */}
               {isLoggedIn && (
                 <JanusAudioCall
                   ref={audioCallRef}

@@ -156,7 +156,7 @@ const JanusAudioCall = forwardRef(
       };
 
       // Check if Janus failed to load
-      if (window.janusLoadFailed) {
+      if (typeof window !== "undefined" && window.janusLoadFailed) {
         console.error("Janus library failed to load - using demo mode");
         setConnectionError(
           "Janus library unavailable. Audio calls will be simulated in demo mode."
@@ -180,7 +180,9 @@ const JanusAudioCall = forwardRef(
               setConnectionError(
                 "Janus library failed to load. Audio calls will be simulated in demo mode."
               );
-              window.janusLoadFailed = true;
+              if (typeof window !== "undefined") {
+                window.janusLoadFailed = true;
+              }
             }
           }
         }, 500);
@@ -202,7 +204,10 @@ const JanusAudioCall = forwardRef(
       console.log("JanusAudioCall: Initializing Janus...");
 
       // Check if we're in demo mode or Janus failed to load
-      if (IS_DEMO_MODE || window.janusLoadFailed) {
+      if (
+        IS_DEMO_MODE ||
+        (typeof window !== "undefined" && window.janusLoadFailed)
+      ) {
         console.log(
           "JanusAudioCall: Demo mode or Janus unavailable - using simulated calls"
         );
@@ -212,18 +217,23 @@ const JanusAudioCall = forwardRef(
       }
 
       // Check if Janus is available
-      if (typeof Janus === "undefined") {
+      if (
+        typeof window === "undefined" ||
+        typeof window.Janus === "undefined"
+      ) {
         console.error("JanusAudioCall: Janus library not loaded");
         setConnectionError(
           "Janus library not loaded. Audio calls will be simulated in demo mode."
         );
-        window.janusLoadFailed = true;
+        if (typeof window !== "undefined") {
+          window.janusLoadFailed = true;
+        }
         setJanusConnected(true); // Pretend we're connected for demo
         return;
       }
 
       try {
-        janusRef.current = new Janus({
+        janusRef.current = new window.Janus({
           server: JANUS_URL,
           success: () => {
             console.log("JanusAudioCall: Janus connected successfully");
@@ -238,7 +248,9 @@ const JanusAudioCall = forwardRef(
             );
             setJanusConnected(false);
             // Fall back to demo mode
-            window.janusLoadFailed = true;
+            if (typeof window !== "undefined") {
+              window.janusLoadFailed = true;
+            }
           },
           destroyed: () => {
             console.log("JanusAudioCall: Janus connection destroyed");
@@ -256,7 +268,9 @@ const JanusAudioCall = forwardRef(
         setConnectionError(
           `Failed to create Janus instance: ${error.message}. Audio calls will be simulated.`
         );
-        window.janusLoadFailed = true;
+        if (typeof window !== "undefined") {
+          window.janusLoadFailed = true;
+        }
         setJanusConnected(true); // Pretend we're connected for demo
       }
     };
