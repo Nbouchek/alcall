@@ -10,9 +10,9 @@ services:
       - key: PORT
         value: 3000
       - key: NEXT_PUBLIC_AUTH_API_URL
-        value: "https://unifiedchat-gateway-service.onrender.com"
+        value: "https://unifiedchat-auth-service.onrender.com"
       - key: NEXT_PUBLIC_MESSAGE_API_URL
-        value: "https://unifiedchat-gateway-service.onrender.com"
+        value: "https://unifiedchat-message-service.onrender.com"
       - key: NEXT_PUBLIC_REALTIME_API_URL
         value: "https://unifiedchat-realtime-service.onrender.com"
       - key: NEXT_PUBLIC_JANUS_URL

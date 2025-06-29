@@ -7,7 +7,6 @@ import JanusAudioCall from "../components/JanusAudioCall";
 import JanusVideoCall from "../components/JanusVideoCall";
 import {
   FaPhone,
-  FaPhoneSlash,
   FaPaperPlane,
   FaUser,
   FaSignOutAlt,
@@ -24,17 +23,16 @@ import {
   FaVolumeUp,
 } from "react-icons/fa";
 
-// Smart URL detection for both development and production
 const AUTH_API_BASE_URL =
   process.env.NEXT_PUBLIC_AUTH_API_URL ||
   (typeof window !== "undefined" && window.location.hostname === "localhost"
     ? "http://localhost:8080"
-    : "https://unifiedchat-gateway-service.onrender.com");
+    : "https://unifiedchat-auth-service.onrender.com");
 const MESSAGE_API_BASE_URL =
   process.env.NEXT_PUBLIC_MESSAGE_API_URL ||
   (typeof window !== "undefined" && window.location.hostname === "localhost"
-    ? "http://localhost:8080"
-    : "https://unifiedchat-gateway-service.onrender.com");
+    ? "http://localhost:8083"
+    : "https://unifiedchat-message-service.onrender.com");
 const REALTIME_API_BASE_URL =
   process.env.NEXT_PUBLIC_REALTIME_API_URL ||
   (typeof window !== "undefined" && window.location.hostname === "localhost"
@@ -49,24 +47,6 @@ const FORCE_NORMAL_MODE =
   process.env.NEXT_PUBLIC_FORCE_NORMAL_MODE === "true" || true;
 
 // Debug: Log the detection will happen in useEffect after component mounts
-
-// Configure axios to handle 501 errors gracefully
-axios.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    // Suppress 501 errors from appearing as red errors in console
-    if (error.response && error.response.status === 501) {
-      // Create a custom error that won't trigger console.error
-      const customError = new Error(
-        `MVP Service: ${error.config.url} returned 501 Not Implemented`
-      );
-      customError.response = error.response;
-      customError.config = error.config;
-      return Promise.reject(customError);
-    }
-    return Promise.reject(error);
-  }
-);
 
 export default function Home() {
   const [user, setUser] = useState(null);
@@ -191,10 +171,15 @@ export default function Home() {
       REALTIME_API_BASE_URL,
     });
 
-    // Clear any cached login state for now (MVP mode)
-    // In a real app, you'd verify the token with the backend
-    localStorage.removeItem("token");
-    console.log("Cleared any cached login state for fresh session");
+    // Check for existing login state
+    const token = localStorage.getItem("token");
+    if (token) {
+      console.log("Found existing token, attempting to restore login state");
+      // For now, just set a basic user state
+      // In a real app, you'd verify the token with the backend
+      setUser({ id: 2, username: "Nacer" }); // Default user
+      setIsLoggedIn(true);
+    }
   }, []);
 
   // Debug: Monitor AudioCall ref
@@ -212,18 +197,6 @@ export default function Home() {
       if (isRenderDeployment && !FORCE_NORMAL_MODE) {
         console.log("Demo mode: Skipping Janus service check");
         setAudioServiceStatus("available"); // Assume available in demo
-        return;
-      }
-
-      // For localhost development, assume Janus is available for testing
-      if (
-        typeof window !== "undefined" &&
-        window.location.hostname === "localhost"
-      ) {
-        console.log(
-          "Local development: Setting audio service as available for testing"
-        );
-        setAudioServiceStatus("available");
         return;
       }
 
@@ -282,15 +255,13 @@ export default function Home() {
           ]);
         }
       } catch (error) {
-        // Suppress 501 errors in console - they're expected for MVP stub services
-        if (error.response && error.response.status === 501) {
+        console.error("Failed to fetch users:", error);
+        if (error.response && error.response.status === 404) {
+          console.log("Users endpoint not available yet, using fallback");
+        } else if (error.response && error.response.status === 501) {
           console.log(
-            "Backend returned 501 Not Implemented for users - using demo fallback (MVP mode)"
+            "Backend returned 501 Not Implemented for users, using fallback (MVP mode)"
           );
-        } else if (error.response && error.response.status === 404) {
-          console.log("Users endpoint not available yet - using demo fallback");
-        } else {
-          console.error("Failed to fetch users:", error);
         }
         // Fallback to hardcoded users if backend doesn't work
         setUsers([
@@ -429,10 +400,12 @@ export default function Home() {
             alert("Login failed: Invalid response from server.");
           }
         } catch (error) {
+          console.error("Login error:", error);
+
           // Check if it's a 501 Not Implemented error (MVP stub)
           if (error.response && error.response.status === 501) {
             console.log(
-              "Backend returned 501 Not Implemented - falling back to demo mode (MVP mode)"
+              "Backend returned 501 Not Implemented, falling back to demo mode"
             );
             const demoUser = {
               id:
@@ -461,9 +434,6 @@ export default function Home() {
             console.log("Demo login completed for MVP backend");
             return;
           }
-
-          // Log other errors
-          console.error("Login error:", error);
 
           let msg = "Login failed: ";
           if (
@@ -519,57 +489,34 @@ export default function Home() {
   const sendMessage = async () => {
     if (!newMessage.trim()) return;
 
-    const messageData = {
-      id: Date.now(),
-      sender_id: user.id,
-      receiver_id: selectedReceiver,
-      content: newMessage,
-      timestamp: new Date().toISOString(),
-    };
-
-    // Add message to local state immediately for better UX
-    setMessages((prev) => [...prev, messageData]);
-    setNewMessage("");
-    scrollToBottom();
-
-    // Send via WebSocket for real-time delivery to other users
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      const wsMessage = {
-        type: "chat_message",
-        ...messageData,
+    // Demo mode for Render deployment
+    if (isRenderDeployment) {
+      const demoMessage = {
+        id: Date.now(),
+        sender_id: user.id,
+        receiver_id: selectedReceiver,
+        content: newMessage,
+        timestamp: new Date().toISOString(),
       };
-      console.log("Sending chat message via WebSocket:", wsMessage);
-      wsRef.current.send(JSON.stringify(wsMessage));
-
-      // If WebSocket is working, we don't need to fallback to API
-      console.log("Message sent via WebSocket successfully");
+      setMessages((prev) => [...prev, demoMessage]);
+      setNewMessage("");
+      scrollToBottom();
       return;
-    } else {
-      console.warn(
-        "WebSocket not available for message sending, trying API fallback"
-      );
     }
 
-    // If WebSocket failed, try API fallback even in production
-    console.log("Attempting to send message via API fallback...");
-
     try {
-      const response = await axios.post(
-        `${MESSAGE_API_BASE_URL}/api/v1/messages`,
-        {
-          sender_id: user.id,
-          receiver_id: selectedReceiver,
-          content: messageData.content,
-        }
-      );
+      const response = await axios.post(`${MESSAGE_API_BASE_URL}/messages`, {
+        sender_id: user.id,
+        receiver_id: selectedReceiver,
+        content: newMessage,
+      });
 
-      console.log("Message sent via API fallback successfully");
-      // Note: Message already added to local state at the beginning of function
+      setMessages((prev) => [...prev, response.data]);
+      setNewMessage("");
+      scrollToBottom();
     } catch (error) {
-      console.error("API fallback also failed:", error);
-      // Since both WebSocket and API failed, we should inform the user
       alert(
-        "Failed to send message: Both real-time and API delivery failed. " +
+        "Failed to send message: " +
           (error.response?.data?.error || error.message)
       );
     }
@@ -587,7 +534,7 @@ export default function Home() {
 
     try {
       const response = await axios.get(
-        `${MESSAGE_API_BASE_URL}/api/v1/messages/${user.id}`
+        `${MESSAGE_API_BASE_URL}/messages/${user.id}`
       );
       // Ensure response.data is an array
       setMessages(Array.isArray(response.data) ? response.data : []);
@@ -651,9 +598,19 @@ export default function Home() {
 
     // Last resort: directly remove any audio call modals from the DOM
     if (typeof window !== "undefined") {
-      // Let React handle DOM cleanup naturally
       setTimeout(() => {
-        console.log("Audio call cleanup completed");
+        const audioCallModals = document.querySelectorAll(
+          ".fixed.inset-0.bg-black.bg-opacity-50"
+        );
+        if (audioCallModals.length > 0) {
+          console.log(
+            "Forcibly removing audio call modals:",
+            audioCallModals.length
+          );
+          audioCallModals.forEach((modal) => {
+            modal.parentNode.removeChild(modal);
+          });
+        }
       }, 200);
     }
   };
@@ -757,30 +714,18 @@ export default function Home() {
 
   // Incoming call ringtone functions
   const playIncomingCallRingtone = () => {
-    console.log("🔊 playIncomingCallRingtone called");
-    console.log(
-      "🔊 Document has user interaction:",
-      document.hasStoredUserActivation || false
-    );
-    console.log(
-      "🔊 AudioContext available:",
-      !!(window.AudioContext || window.webkitAudioContext)
-    );
-
     try {
+      console.log("🔔 STARTING INCOMING CALL RINGTONE");
       stopIncomingCallRingtone();
-      console.log("🔊 Previous ringtone stopped");
 
       // Mobile-friendly ringtone system
       const playRingtoneTone = () => {
-        console.log("🔊 playRingtoneTone called");
+        console.log("🎵 Playing ringtone tone...");
         try {
           // Try Web Audio API first (better quality)
           if (window.AudioContext || window.webkitAudioContext) {
             const audioContext = new (window.AudioContext ||
               window.webkitAudioContext)();
-
-            console.log("🔊 Audio context state:", audioContext.state);
 
             // Resume audio context if suspended (required for mobile)
             if (audioContext.state === "suspended") {
@@ -790,12 +735,12 @@ export default function Home() {
               audioContext
                 .resume()
                 .then(() => {
-                  console.log("🔊 Audio context resumed successfully");
-                  // Retry playing the tone after resuming
-                  playRingtoneTone();
+                  console.log("✅ Audio context resumed successfully");
+                  // Try playing the tone again after resuming
+                  setTimeout(() => playRingtoneTone(), 100);
                 })
                 .catch((err) => {
-                  console.error("🔊 Failed to resume audio context:", err);
+                  console.error("❌ Failed to resume audio context:", err);
                   // Fallback to HTML5 audio
                   playFallbackRingtone();
                 });
@@ -835,7 +780,8 @@ export default function Home() {
             oscillator2.start(now);
             oscillator1.stop(now + 0.6);
             oscillator2.stop(now + 0.6);
-            console.log("🔊 Web Audio API ringtone played");
+
+            console.log("🎶 Ringtone oscillators started successfully");
           } else {
             // Fallback for older browsers
             playFallbackRingtone();
@@ -848,75 +794,70 @@ export default function Home() {
 
       // HTML5 Audio fallback for mobile devices
       const playFallbackRingtone = () => {
-        console.log("🔊 playFallbackRingtone called");
+        console.log("🔊 Using HTML5 Audio fallback for ringtone");
         try {
-          // Create a simple beep using HTML5 Audio
+          // Create a simple beep tone using data URL
           const audio = new Audio();
-          const sampleRate = 44100;
-          const duration = 0.6;
-          const frequency = 480;
+          // Simple beep sound as data URL
+          audio.src =
+            "data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT";
+          audio.volume = 0.8;
 
-          // Generate a simple sine wave
+          const playPromise = audio.play();
+          if (playPromise !== undefined) {
+            playPromise
+              .then(() => {
+                console.log("✅ Fallback ringtone played successfully");
+              })
+              .catch((error) => {
+                console.error("❌ Fallback ringtone play failed:", error);
+                // Try alternative approach
+                tryAlternativeRingtone();
+              });
+          }
+        } catch (error) {
+          console.error("❌ Fallback ringtone setup failed:", error);
+          tryAlternativeRingtone();
+        }
+      };
+
+      // Alternative ringtone approach
+      const tryAlternativeRingtone = () => {
+        console.log("🔔 Trying alternative ringtone approach");
+        try {
+          // Create a simple beep using HTML5 Audio with generated tone
           const audioContext = new (window.AudioContext ||
             window.webkitAudioContext)();
-          const buffer = audioContext.createBuffer(
-            1,
-            sampleRate * duration,
-            sampleRate
-          );
+          const buffer = audioContext.createBuffer(1, 44100 * 0.6, 44100);
           const channelData = buffer.getChannelData(0);
 
-          for (let i = 0; i < sampleRate * duration; i++) {
-            channelData[i] =
-              Math.sin((2 * Math.PI * frequency * i) / sampleRate) * 0.3;
+          for (let i = 0; i < 44100 * 0.6; i++) {
+            channelData[i] = Math.sin((2 * Math.PI * 480 * i) / 44100) * 0.3;
           }
 
           const source = audioContext.createBufferSource();
           source.buffer = buffer;
           source.connect(audioContext.destination);
           source.start();
-          console.log("🔊 Fallback ringtone played using Web Audio API");
+          console.log("✅ Alternative ringtone started");
         } catch (error) {
-          console.error("🔊 Fallback ringtone failed:", error);
-          // Last resort: try a simple HTML5 audio beep
-          try {
-            console.log("🔊 Trying simple HTML5 audio beep");
-            // Create a simple beep sound using data URL
-            const audio = new Audio();
-            audio.src =
-              "data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT";
-            audio.volume = 0.5;
-            audio
-              .play()
-              .then(() => {
-                console.log("🔊 HTML5 audio beep played successfully");
-              })
-              .catch((err) => {
-                console.error("🔊 HTML5 audio beep failed:", err);
-              });
-          } catch (e) {
-            console.error("🔊 HTML5 audio beep setup failed:", e);
-          }
+          console.error("❌ Alternative ringtone failed:", error);
         }
       };
 
       // Start ringing with mobile-friendly interval
       let ringCount = 0;
-      console.log("🔊 Setting up ringtone interval");
       const interval = setInterval(() => {
-        console.log("🔊 Ringtone interval tick #" + (ringCount + 1));
         playRingtoneTone();
         ringCount++;
 
         // Stop after 30 seconds to prevent infinite ringing
         if (ringCount >= 30) {
-          console.log("🔊 Stopping ringtone after 30 rings");
           stopIncomingCallRingtone();
         }
       }, 1000);
 
       setIncomingCallRingtoneInterval(interval);
-      console.log("🔊 Ringtone interval set up successfully");
 
       // Also try to unlock audio immediately on user interaction
       const unlockAudio = () => {
@@ -991,8 +932,6 @@ export default function Home() {
 
       const wsUrl = REALTIME_API_BASE_URL.replace(/^http/, "ws") + "/ws";
       console.log("Attempting WebSocket connection to:", wsUrl);
-      console.log("Production environment:", isRenderDeployment);
-      console.log("REALTIME_API_BASE_URL:", REALTIME_API_BASE_URL);
 
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
@@ -1007,11 +946,7 @@ export default function Home() {
           user_id: user.id,
           username: user.username,
         };
-        console.log("🔍 WEBSOCKET REGISTRATION DEBUG:");
-        console.log("  - User object:", user);
-        console.log("  - User ID:", user.id, "Type:", typeof user.id);
-        console.log("  - Username:", user.username);
-        console.log("  - Registration message:", registerMessage);
+        console.log("Sending registration message:", registerMessage);
         ws.send(JSON.stringify(registerMessage));
       };
 
@@ -1052,56 +987,8 @@ export default function Home() {
             if (toUserId === currentUserId && fromUserId !== currentUserId) {
               console.log("Processing incoming call for user:", user.username);
               setIncomingCall(data);
-
               // Start playing ringtone for incoming call
-              console.log("🔊 ATTEMPTING TO PLAY RINGTONE FOR INCOMING CALL");
-              console.log(
-                "🔊 User:",
-                user.username,
-                "receiving call from:",
-                data.from_username
-              );
-
-              try {
-                // Try multiple ringtone methods for better compatibility
-                playIncomingCallRingtone();
-                console.log("🔊 Ringtone function called successfully");
-
-                // Also show a browser notification as backup
-                if ("Notification" in window) {
-                  if (Notification.permission === "granted") {
-                    new Notification(
-                      `Incoming call from ${data.from_username}`,
-                      {
-                        body: "Click to answer",
-                        icon: "/favicon.ico",
-                        tag: "incoming-call",
-                      }
-                    );
-                  } else if (Notification.permission !== "denied") {
-                    Notification.requestPermission().then((permission) => {
-                      if (permission === "granted") {
-                        new Notification(
-                          `Incoming call from ${data.from_username}`,
-                          {
-                            body: "Click to answer",
-                            icon: "/favicon.ico",
-                            tag: "incoming-call",
-                          }
-                        );
-                      }
-                    });
-                  }
-                }
-
-                // Visual alert as additional backup
-                console.log(
-                  "🔔 VISUAL ALERT: Incoming call from",
-                  data.from_username
-                );
-              } catch (error) {
-                console.error("🔊 ERROR calling ringtone function:", error);
-              }
+              playIncomingCallRingtone();
             } else {
               console.log(
                 "Ignoring own call notification for user:",
@@ -1126,59 +1013,6 @@ export default function Home() {
             }
             // Also call the handler to ensure modal closes
             handleAudioCallEnd();
-          } else if (data.type === "call_ended") {
-            console.log("Call ended for user", user.username + ":", data);
-            console.log("AudioCall ref available:", !!audioCallRef.current);
-            // Both caller and receiver should close their call modal
-            if (audioCallRef.current) {
-              console.log("Force closing audio call modal due to call end");
-              audioCallRef.current.forceClose();
-            } else {
-              console.error("AudioCall ref not available for call end");
-            }
-            // Also call the handler to ensure modal closes
-            handleAudioCallEnd();
-          } else if (data.type === "chat_message") {
-            console.log(
-              "Received chat message for user",
-              user.username + ":",
-              data
-            );
-
-            // Ensure consistent ID types for comparison
-            const currentUserId = Number(user.id);
-            const receiverId = Number(data.receiver_id);
-            const senderId = Number(data.sender_id);
-
-            console.log("Chat message ID comparison:", {
-              currentUserId,
-              receiverId,
-              senderId,
-              isForCurrentUser: receiverId === currentUserId,
-              isFromCurrentUser: senderId === currentUserId,
-            });
-
-            // Only add message if it's for the current user and not from themselves
-            if (receiverId === currentUserId && senderId !== currentUserId) {
-              console.log(
-                "Adding received message to chat for user:",
-                user.username
-              );
-              setMessages((prev) => {
-                // Check if message already exists to avoid duplicates
-                const messageExists = prev.some((msg) => msg.id === data.id);
-                if (messageExists) {
-                  console.log("Message already exists, skipping duplicate");
-                  return prev;
-                }
-                return [...prev, data];
-              });
-              scrollToBottom();
-            } else {
-              console.log(
-                "Ignoring chat message (not for current user or from self)"
-              );
-            }
           }
         } catch (error) {
           console.log(
@@ -1199,19 +1033,6 @@ export default function Home() {
           "WebSocket connection failed for user",
           user.username + ", will rely on polling fallback"
         );
-
-        // For production, try to reconnect after a delay
-        if (isRenderDeployment) {
-          console.log(
-            "Production WebSocket failed, attempting reconnection in 5 seconds..."
-          );
-          setTimeout(() => {
-            if (wsRef.current && wsRef.current.readyState !== WebSocket.OPEN) {
-              console.log("Attempting WebSocket reconnection...");
-              // The useEffect will handle reconnection when user state changes
-            }
-          }, 5000);
-        }
       };
 
       return () => {
@@ -1254,6 +1075,8 @@ export default function Home() {
                 user.username
               );
               setIncomingCall(notification);
+              // Start playing ringtone for incoming call
+              playIncomingCallRingtone();
               // Clear the notification after processing
               localStorage.removeItem("call_notification");
             }
@@ -1328,15 +1151,13 @@ export default function Home() {
     // Debug: Log user information before sending notification
     console.log("=== SENDING CALL NOTIFICATION ===");
     debugUserInfo();
-    console.log("🔍 CALL NOTIFICATION DEBUG:");
-    console.log("  - Current user object:", user);
-    console.log("  - Receiver ID:", receiverId, "Type:", typeof receiverId);
+    console.log("Receiver ID:", receiverId, "Type:", typeof receiverId);
     console.log(
-      "  - Receiver user:",
+      "Receiver user:",
       users.find((u) => u.id === receiverId)
     );
-    console.log("  - From User ID:", fromUserId, "Type:", typeof fromUserId);
-    console.log("  - To User ID:", toUserId, "Type:", typeof toUserId);
+    console.log("From User ID:", fromUserId, "Type:", typeof fromUserId);
+    console.log("To User ID:", toUserId, "Type:", typeof toUserId);
 
     const callData = {
       type: "incoming_call",
@@ -1447,6 +1268,26 @@ export default function Home() {
           <div>
             WebSocket State:{" "}
             {wsRef.current ? wsRef.current.readyState : "no ref"}
+          </div>
+          <div className="mt-2">
+            <button
+              onClick={() => {
+                console.log("🧪 Testing ringtone manually...");
+                playIncomingCallRingtone();
+              }}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs mr-2"
+            >
+              Test Ringtone
+            </button>
+            <button
+              onClick={() => {
+                console.log("🔇 Stopping ringtone manually...");
+                stopIncomingCallRingtone();
+              }}
+              className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs"
+            >
+              Stop Ringtone
+            </button>
           </div>
         </div>
       )}
@@ -1694,129 +1535,33 @@ export default function Home() {
                 <div className="flex items-center gap-2">
                   {/* Audio Call Button */}
                   <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
+                    onClick={() => {
                       console.log("Audio call button clicked");
                       console.log("Audio service status:", audioServiceStatus);
                       console.log("AudioCall ref:", audioCallRef.current);
                       console.log("User:", user);
                       console.log("Selected receiver:", selectedReceiver);
 
-                      // Initialize mobile audio first if needed
-                      if (
-                        typeof window !== "undefined" &&
-                        window.AudioContext
-                      ) {
-                        const audioContext = new (window.AudioContext ||
-                          window.webkitAudioContext)();
-                        if (audioContext.state === "suspended") {
-                          console.log(
-                            "Resuming audio context for mobile compatibility"
-                          );
-                          audioContext
-                            .resume()
-                            .then(() => {
-                              console.log(
-                                "Audio context resumed successfully for call"
-                              );
-                            })
-                            .catch((err) => {
-                              console.error(
-                                "Failed to resume audio context for call:",
-                                err
-                              );
-                            });
-                        }
-                      }
-
-                      // Request media permissions for mobile
-                      if (
-                        navigator.mediaDevices &&
-                        navigator.mediaDevices.getUserMedia
-                      ) {
-                        console.log("Requesting media permissions for call");
-                        navigator.mediaDevices
-                          .getUserMedia({ audio: true })
-                          .then((stream) => {
-                            console.log("Audio permissions granted for call");
-                            // Stop the stream, we just wanted permissions
-                            stream.getTracks().forEach((track) => track.stop());
-
-                            // Now proceed with the call
-                            if (audioServiceStatus === "available") {
-                              if (audioCallRef.current) {
-                                console.log("Calling startCall via ref");
-                                audioCallRef.current.startCall();
-                              } else {
-                                console.error("AudioCall ref not available");
-                                alert(
-                                  "Audio call feature is loading... Please wait a moment and try again."
-                                );
-                              }
-                            } else {
-                              alert(
-                                "Audio service is not available. Please check if the audio service is deployed."
-                              );
-                            }
-                          })
-                          .catch((err) => {
-                            console.log(
-                              "Media permissions denied for call:",
-                              err
-                            );
-                            alert(
-                              "Microphone access is required for audio calls. Please allow microphone access and try again."
-                            );
-                          });
-                      } else {
-                        // Fallback for browsers without getUserMedia
-                        if (audioServiceStatus === "available") {
-                          if (audioCallRef.current) {
-                            console.log(
-                              "Calling startCall via ref (no media check)"
-                            );
-                            audioCallRef.current.startCall();
-                          } else {
-                            console.error("AudioCall ref not available");
-                            alert(
-                              "Audio call feature is loading... Please wait a moment and try again."
-                            );
-                          }
+                      if (audioServiceStatus === "available") {
+                        // Use the ref to call startCall directly
+                        if (audioCallRef.current) {
+                          console.log("Calling startCall via ref");
+                          audioCallRef.current.startCall();
                         } else {
+                          console.error("AudioCall ref not available");
+                          console.log("AudioCall ref details:", {
+                            ref: audioCallRef,
+                            current: audioCallRef.current,
+                            shouldShowChat,
+                          });
                           alert(
-                            "Audio service is not available. Please check if the audio service is deployed."
+                            "Audio call feature is loading... Please wait a moment and try again."
                           );
                         }
-                      }
-                    }}
-                    onTouchStart={(e) => {
-                      // Prevent double-tap zoom on mobile
-                      e.preventDefault();
-                      e.stopPropagation();
-                      console.log("Audio call button touched (mobile)");
-
-                      // Initialize mobile audio context immediately on touch
-                      if (
-                        typeof window !== "undefined" &&
-                        window.AudioContext
-                      ) {
-                        const audioContext = new (window.AudioContext ||
-                          window.webkitAudioContext)();
-                        if (audioContext.state === "suspended") {
-                          console.log("Resuming audio context on mobile touch");
-                          audioContext
-                            .resume()
-                            .then(() => {
-                              console.log("Audio context resumed successfully");
-                            })
-                            .catch((err) => {
-                              console.error(
-                                "Failed to resume audio context:",
-                                err
-                              );
-                            });
-                        }
+                      } else {
+                        alert(
+                          "Audio service is not available. Please check if the audio service is deployed."
+                        );
                       }
                     }}
                     className={`group relative px-3 py-2 sm:px-4 sm:py-3 rounded-xl transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 flex items-center gap-2 font-bold shadow-lg ${
@@ -1843,156 +1588,33 @@ export default function Home() {
 
                   {/* Video Call Button */}
                   <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
+                    onClick={() => {
                       console.log("Video call button clicked");
                       console.log("Audio service status:", audioServiceStatus);
                       console.log("VideoCall ref:", videoCallRef.current);
                       console.log("User:", user);
                       console.log("Selected receiver:", selectedReceiver);
 
-                      // Initialize mobile audio/video first if needed
-                      if (
-                        typeof window !== "undefined" &&
-                        window.AudioContext
-                      ) {
-                        const audioContext = new (window.AudioContext ||
-                          window.webkitAudioContext)();
-                        if (audioContext.state === "suspended") {
-                          console.log(
-                            "Resuming audio context for mobile compatibility"
-                          );
-                          audioContext
-                            .resume()
-                            .then(() => {
-                              console.log(
-                                "Audio context resumed successfully for video call"
-                              );
-                            })
-                            .catch((err) => {
-                              console.error(
-                                "Failed to resume audio context for video call:",
-                                err
-                              );
-                            });
-                        }
-                      }
-
-                      // Request media permissions for mobile video call
-                      if (
-                        navigator.mediaDevices &&
-                        navigator.mediaDevices.getUserMedia
-                      ) {
-                        console.log(
-                          "Requesting media permissions for video call"
-                        );
-                        navigator.mediaDevices
-                          .getUserMedia({ audio: true, video: true })
-                          .then((stream) => {
-                            console.log(
-                              "Audio/video permissions granted for call"
-                            );
-                            // Stop the stream, we just wanted permissions
-                            stream.getTracks().forEach((track) => track.stop());
-
-                            // Now proceed with the video call
-                            if (audioServiceStatus === "available") {
-                              if (videoCallRef.current) {
-                                console.log("Calling startVideoCall via ref");
-                                videoCallRef.current.startVideoCall();
-                              } else {
-                                console.error("VideoCall ref not available");
-                                alert(
-                                  "Video call feature is loading... Please wait a moment and try again."
-                                );
-                              }
-                            } else {
-                              alert(
-                                "Video service is not available. Please check if the video service is deployed."
-                              );
-                            }
-                          })
-                          .catch((err) => {
-                            console.log(
-                              "Media permissions denied for video call:",
-                              err
-                            );
-                            alert(
-                              "Camera and microphone access are required for video calls. Please allow access and try again."
-                            );
-                          });
-                      } else {
-                        // Fallback for browsers without getUserMedia
-                        if (audioServiceStatus === "available") {
-                          if (videoCallRef.current) {
-                            console.log(
-                              "Calling startVideoCall via ref (no media check)"
-                            );
-                            videoCallRef.current.startVideoCall();
-                          } else {
-                            console.error("VideoCall ref not available");
-                            alert(
-                              "Video call feature is loading... Please wait a moment and try again."
-                            );
-                          }
+                      if (audioServiceStatus === "available") {
+                        // Use the ref to call startVideoCall directly
+                        if (videoCallRef.current) {
+                          console.log("Calling startVideoCall via ref");
+                          videoCallRef.current.startVideoCall();
                         } else {
+                          console.error("VideoCall ref not available");
+                          console.log("VideoCall ref details:", {
+                            ref: videoCallRef,
+                            current: videoCallRef.current,
+                            shouldShowChat,
+                          });
                           alert(
-                            "Video service is not available. Please check if the video service is deployed."
+                            "Video call feature is loading... Please wait a moment and try again."
                           );
                         }
-                      }
-                    }}
-                    onTouchStart={(e) => {
-                      // Prevent double-tap zoom on mobile
-                      e.preventDefault();
-                      e.stopPropagation();
-                      console.log("Video call button touched (mobile)");
-
-                      // Initialize mobile audio/video context immediately on touch
-                      if (
-                        typeof window !== "undefined" &&
-                        window.AudioContext
-                      ) {
-                        const audioContext = new (window.AudioContext ||
-                          window.webkitAudioContext)();
-                        if (audioContext.state === "suspended") {
-                          console.log("Resuming audio context on mobile touch");
-                          audioContext
-                            .resume()
-                            .then(() => {
-                              console.log("Audio context resumed successfully");
-                            })
-                            .catch((err) => {
-                              console.error(
-                                "Failed to resume audio context:",
-                                err
-                              );
-                            });
-                        }
-                      }
-
-                      // Request media permissions on mobile
-                      if (
-                        navigator.mediaDevices &&
-                        navigator.mediaDevices.getUserMedia
-                      ) {
-                        console.log(
-                          "Pre-requesting media permissions on mobile"
+                      } else {
+                        alert(
+                          "Video service is not available. Please check if the video service is deployed."
                         );
-                        navigator.mediaDevices
-                          .getUserMedia({ audio: true, video: true })
-                          .then((stream) => {
-                            console.log("Media permissions granted on mobile");
-                            // Stop the stream immediately, we just wanted permissions
-                            stream.getTracks().forEach((track) => track.stop());
-                          })
-                          .catch((err) => {
-                            console.log(
-                              "Media permissions denied or unavailable:",
-                              err
-                            );
-                          });
                       }
                     }}
                     className={`group relative px-3 py-2 sm:px-4 sm:py-3 rounded-xl transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 flex items-center gap-2 font-bold shadow-lg ${
@@ -2049,36 +1671,6 @@ export default function Home() {
                       Test Audio
                     </span>
                   </button>
-                  <button
-                    onClick={() => {
-                      console.log("🔊 Testing ringtone manually");
-                      playIncomingCallRingtone();
-                    }}
-                    className="group relative px-3 py-2 sm:px-4 sm:py-3 rounded-xl transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 flex items-center gap-2 font-bold shadow-lg bg-gradient-to-r from-purple-400 to-pink-500 hover:from-purple-500 hover:to-pink-600 text-white"
-                    title="Test ringtone functionality"
-                  >
-                    {/* Glowing effect */}
-                    <div className="absolute -inset-1 bg-gradient-to-r from-purple-400 to-pink-500 rounded-xl blur opacity-30 group-hover:opacity-50 transition duration-300"></div>
-                    <FaBell className="w-4 h-4 sm:w-5 sm:h-5 relative z-10 animate-pulse group-hover:animate-bounce" />
-                    <span className="relative z-10 hidden sm:inline">
-                      Test Ring
-                    </span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      console.log("🔊 Stopping ringtone manually");
-                      stopIncomingCallRingtone();
-                    }}
-                    className="group relative px-3 py-2 sm:px-4 sm:py-3 rounded-xl transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 flex items-center gap-2 font-bold shadow-lg bg-gradient-to-r from-red-400 to-red-600 hover:from-red-500 hover:to-red-700 text-white"
-                    title="Stop ringtone"
-                  >
-                    {/* Glowing effect */}
-                    <div className="absolute -inset-1 bg-gradient-to-r from-red-400 to-red-600 rounded-xl blur opacity-30 group-hover:opacity-50 transition duration-300"></div>
-                    <FaPhoneSlash className="w-4 h-4 sm:w-5 sm:h-5 relative z-10" />
-                    <span className="relative z-10 hidden sm:inline">
-                      Stop Ring
-                    </span>
-                  </button>
                 </div>
               )}
 
@@ -2092,7 +1684,6 @@ export default function Home() {
                     onCallEnd={handleAudioCallEnd}
                     getUserName={getUserName}
                     sendCallNotification={sendCallNotification}
-                    wsRef={wsRef}
                   />
                   <JanusVideoCall
                     ref={videoCallRef}
@@ -2357,13 +1948,10 @@ export default function Home() {
             </p>
             <div className="flex justify-around">
               <button
-                onClick={async () => {
-                  console.log("🔔 CALL ACCEPTED by receiver:", user.username);
-
+                onClick={() => {
                   // Stop the ringtone
                   stopIncomingCallRingtone();
 
-                  // Send acceptance message to caller
                   if (
                     wsRef.current &&
                     wsRef.current.readyState === WebSocket.OPEN
@@ -2376,49 +1964,12 @@ export default function Home() {
                       room_id: incomingCall.room_id,
                     };
                     wsRef.current.send(JSON.stringify(acceptanceMessage));
-                    console.log(
-                      "🔔 Sent call acceptance message:",
-                      acceptanceMessage
-                    );
                   }
-
-                  // Set the receiver as the selected receiver for the call interface
-                  setSelectedReceiver(incomingCall.from_user_id);
-
-                  // Clear incoming call state
+                  // Receiver joins the room
+                  if (audioCallRef.current) {
+                    audioCallRef.current.joinRoom(incomingCall.room_id);
+                  }
                   setIncomingCall(null);
-
-                  // Give a moment for state to update, then join the room
-                  setTimeout(async () => {
-                    if (audioCallRef.current) {
-                      console.log(
-                        "🔔 Receiver joining room:",
-                        incomingCall.room_id
-                      );
-                      try {
-                        // Set the other party ID for call end notifications
-                        audioCallRef.current.setOtherPartyId(
-                          incomingCall.from_user_id
-                        );
-
-                        await audioCallRef.current.joinRoom(
-                          incomingCall.room_id
-                        );
-                        console.log("🔔 Receiver successfully joined room");
-                      } catch (error) {
-                        console.error(
-                          "🔔 Receiver failed to join room:",
-                          error
-                        );
-                        alert("Failed to join call: " + error.message);
-                      }
-                    } else {
-                      console.error(
-                        "🔔 AudioCall ref not available for receiver"
-                      );
-                      alert("Call system not ready. Please try again.");
-                    }
-                  }, 100);
                 }}
                 className="bg-green-500 text-white px-6 py-2 rounded-lg"
               >

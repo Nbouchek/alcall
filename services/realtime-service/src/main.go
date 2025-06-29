@@ -41,11 +41,6 @@ type Message struct {
 	CallID       string      `json:"call_id,omitempty"`
 	Timestamp    int64       `json:"timestamp,omitempty"`
 	OnlineUsers  []string    `json:"online_users,omitempty"`
-	// Chat message fields
-	ID         interface{} `json:"id,omitempty"`
-	SenderID   interface{} `json:"sender_id,omitempty"`
-	ReceiverID interface{} `json:"receiver_id,omitempty"`
-	Content    string      `json:"content,omitempty"`
 }
 
 // Hub manages clients and broadcasts messages.
@@ -111,19 +106,11 @@ func (h *Hub) broadcastPresenceUpdate() {
 
 	log.Printf("Broadcasting presence update to %d clients. Users: %v", len(h.clients), onlineUsers)
 
-	for clientID, client := range h.clients {
+	for _, client := range h.clients {
         select {
         case client.Send <- updateBytes:
         default:
-			log.Printf("Client channel full or closed for %s. Removing client.", clientID)
-			// Remove client if channel is closed
-			delete(h.clients, clientID)
-			if client.Username != "" {
-				delete(h.usernameToClientID, client.Username)
-			}
-			if client.UserID != nil {
-				delete(h.userIDToClientID, client.UserID)
-			}
+			log.Printf("Client channel full or closed for %s.", client.ID)
 		}
 	}
 }
@@ -142,13 +129,7 @@ func (h *Hub) sendToUser(targetUserID interface{}, message []byte) bool {
 				log.Printf("Message sent successfully to user ID: %v", targetUserID)
 				return true
 			default:
-				log.Printf("Client channel full or closed for user ID: %v. Cleaning up.", targetUserID)
-				// Clean up closed client
-				delete(h.clients, clientID)
-				delete(h.userIDToClientID, targetUserID)
-				if client.Username != "" {
-					delete(h.usernameToClientID, client.Username)
-				}
+				log.Printf("Client channel full for user ID: %v", targetUserID)
 			}
 		}
 	}
@@ -165,13 +146,7 @@ func (h *Hub) sendToUser(targetUserID interface{}, message []byte) bool {
 					log.Printf("Message sent successfully to converted user ID: %v", int(v))
 					return true
 				default:
-					log.Printf("Client channel full or closed for converted user ID: %v. Cleaning up.", int(v))
-					// Clean up closed client
-					delete(h.clients, clientID)
-					delete(h.userIDToClientID, int(v))
-					if client.Username != "" {
-						delete(h.usernameToClientID, client.Username)
-					}
+					log.Printf("Client channel full for converted user ID: %v", int(v))
 				}
 			}
 		}
@@ -185,13 +160,7 @@ func (h *Hub) sendToUser(targetUserID interface{}, message []byte) bool {
 					log.Printf("Message sent successfully to converted user ID: %v", float64(v))
 					return true
 				default:
-					log.Printf("Client channel full or closed for converted user ID: %v. Cleaning up.", float64(v))
-					// Clean up closed client
-					delete(h.clients, clientID)
-					delete(h.userIDToClientID, float64(v))
-					if client.Username != "" {
-						delete(h.usernameToClientID, client.Username)
-					}
+					log.Printf("Client channel full for converted user ID: %v", float64(v))
             }
         }
     }
@@ -313,12 +282,6 @@ func (c *Client) readPump() {
 			log.Printf("Forwarding '%s' from %s to %v", msg.Type, msg.FromUsername, msg.ToUserID)
 			if !hub.sendToUser(msg.ToUserID, messageBytes) {
 				log.Printf("Failed to forward message type %s - user %v not found", msg.Type, msg.ToUserID)
-			}
-
-		case "chat_message":
-			log.Printf("Forwarding chat message from %v to %v", msg.SenderID, msg.ReceiverID)
-			if !hub.sendToUser(msg.ReceiverID, messageBytes) {
-				log.Printf("Failed to forward chat message - user %v not found", msg.ReceiverID)
 			}
 
 		default:
