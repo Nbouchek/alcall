@@ -608,6 +608,8 @@ export default function Home() {
               ? 1
               : loginForm.username === "Nacer"
               ? 2
+              : loginForm.username === "nacer"
+              ? 2
               : 10,
           username: loginForm.username,
         };
@@ -665,6 +667,8 @@ export default function Home() {
                   ? 1
                   : loginForm.username === "Nacer"
                   ? 2
+                  : loginForm.username === "nacer"
+                  ? 2
                   : 10,
               username: loginForm.username,
             };
@@ -712,6 +716,8 @@ export default function Home() {
           loginForm.username === "admin"
             ? 1
             : loginForm.username === "Nacer"
+            ? 2
+            : loginForm.username === "nacer"
             ? 2
             : 10,
         username: loginForm.username,
@@ -1167,7 +1173,20 @@ export default function Home() {
             setOnlineUsers(data.online_users || []);
             setConnectedUsers(new Set(data.online_users || []));
           } else if (data.type === "incoming_call") {
+            console.log("=== INCOMING CALL DEBUG ===");
             console.log("Incoming call for user", user.username + ":", data);
+            console.log("Current user details:", {
+              id: user.id,
+              username: user.username,
+              idType: typeof user.id,
+            });
+            console.log("Call data details:", {
+              from_user_id: data.from_user_id,
+              to_user_id: data.to_user_id,
+              from_username: data.from_username,
+              to_username: data.to_username,
+            });
+
             // Ensure consistent ID types for comparison
             const currentUserId = Number(user.id);
             const toUserId = Number(data.to_user_id);
@@ -1179,20 +1198,30 @@ export default function Home() {
               fromUserId,
               isForCurrentUser: toUserId === currentUserId,
               isFromCurrentUser: fromUserId === currentUserId,
+              shouldProcess:
+                toUserId === currentUserId && fromUserId !== currentUserId,
             });
 
             // Check if this call is for the current user and not from themselves
             if (toUserId === currentUserId && fromUserId !== currentUserId) {
-              console.log("Processing incoming call for user:", user.username);
+              console.log(
+                "✅ Processing incoming call for user:",
+                user.username
+              );
               setIncomingCall(data);
               // Start playing ringtone for incoming call
               playIncomingCallRingtone();
             } else {
               console.log(
-                "Ignoring own call notification for user:",
+                "❌ Ignoring call notification for user:",
                 user.username
               );
+              console.log("Reason:", {
+                notForCurrentUser: toUserId !== currentUserId,
+                isFromSelf: fromUserId === currentUserId,
+              });
             }
+            console.log("=== END INCOMING CALL DEBUG ===");
           } else if (data.type === "call_accepted") {
             console.log("Call accepted for user", user.username + ":", data);
             // Caller: call was accepted, start connecting
@@ -1440,6 +1469,7 @@ export default function Home() {
       timestamp: Date.now(),
     };
 
+    console.log("Call notification data:", callData);
     console.log("Attempting to send call notification:", {
       from: user.username,
       to: receiverId,
@@ -1450,14 +1480,15 @@ export default function Home() {
 
     // Use WebSocket to send notification
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      console.log("Sending call notification via WebSocket:", callData);
+      console.log("✅ Sending call notification via WebSocket:", callData);
       wsRef.current.send(JSON.stringify(callData));
     } else {
       // Fallback to localStorage for same-browser testing
-      console.warn("WebSocket not available, using localStorage fallback");
+      console.warn("❌ WebSocket not available, using localStorage fallback");
       console.log("Storing call notification in localStorage:", callData);
       localStorage.setItem("call_notification", JSON.stringify(callData));
     }
+    console.log("=== END SENDING CALL NOTIFICATION ===");
   };
 
   // Clean up ringtone when incoming call changes
