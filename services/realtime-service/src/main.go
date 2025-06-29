@@ -122,13 +122,22 @@ func (h *Hub) broadcastPresenceUpdate() {
 	for clientID, client := range clientsCopy {
 		// Check if client still exists and channel is open
 		if client != nil && client.Send != nil {
-			select {
-			case client.Send <- updateBytes:
-				// Successfully sent
-			default:
-				log.Printf("Client channel full or closed for %s.", clientID)
-				// Channel is closed or full, skip this client
-			}
+			// Use a defer/recover to catch any panic from sending to closed channel
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Printf("Recovered from panic sending to client %s: %v", clientID, r)
+					}
+				}()
+
+				select {
+				case client.Send <- updateBytes:
+					// Successfully sent
+				default:
+					log.Printf("Client channel full or closed for %s.", clientID)
+					// Channel is closed or full, skip this client
+				}
+			}()
 		}
 	}
 }
