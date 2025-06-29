@@ -1,5 +1,6 @@
 import "../styles/globals.css";
 import Head from "next/head";
+import Script from "next/script";
 
 export default function App({ Component, pageProps }) {
   return (
@@ -13,6 +14,31 @@ export default function App({ Component, pageProps }) {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
+
+      {/* Load WebRTC adapter and Janus library */}
+      <Script
+        src="/adapter.js"
+        strategy="beforeInteractive"
+        onLoad={() => {
+          console.log("WebRTC adapter loaded successfully");
+        }}
+        onError={(e) => {
+          console.error("Failed to load WebRTC adapter:", e);
+        }}
+      />
+      <Script
+        src="/janus.js"
+        strategy="beforeInteractive"
+        onLoad={() => {
+          console.log("Janus library loaded successfully");
+          if (typeof window !== "undefined" && window.Janus) {
+            console.log("Janus is available:", window.Janus);
+          }
+        }}
+        onError={(e) => {
+          console.error("Failed to load Janus library:", e);
+        }}
+      />
 
       <Component {...pageProps} />
     </>

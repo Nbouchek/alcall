@@ -18,7 +18,10 @@ import {
 } from "react-icons/fa";
 
 const JanusVideoCall = forwardRef(
-  ({ user, selectedReceiver, onCallEnd, getUserName }, ref) => {
+  (
+    { user, selectedReceiver, onCallEnd, getUserName, sendCallNotification },
+    ref
+  ) => {
     const [isInCall, setIsInCall] = useState(false);
     const [isVideoEnabled, setIsVideoEnabled] = useState(true);
     const [isAudioEnabled, setIsAudioEnabled] = useState(true);
@@ -163,6 +166,12 @@ const JanusVideoCall = forwardRef(
         setIsInCall(true);
         setCallStatus("Demo video call active");
         startCallTimer();
+
+        // Send call notification in demo mode too
+        if (sendCallNotification && selectedReceiver) {
+          console.log("JanusVideoCall: Sending call notification (demo mode)");
+          sendCallNotification(selectedReceiver, 1234);
+        }
         return;
       }
 
@@ -179,6 +188,19 @@ const JanusVideoCall = forwardRef(
           selectedReceiver?.username || "default"
         );
         setRoomId(targetRoomId);
+
+        // Send call notification to the receiver
+        if (sendCallNotification && selectedReceiver) {
+          console.log(
+            "JanusVideoCall: Sending call notification to receiver:",
+            selectedReceiver
+          );
+          sendCallNotification(selectedReceiver, targetRoomId);
+        } else {
+          console.warn(
+            "JanusVideoCall: sendCallNotification not available or no receiver selected"
+          );
+        }
 
         // Get user media
         const stream = await getUserMedia({
