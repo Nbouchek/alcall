@@ -538,11 +538,14 @@ export default function Home() {
     }
 
     try {
-      const response = await axios.post(`${MESSAGE_API_BASE_URL}/messages`, {
-        sender_id: user.id,
-        receiver_id: selectedReceiver,
-        content: newMessage,
-      });
+      const response = await axios.post(
+        `${MESSAGE_API_BASE_URL}/api/v1/messages`,
+        {
+          sender_id: user.id,
+          receiver_id: selectedReceiver,
+          content: newMessage,
+        }
+      );
 
       setMessages((prev) => [...prev, response.data]);
       setNewMessage("");
@@ -567,7 +570,7 @@ export default function Home() {
 
     try {
       const response = await axios.get(
-        `${MESSAGE_API_BASE_URL}/messages/${user.id}`
+        `${MESSAGE_API_BASE_URL}/api/v1/messages/${user.id}`
       );
       // Ensure response.data is an array
       setMessages(Array.isArray(response.data) ? response.data : []);
