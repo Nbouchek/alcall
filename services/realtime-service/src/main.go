@@ -120,11 +120,15 @@ func (h *Hub) broadcastPresenceUpdate() {
 
 	// Send to clients without holding the lock
 	for clientID, client := range clientsCopy {
-        select {
-        case client.Send <- updateBytes:
-        default:
-			log.Printf("Client channel full or closed for %s.", clientID)
-			// Channel is closed or full, skip this client
+		// Check if client still exists and channel is open
+		if client != nil && client.Send != nil {
+			select {
+			case client.Send <- updateBytes:
+				// Successfully sent
+			default:
+				log.Printf("Client channel full or closed for %s.", clientID)
+				// Channel is closed or full, skip this client
+			}
 		}
 	}
 }
