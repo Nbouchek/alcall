@@ -1,0 +1,41 @@
+JANUS PLUGIN VERIFICATION
+=======================
+
+The following plugins are required and have been verified as enabled:
+
+1. VideoRoom Plugin (janus.plugin.videoroom.jcfg)
+   - Status: ENABLED
+   - Configuration: services/janus-service/config/janus.plugin.videoroom.jcfg
+   - Features: Video conferencing, screen sharing
+
+2. AudioBridge Plugin (janus.plugin.audiobridge.jcfg)
+   - Status: ENABLED
+   - Configuration: services/janus-service/config/janus.plugin.audiobridge.jcfg
+   - Features: Voice-only communication
+
+3. EchoTest Plugin (janus.plugin.echotest.jcfg)
+   - Status: ENABLED
+   - Configuration: services/janus-service/config/janus.plugin.echotest.jcfg
+   - Features: Audio/video echo testing, device configuration
+
+4. Streaming Plugin (janus.plugin.streaming.jcfg)
+   - Status: ENABLED
+   - Configuration: services/janus-service/config/janus.plugin.streaming.jcfg
+   - Features: Live and on-demand media streaming
+
+5. VideoCall Plugin (janus.plugin.videocall.jcfg)
+   - Status: ENABLED
+   - Configuration: services/janus-service/config/janus.plugin.videocall.jcfg
+   - Features: Peer-to-peer video calls
+
+6. TextRoom Plugin (janus.plugin.textroom.jcfg)
+   - Status: ENABLED
+   - Configuration: services/janus-service/config/janus.plugin.textroom.jcfg
+   - Features: Text-only chat rooms
+
+Main Janus Configuration:
+- File: services/janus-service/config/janus.jcfg
+- Plugin Loading: All required plugins enabled by default
+- Disabled Plugins: voicemail, recordplay, sip, nosip, lua (not needed for our use case)
+
+Verification completed: All required plugins are properly enabled and configured.

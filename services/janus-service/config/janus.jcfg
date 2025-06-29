@@ -32,3 +32,9 @@ nat: {
     ice_lite = false
     ice_tcp = false
 }
+
+# Plugins to enable
+plugins: {
+    # Enable all required plugins
+    disable = "libjanus_voicemail.so,libjanus_recordplay.so,libjanus_sip.so,libjanus_nosip.so,libjanus_lua.so"
+}
