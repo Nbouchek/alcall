@@ -19,6 +19,8 @@ services:
         value: "wss://unifiedchat-janus-service.onrender.com/janus"
       - key: NEXT_PUBLIC_JANUS_HTTP_URL
         value: "https://unifiedchat-janus-service.onrender.com"
+      - key: NEXT_PUBLIC_FORCE_NORMAL_MODE
+        value: "true"
     healthCheckPath: /
     autoDeploy: true
     numInstances: 1

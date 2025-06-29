@@ -46,7 +46,8 @@ const JanusDeviceTest = forwardRef(({ user, onTestEnd }, ref) => {
   const IS_DEMO_MODE =
     typeof window !== "undefined" &&
     (window.location.hostname.includes("onrender.com") ||
-      window.location.hostname.includes("render.com"));
+      window.location.hostname.includes("render.com")) &&
+    !(process.env.NEXT_PUBLIC_FORCE_NORMAL_MODE === "true" || true);
 
   // Janus-specific refs
   const janusRef = useRef(null);

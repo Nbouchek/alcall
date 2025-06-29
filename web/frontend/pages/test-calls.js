@@ -22,6 +22,10 @@ import {
   FaStream,
 } from "react-icons/fa";
 
+// Force normal mode for all Janus tests
+const FORCE_NORMAL_MODE =
+  process.env.NEXT_PUBLIC_FORCE_NORMAL_MODE === "true" || true;
+
 export default function TestCalls() {
   const [activeTest, setActiveTest] = useState(null);
   const [user, setUser] = useState({ id: 1, username: "TestUser" });
@@ -29,6 +33,7 @@ export default function TestCalls() {
     id: 2,
     username: "TestReceiver",
   });
+  const [isRenderDeployment, setIsRenderDeployment] = useState(false);
 
   const audioCallRef = useRef(null);
   const videoCallRef = useRef(null);
@@ -234,6 +239,23 @@ export default function TestCalls() {
         return null;
     }
   };
+
+  // Check if we're on Render deployment
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const hostname = window.location.hostname;
+      const isRender =
+        hostname.includes("onrender.com") || hostname.includes("render.com");
+      setIsRenderDeployment(isRender);
+      console.log("TestCalls: Hostname:", hostname);
+      console.log("TestCalls: Is Render deployment:", isRender);
+      console.log("TestCalls: FORCE_NORMAL_MODE:", FORCE_NORMAL_MODE);
+      console.log(
+        "TestCalls: Will use normal mode:",
+        FORCE_NORMAL_MODE || !isRender
+      );
+    }
+  }, []);
 
   if (activeTest) {
     return (

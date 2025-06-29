@@ -43,7 +43,8 @@ const JanusAudioCall = forwardRef(
     const IS_DEMO_MODE =
       typeof window !== "undefined" &&
       (window.location.hostname.includes("onrender.com") ||
-        window.location.hostname.includes("render.com"));
+        window.location.hostname.includes("render.com")) &&
+      !(process.env.NEXT_PUBLIC_FORCE_NORMAL_MODE === "true" || true);
 
     // Janus-specific refs
     const janusRef = useRef(null);
@@ -1203,7 +1204,7 @@ const JanusAudioCall = forwardRef(
             try {
               const silentAudio = new Audio();
               silentAudio.src =
-                "data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT";
+                "data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWTQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT";
               silentAudio.play().catch(() => {});
             } catch (e) {
               console.error("JanusAudioCall: Silent audio unlock failed:", e);
