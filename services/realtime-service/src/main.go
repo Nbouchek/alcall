@@ -230,6 +230,15 @@ func (c *Client) readPump() {
                 log.Printf("Failed to forward call notification - user not found")
             }
 
+        case "call_accepted":
+            log.Printf("Processing call acceptance from %v (%s) to %v", msg.FromUserID, msg.FromUsername, msg.ToUserID)
+            // Forward the call acceptance to the original caller
+            if sendToUser(msg.ToUserID, "", messageBytes) {
+                log.Printf("Call acceptance forwarded successfully")
+            } else {
+                log.Printf("Failed to forward call acceptance - user not found")
+            }
+
         case "call_ended":
             log.Printf("Processing call end from %v (%s) to %v", msg.FromUserID, msg.FromUsername, msg.ToUserID)
             // Forward the call end notification to the target user
