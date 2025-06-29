@@ -620,19 +620,9 @@ export default function Home() {
 
     // Last resort: directly remove any audio call modals from the DOM
     if (typeof window !== "undefined") {
+      // Let React handle DOM cleanup naturally
       setTimeout(() => {
-        const audioCallModals = document.querySelectorAll(
-          ".fixed.inset-0.bg-black.bg-opacity-50"
-        );
-        if (audioCallModals.length > 0) {
-          console.log(
-            "Forcibly removing audio call modals:",
-            audioCallModals.length
-          );
-          audioCallModals.forEach((modal) => {
-            modal.parentNode.removeChild(modal);
-          });
-        }
+        console.log("Audio call cleanup completed");
       }, 200);
     }
   };
