@@ -91,7 +91,6 @@ func (h *Hub) unregisterClient(client *Client) {
 
 func (h *Hub) broadcastPresenceUpdate() {
 	h.mu.RLock()
-	defer h.mu.RUnlock()
 
 	onlineUsers := make([]string, 0, len(h.usernameToClientID))
 	for username := range h.usernameToClientID {
@@ -106,12 +105,21 @@ func (h *Hub) broadcastPresenceUpdate() {
     updateBytes, err := json.Marshal(update)
     if err != nil {
         log.Println("Error marshaling presence update:", err)
+		h.mu.RUnlock()
         return
     }
 
 	log.Printf("Broadcasting presence update to %d clients. Users: %v", len(h.clients), onlineUsers)
 
-	for clientID, client := range h.clients {
+	// Create a copy of clients to avoid concurrent map access
+	clientsCopy := make(map[string]*Client)
+	for id, client := range h.clients {
+		clientsCopy[id] = client
+	}
+	h.mu.RUnlock()
+
+	// Send to clients without holding the lock
+	for clientID, client := range clientsCopy {
         select {
         case client.Send <- updateBytes:
         default:
