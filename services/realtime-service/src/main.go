@@ -3,53 +3,104 @@ package main
 import (
     "encoding/json"
     "log"
+	"math/rand"
     "net/http"
     "os"
+	"sync"
+	"time"
+
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
     "github.com/gorilla/websocket"
-    "github.com/gin-gonic/gin"
-    "github.com/gin-contrib/cors"
 )
 
 var upgrader = websocket.Upgrader{
     CheckOrigin: func(r *http.Request) bool {
-        return true // Allow all origins for MVP
+		return true // Allow all origins
     },
 }
 
+// Client represents a connected user.
 type Client struct {
     ID       string
     Username string
-    UserID   interface{}
+	UserID   interface{}
     Conn     *websocket.Conn
     Send     chan []byte
 }
 
+// Message represents messages sent over WebSocket.
 type Message struct {
-    Type         string      `json:"type"`
-    Username     string      `json:"username,omitempty"`
-    UserID       interface{} `json:"user_id,omitempty"`
-    FromUserID   interface{} `json:"from_user_id,omitempty"`
-    FromUsername string      `json:"from_username,omitempty"`
-    ToUserID     interface{} `json:"to_user_id,omitempty"`
-    RoomID       interface{} `json:"room_id,omitempty"`
-    CallID       string      `json:"call_id,omitempty"`
-    Timestamp    int64       `json:"timestamp,omitempty"`
-    OnlineUsers  []string    `json:"online_users,omitempty"`
+	Type         string      `json:"type"`
+	Username     string      `json:"username,omitempty"`
+	UserID       interface{} `json:"user_id,omitempty"`
+	FromUserID   interface{} `json:"from_user_id,omitempty"`
+	FromUsername string      `json:"from_username,omitempty"`
+	ToUserID     interface{} `json:"to_user_id,omitempty"`
+	RoomID       interface{} `json:"room_id,omitempty"`
+	CallID       string      `json:"call_id,omitempty"`
+	Timestamp    int64       `json:"timestamp,omitempty"`
+	OnlineUsers  []string    `json:"online_users,omitempty"`
 }
 
-var clients = make(map[string]*Client)
-var usernameToClientID = make(map[string]string)
-var userIDToClientID = make(map[interface{}]string)
+// Hub manages clients and broadcasts messages.
+type Hub struct {
+	clients            map[string]*Client
+	usernameToClientID map[string]string
+	userIDToClientID   map[interface{}]string
+	mu                 sync.RWMutex
+}
 
-// Broadcast presence update to all connected clients
-func broadcastPresenceUpdate() {
-    onlineUsers := []string{}
-    for username := range usernameToClientID {
+func newHub() *Hub {
+	return &Hub{
+		clients:            make(map[string]*Client),
+		usernameToClientID: make(map[string]string),
+		userIDToClientID:   make(map[interface{}]string),
+	}
+}
+
+var hub = newHub()
+
+func (h *Hub) registerClient(client *Client) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.clients[client.ID] = client
+}
+
+func (h *Hub) unregisterClient(client *Client) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if _, ok := h.clients[client.ID]; ok {
+		delete(h.clients, client.ID)
+		if client.Username != "" {
+			delete(h.usernameToClientID, client.Username)
+		}
+		if client.UserID != nil {
+			delete(h.userIDToClientID, client.UserID)
+		}
+		close(client.Send)
+		log.Printf("Unregistered client: %s, Username: %s", client.ID, client.Username)
+	}
+}
+
+func (h *Hub) broadcastPresenceUpdate() {
+	h.mu.RLock()
+
+	onlineUsers := make([]string, 0, len(h.usernameToClientID))
+	for username := range h.usernameToClientID {
         onlineUsers = append(onlineUsers, username)
     }
 
-    update := Message{
-        Type: "presence_update",
+	clientsCopy := make([]*Client, 0, len(h.clients))
+	for _, client := range h.clients {
+		clientsCopy = append(clientsCopy, client)
+	}
+
+	h.mu.RUnlock()
+
+	update := Message{
+		Type:        "presence_update",
         OnlineUsers: onlineUsers,
     }
 
@@ -59,90 +110,95 @@ func broadcastPresenceUpdate() {
         return
     }
 
-    for _, client := range clients {
+	log.Printf("Broadcasting presence update to %d clients. Users: %v", len(clientsCopy), onlineUsers)
+
+	for _, client := range clientsCopy {
         select {
         case client.Send <- updateBytes:
         default:
-            // Channel is full, close connection
-            close(client.Send)
-            removeClient(client)
-        }
-    }
+			log.Printf("Client channel full for %s. The connection will be closed by its own pump.", client.ID)
+		}
+	}
 }
 
-// Send message to specific user
-func sendToUser(targetUserID interface{}, targetUsername string, message []byte) bool {
-    log.Printf("Attempting to send message to user: ID=%v, Username=%s", targetUserID, targetUsername)
+func (h *Hub) sendToUser(targetUserID interface{}, message []byte) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
 
-    // Try to find client by user ID first
-    if clientID, exists := userIDToClientID[targetUserID]; exists {
-        if client, exists := clients[clientID]; exists {
-            log.Printf("Found client by user ID: %v", targetUserID)
-            select {
-            case client.Send <- message:
-                log.Printf("Message sent successfully to user ID: %v", targetUserID)
-                return true
-            default:
-                log.Printf("Client channel full for user ID: %v", targetUserID)
-                removeClient(client)
+	log.Printf("Attempting to send message to user ID: %v (type: %T)", targetUserID, targetUserID)
+
+	if clientID, exists := h.userIDToClientID[targetUserID]; exists {
+		if client, ok := h.clients[clientID]; ok {
+			log.Printf("Found client by user ID: %v", targetUserID)
+			select {
+			case client.Send <- message:
+				log.Printf("Message sent successfully to user ID: %v", targetUserID)
+				return true
+			default:
+				log.Printf("Client channel full for user ID: %v", targetUserID)
+			}
+		}
+	}
+
+	// Try with different type conversions
+	switch v := targetUserID.(type) {
+	case float64:
+		// Try with int conversion
+		if clientID, exists := h.userIDToClientID[int(v)]; exists {
+			if client, ok := h.clients[clientID]; ok {
+				log.Printf("Found client by converted user ID: %v -> %v", targetUserID, int(v))
+				select {
+				case client.Send <- message:
+					log.Printf("Message sent successfully to converted user ID: %v", int(v))
+					return true
+				default:
+					log.Printf("Client channel full for converted user ID: %v", int(v))
+				}
+			}
+		}
+	case int:
+		// Try with float64 conversion
+		if clientID, exists := h.userIDToClientID[float64(v)]; exists {
+			if client, ok := h.clients[clientID]; ok {
+				log.Printf("Found client by converted user ID: %v -> %v", targetUserID, float64(v))
+				select {
+				case client.Send <- message:
+					log.Printf("Message sent successfully to converted user ID: %v", float64(v))
+					return true
+				default:
+					log.Printf("Client channel full for converted user ID: %v", float64(v))
             }
         }
     }
+	}
 
-    // Fallback: try to find client by username
-    if clientID, exists := usernameToClientID[targetUsername]; exists {
-        if client, exists := clients[clientID]; exists {
-            log.Printf("Found client by username: %s", targetUsername)
-            select {
-            case client.Send <- message:
-                log.Printf("Message sent successfully to username: %s", targetUsername)
-                return true
-            default:
-                log.Printf("Client channel full for username: %s", targetUsername)
-                removeClient(client)
-            }
-        }
-    }
-
-    log.Printf("No client found for user ID: %v, username: %s", targetUserID, targetUsername)
-    return false
-}
-
-// Remove client from all maps
-func removeClient(client *Client) {
-    delete(clients, client.ID)
-    if client.Username != "" {
-        delete(usernameToClientID, client.Username)
-    }
-    if client.UserID != nil {
-        delete(userIDToClientID, client.UserID)
-    }
+	log.Printf("No client found for user ID: %v (tried type conversions)", targetUserID)
+	log.Printf("Available user IDs: %v", h.userIDToClientID)
+	return false
 }
 
 func main() {
     r := gin.Default()
 
-    // CORS configuration - Allow external access
-    config := cors.DefaultConfig()
-    config.AllowAllOrigins = true  // Allow all origins for external testing
-    config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
-    config.AllowHeaders = []string{"Origin", "Content-Type", "Authorization"}
-    r.Use(cors.New(config))
+	config := cors.DefaultConfig()
+	config.AllowAllOrigins = true
+	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
+	config.AllowHeaders = []string{"Origin", "Content-Type", "Authorization"}
+	r.Use(cors.New(config))
 
-    // Root endpoint
     r.GET("/", func(c *gin.Context) {
         c.JSON(200, gin.H{"message": "UnifiedChat Realtime Service is running."})
     })
 
-    // Health check
     r.GET("/health", func(c *gin.Context) {
         c.JSON(200, gin.H{"status": "healthy"})
     })
 
-    // Online users endpoint
     r.GET("/online-users", func(c *gin.Context) {
-        onlineUsers := []string{}
-        for username := range usernameToClientID {
+		hub.mu.RLock()
+		defer hub.mu.RUnlock()
+		onlineUsers := make([]string, 0, len(hub.usernameToClientID))
+		for username := range hub.usernameToClientID {
             onlineUsers = append(onlineUsers, username)
         }
         c.JSON(200, gin.H{"online_users": onlineUsers})
@@ -150,10 +206,9 @@ func main() {
 
     r.GET("/ws", handleWebSocket)
 
-    // Use PORT environment variable for Render deployment
     port := os.Getenv("PORT")
     if port == "" {
-        port = "8084" // Default fallback
+		port = "8084"
     }
 
     log.Printf("Realtime service starting on port %s", port)
@@ -166,116 +221,101 @@ func handleWebSocket(c *gin.Context) {
         log.Println("WebSocket upgrade failed:", err)
         return
     }
-
-    log.Println("New WebSocket connection established")
+	log.Println("New WebSocket connection established")
 
     client := &Client{
-        ID:   generateID(),
-        Conn: conn,
-        Send: make(chan []byte, 256),
+		ID:   generateID(),
+		Conn: conn,
+		Send: make(chan []byte, 256),
     }
 
-    clients[client.ID] = client
+	hub.registerClient(client)
 
+	go client.writePump()
     go client.readPump()
-    go client.writePump()
 }
 
 func (c *Client) readPump() {
     defer func() {
-        removeClient(c)
+		hub.unregisterClient(c)
         c.Conn.Close()
-        // Broadcast presence update when user disconnects
-        broadcastPresenceUpdate()
-        log.Printf("Client %s disconnected", c.ID)
+		hub.broadcastPresenceUpdate()
     }()
 
     for {
-        _, messageBytes, err := c.Conn.ReadMessage()
+		_, messageBytes, err := c.Conn.ReadMessage()
         if err != nil {
-            log.Printf("Error reading message from client %s: %v", c.ID, err)
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				log.Printf("Error reading message from client %s: %v", c.ID, err)
+			}
             break
         }
 
-        // Try to parse as JSON message
-        var msg Message
-        if err := json.Unmarshal(messageBytes, &msg); err != nil {
-            // If not JSON, treat as plain text username (backward compatibility)
-            username := string(messageBytes)
-            log.Printf("Received plain text username: %s", username)
-            c.Username = username
-            usernameToClientID[username] = c.ID
-            broadcastPresenceUpdate()
-            continue
-        }
+		var msg Message
+		if err := json.Unmarshal(messageBytes, &msg); err != nil {
+			log.Printf("Could not unmarshal JSON: %v", err)
+			continue
+		}
 
-        log.Printf("Received JSON message: %+v", msg)
+		log.Printf("Received message type: %s from user: %s", msg.Type, msg.Username)
 
-        // Handle different message types
-        switch msg.Type {
-        case "register":
-            log.Printf("Registering user: ID=%v, Username=%s", msg.UserID, msg.Username)
-            c.Username = msg.Username
-            c.UserID = msg.UserID
-            usernameToClientID[msg.Username] = c.ID
-            userIDToClientID[msg.UserID] = c.ID
-            broadcastPresenceUpdate()
+		switch msg.Type {
+		case "register":
+			hub.mu.Lock()
+			c.Username = msg.Username
+			c.UserID = msg.UserID
+			hub.usernameToClientID[msg.Username] = c.ID
+			if msg.UserID != nil {
+				hub.userIDToClientID[msg.UserID] = c.ID
+			}
+			log.Printf("Registered client: %s, User: %s, UserID: %v", c.ID, c.Username, c.UserID)
+			hub.mu.Unlock()
+			hub.broadcastPresenceUpdate()
 
-        case "incoming_call":
-            log.Printf("Processing incoming call from %v (%s) to %v", msg.FromUserID, msg.FromUsername, msg.ToUserID)
-            // Forward the call notification to the target user
-            if sendToUser(msg.ToUserID, "", messageBytes) {
-                log.Printf("Call notification forwarded successfully")
-            } else {
-                log.Printf("Failed to forward call notification - user not found")
-            }
+		case "logout":
+			hub.mu.Lock()
+			if c.Username != "" {
+				delete(hub.usernameToClientID, c.Username)
+			}
+			if c.UserID != nil {
+				delete(hub.userIDToClientID, c.UserID)
+			}
+			log.Printf("User logged out: %s, UserID: %v", c.Username, c.UserID)
+			hub.mu.Unlock()
+			hub.broadcastPresenceUpdate()
 
-        case "call_accepted":
-            log.Printf("Processing call acceptance from %v (%s) to %v", msg.FromUserID, msg.FromUsername, msg.ToUserID)
-            // Forward the call acceptance to the original caller
-            if sendToUser(msg.ToUserID, "", messageBytes) {
-                log.Printf("Call acceptance forwarded successfully")
-            } else {
-                log.Printf("Failed to forward call acceptance - user not found")
-            }
+		case "incoming_call", "call_accepted", "call_declined", "call_ended":
+			log.Printf("Forwarding '%s' from %s to %v", msg.Type, msg.FromUsername, msg.ToUserID)
+			if !hub.sendToUser(msg.ToUserID, messageBytes) {
+				log.Printf("Failed to forward message type %s - user %v not found", msg.Type, msg.ToUserID)
+			}
 
-        case "call_ended":
-            log.Printf("Processing call end from %v (%s) to %v", msg.FromUserID, msg.FromUsername, msg.ToUserID)
-            // Forward the call end notification to the target user
-            if sendToUser(msg.ToUserID, "", messageBytes) {
-                log.Printf("Call end notification forwarded successfully")
-            } else {
-                log.Printf("Failed to forward call end notification - user not found")
-            }
-
-        default:
-            log.Printf("Unknown message type: %s", msg.Type)
-            // For unknown types, just echo back for now
-            c.Send <- messageBytes
-        }
+		default:
+			log.Printf("Unknown message type: %s", msg.Type)
+		}
     }
 }
 
 func (c *Client) writePump() {
-    defer c.Conn.Close()
+	defer c.Conn.Close()
     for msg := range c.Send {
-        if err := c.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
-            log.Printf("Error writing message to client %s: %v", c.ID, err)
-            break
-        }
+		if err := c.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+			log.Printf("Error writing message to client %s: %v", c.ID, err)
+			break
+		}
     }
 }
 
+// generateID creates a random string for client IDs.
 func generateID() string {
-    // For MVP, just use a random string
-    return "client-" + RandString(8)
-}
-
-func RandString(n int) string {
-    letters := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
-    b := make([]rune, n)
+	const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	b := make([]byte, 16)
     for i := range b {
-        b[i] = letters[i%len(letters)]
+		b[i] = letterBytes[rand.Intn(len(letterBytes))]
     }
     return string(b)
+}
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
 }

@@ -29,15 +29,14 @@ const MESSAGE_API_BASE_URL =
   process.env.NEXT_PUBLIC_MESSAGE_API_URL ||
   "https://unifiedchat-message-service.onrender.com";
 const REALTIME_API_BASE_URL =
-  process.env.NEXT_PUBLIC_REALTIME_API_URL ||
-  "https://unifiedchat-realtime-service.onrender.com";
+  process.env.NEXT_PUBLIC_REALTIME_API_URL || "http://localhost:8084";
 const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
 // IS_RENDER_DEPLOYMENT is now handled as state to avoid hydration issues
 
 // Force normal mode for now - backend services are working
 const FORCE_NORMAL_MODE =
-  process.env.NEXT_PUBLIC_FORCE_NORMAL_MODE === "true" || true;
+  process.env.NEXT_PUBLIC_FORCE_NORMAL_MODE === "true" || false;
 
 // Debug: Log the detection will happen in useEffect after component mounts
 
@@ -54,6 +53,13 @@ export default function Home() {
   const [audioServiceStatus, setAudioServiceStatus] = useState("checking");
   const [isClient, setIsClient] = useState(false);
   const [isRenderDeployment, setIsRenderDeployment] = useState(false);
+  const [incomingCall, setIncomingCall] = useState(null);
+  const [connectedUsers, setConnectedUsers] = useState(new Set()); // Track actually connected users
+  const [showAudioCallModal, setShowAudioCallModal] = useState(false);
+  const [showVideoCallModal, setShowVideoCallModal] = useState(false);
+  const [incomingCallRingtone, setIncomingCallRingtone] = useState(null);
+  const [incomingCallRingtoneInterval, setIncomingCallRingtoneInterval] =
+    useState(null);
 
   const [loginForm, setLoginForm] = useState({
     username: "",
@@ -75,6 +81,11 @@ export default function Home() {
 
     // Set client state
     setIsClient(true);
+
+    // Ensure messages is always an array
+    if (!messages || !Array.isArray(messages)) {
+      setMessages([]);
+    }
 
     // Check if we're on Render deployment
     const hostname = window.location.hostname;
@@ -165,6 +176,8 @@ export default function Home() {
           // Fallback to hardcoded users if backend doesn't work
           setUsers([
             { id: 1, username: "admin" },
+            { id: 2, username: "user2" },
+            { id: 3, username: "user3" },
             { id: 4, username: "Linda" },
             { id: 5, username: "Hana" },
             { id: 6, username: "Adam" },
@@ -182,6 +195,8 @@ export default function Home() {
         // Fallback to hardcoded users if backend doesn't work
         setUsers([
           { id: 1, username: "admin" },
+          { id: 2, username: "user2" },
+          { id: 3, username: "user3" },
           { id: 4, username: "Linda" },
           { id: 5, username: "Hana" },
           { id: 6, username: "Adam" },
@@ -201,6 +216,8 @@ export default function Home() {
       console.log("Demo mode: Using hardcoded users (fast path)");
       setUsers([
         { id: 1, username: "admin" },
+        { id: 2, username: "user2" },
+        { id: 3, username: "user3" },
         { id: 4, username: "Linda" },
         { id: 5, username: "Hana" },
         { id: 6, username: "Adam" },
@@ -234,6 +251,14 @@ export default function Home() {
       return () => clearInterval(interval);
     }
   }, [isLoggedIn, isRenderDeployment]);
+
+  // Debug: Log user info when users change
+  useEffect(() => {
+    if (users.length > 0) {
+      console.log("Users loaded:", users);
+      debugUserInfo();
+    }
+  }, [users]);
 
   const login = async (e) => {
     try {
@@ -389,6 +414,10 @@ export default function Home() {
   const loadMessages = async () => {
     // Skip loading messages in demo mode
     if (isRenderDeployment) {
+      // Ensure messages is initialized as empty array in demo mode
+      if (!messages || !Array.isArray(messages)) {
+        setMessages([]);
+      }
       return;
     }
 
@@ -396,10 +425,13 @@ export default function Home() {
       const response = await axios.get(
         `${MESSAGE_API_BASE_URL}/messages/${user.id}`
       );
-      setMessages(response.data);
+      // Ensure response.data is an array
+      setMessages(Array.isArray(response.data) ? response.data : []);
       scrollToBottom();
     } catch (error) {
       console.error("Failed to load messages:", error);
+      // Set empty array on error to prevent null reference
+      setMessages([]);
     }
   };
 
@@ -437,6 +469,119 @@ export default function Home() {
     return message.sender_id === user?.id;
   };
 
+  // Helper function to check if a user is actually online
+  const isUserOnline = (username) => {
+    // First check the connected users set (most accurate)
+    if (connectedUsers.size > 0) {
+      return connectedUsers.has(username);
+    }
+    // Fallback to online users array
+    return onlineUsers.includes(username);
+  };
+
+  // Handlers for call end events
+  const handleAudioCallEnd = () => {
+    console.log("Audio call ended, closing modal");
+    setShowAudioCallModal(false);
+    setIncomingCall(null); // Clear any incoming call state
+
+    // Last resort: directly remove any audio call modals from the DOM
+    if (typeof window !== "undefined") {
+      setTimeout(() => {
+        const audioCallModals = document.querySelectorAll(
+          ".fixed.inset-0.bg-black.bg-opacity-50"
+        );
+        if (audioCallModals.length > 0) {
+          console.log(
+            "Forcibly removing audio call modals:",
+            audioCallModals.length
+          );
+          audioCallModals.forEach((modal) => {
+            modal.parentNode.removeChild(modal);
+          });
+        }
+      }, 200);
+    }
+  };
+
+  const handleVideoCallEnd = () => {
+    console.log("Video call ended, closing modal");
+    setShowVideoCallModal(false);
+    setIncomingCall(null); // Clear any incoming call state
+  };
+
+  // Debug function to log user information
+  const debugUserInfo = () => {
+    console.log("=== USER DEBUG INFO ===");
+    console.log("Current User:", user);
+    console.log("Selected Receiver:", selectedReceiver);
+    console.log("Online Users:", onlineUsers);
+    console.log("Connected Users:", Array.from(connectedUsers));
+    console.log(
+      "WebSocket State:",
+      wsRef.current ? wsRef.current.readyState : "no ref"
+    );
+  };
+
+  // Incoming call ringtone functions
+  const playIncomingCallRingtone = () => {
+    stopIncomingCallRingtone();
+
+    let ringCount = 0;
+    const interval = setInterval(() => {
+      const audioContext = new (window.AudioContext ||
+        window.webkitAudioContext)();
+
+      // Create two oscillators for a richer sound
+      const oscillator1 = audioContext.createOscillator();
+      const oscillator2 = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      // Connect oscillators to gain node
+      oscillator1.connect(gainNode);
+      oscillator2.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      // Set different frequencies for alternating tones (like a real phone)
+      const isEvenRing = ringCount % 2 === 0;
+      oscillator1.frequency.setValueAtTime(
+        isEvenRing ? 480 : 620,
+        audioContext.currentTime
+      );
+      oscillator2.frequency.setValueAtTime(
+        isEvenRing ? 620 : 480,
+        audioContext.currentTime
+      );
+
+      // Set oscillator types for better sound
+      oscillator1.type = "sine";
+      oscillator2.type = "sine";
+
+      // Create a nice envelope for the ringtone
+      const now = audioContext.currentTime;
+      gainNode.gain.setValueAtTime(0, now);
+      gainNode.gain.linearRampToValueAtTime(0.3, now + 0.05);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
+
+      // Start and stop the oscillators
+      oscillator1.start(now);
+      oscillator2.start(now);
+      oscillator1.stop(now + 0.8);
+      oscillator2.stop(now + 0.8);
+
+      ringCount++;
+    }, 1000); // Ring every second
+
+    setIncomingCallRingtoneInterval(interval);
+  };
+
+  const stopIncomingCallRingtone = () => {
+    if (incomingCallRingtoneInterval) {
+      clearInterval(incomingCallRingtoneInterval);
+      setIncomingCallRingtoneInterval(null);
+    }
+  };
+
   // Don't render chat interface if no receiver is selected
   const shouldShowChat = isLoggedIn && selectedReceiver !== null;
 
@@ -454,68 +599,219 @@ export default function Home() {
   // Connect to unifiedchat-realtime-service WebSocket and send username
   useEffect(() => {
     if (isLoggedIn && user?.username) {
-      // Skip WebSocket in demo mode
-      if (isRenderDeployment) {
+      // Skip WebSocket only in demo mode when not forcing normal mode
+      if (isRenderDeployment && !FORCE_NORMAL_MODE) {
         console.log("Demo mode: Skipping WebSocket connection");
         return;
       }
 
+      console.log("=== WEBSOCKET CONNECTION ATTEMPT ===");
+      console.log("User:", user);
+      console.log("isRenderDeployment:", isRenderDeployment);
+      console.log("FORCE_NORMAL_MODE:", FORCE_NORMAL_MODE);
+      console.log("REALTIME_API_BASE_URL:", REALTIME_API_BASE_URL);
+
       // Close any previous connection
       if (wsRef.current) {
+        console.log("Closing previous WebSocket connection");
         wsRef.current.close();
       }
+
       const wsUrl = REALTIME_API_BASE_URL.replace(/^http/, "ws") + "/ws";
+      console.log("Attempting WebSocket connection to:", wsUrl);
+
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
+
       ws.onopen = () => {
-        console.log("WebSocket connected, sending username:", user.username);
-        ws.send(user.username);
+        console.log(
+          "WebSocket connected successfully for user:",
+          user.username
+        );
+        const registerMessage = {
+          type: "register",
+          user_id: user.id,
+          username: user.username,
+        };
+        console.log("Sending registration message:", registerMessage);
+        ws.send(JSON.stringify(registerMessage));
       };
+
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+          console.log(
+            "WebSocket message received for user",
+            user.username + ":",
+            data
+          );
+
           if (data.type === "presence_update") {
             console.log(
-              "Received real-time presence update:",
+              "Received real-time presence update for user",
+              user.username + ":",
               data.online_users
             );
+            // Update both online users and connected users
             setOnlineUsers(data.online_users || []);
+            setConnectedUsers(new Set(data.online_users || []));
+          } else if (data.type === "incoming_call") {
+            console.log("Incoming call for user", user.username + ":", data);
+            // Ensure consistent ID types for comparison
+            const currentUserId = Number(user.id);
+            const toUserId = Number(data.to_user_id);
+            const fromUserId = Number(data.from_user_id);
+
+            console.log("Incoming call ID comparison:", {
+              currentUserId,
+              toUserId,
+              fromUserId,
+              isForCurrentUser: toUserId === currentUserId,
+              isFromCurrentUser: fromUserId === currentUserId,
+            });
+
+            // Check if this call is for the current user and not from themselves
+            if (toUserId === currentUserId && fromUserId !== currentUserId) {
+              console.log("Processing incoming call for user:", user.username);
+              setIncomingCall(data);
+              // Start playing ringtone for incoming call
+              playIncomingCallRingtone();
+            } else {
+              console.log(
+                "Ignoring own call notification for user:",
+                user.username
+              );
+            }
+          } else if (data.type === "call_accepted") {
+            console.log("Call accepted for user", user.username + ":", data);
+            // Caller starts the actual call
+            if (audioCallRef.current) {
+              audioCallRef.current.startActualCall(data.room_id);
+            }
+          } else if (data.type === "call_declined") {
+            console.log("Call declined for user", user.username + ":", data);
+            console.log("AudioCall ref available:", !!audioCallRef.current);
+            // Caller should close their call modal
+            if (audioCallRef.current) {
+              console.log("Force closing audio call modal");
+              audioCallRef.current.forceClose();
+            } else {
+              console.error("AudioCall ref not available for call decline");
+            }
+            // Also call the handler to ensure modal closes
+            handleAudioCallEnd();
           }
         } catch (error) {
-          console.log("WebSocket message (not JSON):", event.data);
+          console.log(
+            "WebSocket message (not JSON) for user",
+            user.username + ":",
+            event.data
+          );
         }
       };
+
       ws.onclose = () => {
-        console.log("WebSocket closed");
+        console.log("WebSocket closed for user:", user.username);
       };
+
       ws.onerror = (err) => {
-        console.error("WebSocket error:", err);
+        console.error("WebSocket error for user", user.username + ":", err);
+        console.log(
+          "WebSocket connection failed for user",
+          user.username + ", will rely on polling fallback"
+        );
       };
+
       return () => {
+        console.log(
+          "Cleaning up WebSocket connection for user:",
+          user.username
+        );
         ws.close();
       };
     }
   }, [isLoggedIn, user?.username, isRenderDeployment]);
+
+  // Check for localStorage call notifications (fallback mechanism)
+  useEffect(() => {
+    if (isLoggedIn && user) {
+      const checkLocalStorageNotifications = () => {
+        try {
+          const storedNotification = localStorage.getItem("call_notification");
+          if (storedNotification) {
+            const notification = JSON.parse(storedNotification);
+            console.log("Found localStorage call notification:", notification);
+
+            // Ensure consistent ID types for comparison
+            const currentUserId = Number(user.id);
+            const toUserId = Number(notification.to_user_id);
+            const fromUserId = Number(notification.from_user_id);
+
+            console.log("LocalStorage ID comparison:", {
+              currentUserId,
+              toUserId,
+              fromUserId,
+              isForCurrentUser: toUserId === currentUserId,
+              isFromCurrentUser: fromUserId === currentUserId,
+            });
+
+            // Check if this notification is for the current user
+            if (toUserId === currentUserId && fromUserId !== currentUserId) {
+              console.log(
+                "Processing localStorage call notification for user:",
+                user.username
+              );
+              setIncomingCall(notification);
+              // Clear the notification after processing
+              localStorage.removeItem("call_notification");
+            }
+          }
+        } catch (error) {
+          console.error("Error processing localStorage notification:", error);
+        }
+      };
+
+      // Check immediately
+      checkLocalStorageNotifications();
+
+      // Set up interval to check for notifications
+      const interval = setInterval(checkLocalStorageNotifications, 1000);
+
+      return () => clearInterval(interval);
+    }
+  }, [isLoggedIn, user]);
 
   // Poll /online-users endpoint every 30 seconds as fallback
   useEffect(() => {
     let interval;
     const fetchOnlineUsers = async () => {
       try {
-        // Skip backend call in demo mode
-        if (isRenderDeployment) {
+        // Skip backend call only in demo mode when not forcing normal mode
+        if (isRenderDeployment && !FORCE_NORMAL_MODE) {
           console.log("Demo mode: Using demo online users");
-          setOnlineUsers(["admin", "Nacer", "user2", "user3"]);
+          // In demo mode, only show the current user as online
+          const demoOnlineUsers = [user?.username].filter(Boolean);
+          setOnlineUsers(demoOnlineUsers);
           return;
         }
 
+        // Try to fetch from backend
         const response = await axios.get(
           `${REALTIME_API_BASE_URL}/online-users`
         );
-        setOnlineUsers(response.data.online_users || []);
+        const backendOnlineUsers = response.data.online_users || [];
+        console.log("Backend online users:", backendOnlineUsers);
+        setOnlineUsers(backendOnlineUsers);
+        setConnectedUsers(new Set(backendOnlineUsers));
       } catch (error) {
         console.error("Failed to fetch online users:", error);
-        // Don't clear onlineUsers on error, keep current state
+        // Fallback: only show the current user as online when backend is not available
+        console.log(
+          "Backend not available, showing only current user as online"
+        );
+        const currentUserOnly = [user?.username].filter(Boolean);
+        setOnlineUsers(currentUserOnly);
+        setConnectedUsers(new Set(currentUserOnly));
       }
     };
     if (isLoggedIn) {
@@ -525,7 +821,71 @@ export default function Home() {
       interval = setInterval(fetchOnlineUsers, 30000);
     }
     return () => interval && clearInterval(interval);
-  }, [isLoggedIn, isRenderDeployment]);
+  }, [isLoggedIn, isRenderDeployment, user?.username]);
+
+  const sendCallNotification = (receiverId, roomId) => {
+    if (!user) {
+      console.error("Cannot send notification, user not logged in");
+      return;
+    }
+
+    // Ensure consistent ID types (convert to numbers)
+    const fromUserId = Number(user.id);
+    const toUserId = Number(receiverId);
+
+    // Debug: Log user information before sending notification
+    console.log("=== SENDING CALL NOTIFICATION ===");
+    debugUserInfo();
+    console.log("Receiver ID:", receiverId, "Type:", typeof receiverId);
+    console.log(
+      "Receiver user:",
+      users.find((u) => u.id === receiverId)
+    );
+    console.log("From User ID:", fromUserId, "Type:", typeof fromUserId);
+    console.log("To User ID:", toUserId, "Type:", typeof toUserId);
+
+    const callData = {
+      type: "incoming_call",
+      from_user_id: fromUserId,
+      from_username: user.username,
+      to_user_id: toUserId,
+      room_id: roomId,
+      timestamp: Date.now(),
+    };
+
+    console.log("Attempting to send call notification:", {
+      from: user.username,
+      to: receiverId,
+      roomId: roomId,
+      wsState: wsRef.current ? wsRef.current.readyState : "no ref",
+      wsOpen: wsRef.current && wsRef.current.readyState === WebSocket.OPEN,
+    });
+
+    // Use WebSocket to send notification
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      console.log("Sending call notification via WebSocket:", callData);
+      wsRef.current.send(JSON.stringify(callData));
+    } else {
+      // Fallback to localStorage for same-browser testing
+      console.warn("WebSocket not available, using localStorage fallback");
+      console.log("Storing call notification in localStorage:", callData);
+      localStorage.setItem("call_notification", JSON.stringify(callData));
+    }
+  };
+
+  // Clean up ringtone when incoming call changes
+  useEffect(() => {
+    if (!incomingCall) {
+      stopIncomingCallRingtone();
+    }
+  }, [incomingCall]);
+
+  // Clean up ringtone on component unmount
+  useEffect(() => {
+    return () => {
+      stopIncomingCallRingtone();
+    };
+  }, []);
 
   // Prevent hydration issues by only rendering after client-side initialization
   if (!isClient) {
@@ -582,6 +942,21 @@ export default function Home() {
         </div>
       )}
 
+      {/* Debug Info - Only show in development */}
+      {process.env.NODE_ENV === "development" && (
+        <div className="bg-gray-800 text-green-400 px-4 py-2 text-xs font-mono">
+          <div>Online Users: {JSON.stringify(onlineUsers)}</div>
+          <div>
+            Connected Users: {JSON.stringify(Array.from(connectedUsers))}
+          </div>
+          <div>Current User: {user?.username}</div>
+          <div>
+            WebSocket State:{" "}
+            {wsRef.current ? wsRef.current.readyState : "no ref"}
+          </div>
+        </div>
+      )}
+
       <main className="flex flex-1 h-screen max-h-screen overflow-hidden">
         {/* Mobile Sidebar Overlay - Only show when logged in */}
         {isLoggedIn && sidebarOpen && (
@@ -635,11 +1010,25 @@ export default function Home() {
                 </div>
                 <button
                   onClick={() => {
+                    // Send logout message to WebSocket server
+                    if (
+                      wsRef.current &&
+                      wsRef.current.readyState === WebSocket.OPEN
+                    ) {
+                      const logoutMessage = {
+                        type: "logout",
+                        user_id: user.id,
+                        username: user.username,
+                      };
+                      wsRef.current.send(JSON.stringify(logoutMessage));
+                    }
+
                     // Close WebSocket connection
                     if (wsRef.current) {
                       wsRef.current.close();
                       wsRef.current = null;
                     }
+
                     // Clear all state
                     localStorage.removeItem("token");
                     setIsLoggedIn(false);
@@ -689,12 +1078,13 @@ export default function Home() {
                     .filter((u) => u.id !== user?.id)
                     .map((u) => (
                       <div key={u.id} className="mb-2">
-                        <button
+                        {/* Main clickable area for user selection */}
+                        <div
                           onClick={() => {
                             setSelectedReceiver(u.id);
                             setSidebarOpen(false); // Close sidebar on mobile
                           }}
-                          className={`group w-full text-left px-4 py-3 rounded-xl transition-all duration-300 ease-in-out transform hover:scale-105 ${
+                          className={`group w-full text-left px-4 py-3 rounded-xl transition-all duration-300 ease-in-out transform hover:scale-105 cursor-pointer ${
                             selectedReceiver === u.id
                               ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold shadow-lg"
                               : "hover:bg-gradient-to-r hover:from-gray-100 hover:to-blue-50 text-gray-700 border border-transparent hover:border-blue-200"
@@ -720,7 +1110,7 @@ export default function Home() {
                                 </div>
                                 <div
                                   className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white ${
-                                    onlineUsers.includes(u.username)
+                                    isUserOnline(u.username)
                                       ? "bg-green-400 animate-pulse"
                                       : "bg-gray-400"
                                   }`}
@@ -730,23 +1120,24 @@ export default function Home() {
                                 <div className="font-medium">@{u.username}</div>
                                 <div
                                   className={`text-xs ${
-                                    onlineUsers.includes(u.username)
+                                    isUserOnline(u.username)
                                       ? selectedReceiver === u.id
                                         ? "text-white/80"
                                         : "text-gray-500"
                                       : "text-gray-400 italic"
                                   }`}
                                 >
-                                  {onlineUsers.includes(u.username)
+                                  {isUserOnline(u.username)
                                     ? "Available for chat"
                                     : "Offline"}
                                 </div>
                               </div>
                             </div>
+                            {/* Call button, which is a valid nested element */}
                             <div className="flex items-center gap-2">
                               <button
                                 onClick={(e) => {
-                                  e.stopPropagation();
+                                  e.stopPropagation(); // Prevent the parent div's onClick
                                   const rect =
                                     e.currentTarget.getBoundingClientRect();
                                   setPopoverUser(u);
@@ -762,7 +1153,7 @@ export default function Home() {
                               </button>
                             </div>
                           </div>
-                        </button>
+                        </div>
                       </div>
                     ))
                 )}
@@ -941,15 +1332,17 @@ export default function Home() {
                     ref={audioCallRef}
                     user={user}
                     selectedReceiver={selectedReceiver}
-                    onCallEnd={() => {}}
+                    onCallEnd={handleAudioCallEnd}
                     getUserName={getUserName}
+                    sendCallNotification={sendCallNotification}
                   />
                   <JanusVideoCall
                     ref={videoCallRef}
                     user={user}
                     selectedReceiver={selectedReceiver}
-                    onCallEnd={() => {}}
+                    onCallEnd={handleVideoCallEnd}
                     getUserName={getUserName}
+                    sendCallNotification={sendCallNotification}
                   />
                 </>
               )}
@@ -1060,7 +1453,7 @@ export default function Home() {
                 className="flex-1 overflow-y-auto px-4 py-6 bg-gradient-to-b from-blue-50 via-white to-purple-50"
                 style={{ minHeight: 0 }}
               >
-                {messages.length === 0 ? (
+                {!messages || messages.length === 0 ? (
                   <div className="text-center mt-8">
                     <div className="w-16 h-16 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
                       <FaRocket className="w-8 h-8 text-white animate-bounce" />
@@ -1070,7 +1463,7 @@ export default function Home() {
                     </p>
                   </div>
                 ) : (
-                  messages.map((msg, index) => (
+                  (messages || []).map((msg, index) => (
                     <div
                       key={index}
                       className={`flex mb-4 ${
@@ -1191,6 +1584,76 @@ export default function Home() {
             }, 100);
           }}
         />
+      )}
+
+      {/* Incoming Call Modal */}
+      {incomingCall && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-sm w-full mx-4 shadow-xl">
+            <h3 className="text-lg font-semibold text-center mb-4">
+              Incoming Call
+            </h3>
+            <p className="text-center mb-6">
+              <span className="font-bold">{incomingCall.from_username}</span> is
+              calling...
+            </p>
+            <div className="flex justify-around">
+              <button
+                onClick={() => {
+                  // Stop the ringtone
+                  stopIncomingCallRingtone();
+
+                  if (
+                    wsRef.current &&
+                    wsRef.current.readyState === WebSocket.OPEN
+                  ) {
+                    const acceptanceMessage = {
+                      type: "call_accepted",
+                      from_user_id: user.id,
+                      from_username: user.username,
+                      to_user_id: incomingCall.from_user_id,
+                      room_id: incomingCall.room_id,
+                    };
+                    wsRef.current.send(JSON.stringify(acceptanceMessage));
+                  }
+                  // Receiver joins the room
+                  if (audioCallRef.current) {
+                    audioCallRef.current.joinRoom(incomingCall.room_id);
+                  }
+                  setIncomingCall(null);
+                }}
+                className="bg-green-500 text-white px-6 py-2 rounded-lg"
+              >
+                Accept
+              </button>
+              <button
+                onClick={() => {
+                  // Stop the ringtone
+                  stopIncomingCallRingtone();
+
+                  // Send call declined message to caller
+                  if (
+                    wsRef.current &&
+                    wsRef.current.readyState === WebSocket.OPEN
+                  ) {
+                    const declineMessage = {
+                      type: "call_declined",
+                      from_user_id: user.id,
+                      from_username: user.username,
+                      to_user_id: incomingCall.from_user_id,
+                      room_id: incomingCall.room_id,
+                    };
+                    wsRef.current.send(JSON.stringify(declineMessage));
+                  }
+                  setIncomingCall(null);
+                }}
+                className="bg-red-500 text-white px-6 py-2 rounded-lg"
+              >
+                Decline
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -17,14 +17,17 @@ import {
   FaBell,
   FaCog,
   FaExclamationTriangle,
+  FaTimes,
 } from "react-icons/fa";
 
 const JanusAudioCall = forwardRef(
-  ({ user, selectedReceiver, onCallEnd, getUserName }, ref) => {
+  (
+    { user, selectedReceiver, onCallEnd, getUserName, sendCallNotification },
+    ref
+  ) => {
     const [isInCall, setIsInCall] = useState(false);
     const [isRinging, setIsRinging] = useState(false);
     const [callStatus, setCallStatus] = useState("");
-    const [incomingCall, setIncomingCall] = useState(null);
     const [callDuration, setCallDuration] = useState(0);
     const [isMuted, setIsMuted] = useState(false);
     const [isCallActive, setIsCallActive] = useState(false);
@@ -63,6 +66,17 @@ const JanusAudioCall = forwardRef(
       startCall: () => {
         console.log("JanusAudioCall: startCall called");
         startCall();
+      },
+      joinRoom: async (roomId) => {
+        console.log("JanusAudioCall: joinRoom called with roomId:", roomId);
+        try {
+          // This is called when receiver accepts the call
+          await startActualCall(roomId);
+          console.log("JanusAudioCall: Successfully joined room:", roomId);
+        } catch (error) {
+          console.error("JanusAudioCall: Failed to join room:", error);
+          setConnectionError("Failed to join call: " + error.message);
+        }
       },
       testAudio: () => {
         console.log("JanusAudioCall: Testing audio playback...");
@@ -134,6 +148,22 @@ const JanusAudioCall = forwardRef(
             error
           );
           return false;
+        }
+      },
+      // New function to start actual call after acceptance
+      startActualCall: async (roomId) => {
+        console.log("JanusAudioCall: Starting actual call for room:", roomId);
+        await startActualCall(roomId);
+      },
+      endCall,
+      forceClose: () => {
+        console.log("JanusAudioCall: Force closing modal");
+        setIsInCall(false);
+        setIsRinging(false);
+        setIsCallActive(false);
+        cleanupCall();
+        if (onCallEnd) {
+          onCallEnd();
         }
       },
     }));
@@ -227,6 +257,39 @@ const JanusAudioCall = forwardRef(
       };
     }, [user]);
 
+    // Auto-reconnect on connection loss
+    useEffect(() => {
+      if (!janusConnected && user && !reconnectTimeoutRef.current) {
+        reconnectTimeoutRef.current = setTimeout(() => {
+          console.log("JanusAudioCall: Attempting to reconnect...");
+          initializeJanus();
+          reconnectTimeoutRef.current = null;
+        }, 5000);
+      }
+
+      return () => {
+        if (reconnectTimeoutRef.current) {
+          clearTimeout(reconnectTimeoutRef.current);
+          reconnectTimeoutRef.current = null;
+        }
+      };
+    }, [janusConnected, user]);
+
+    // Add escape key handler to close modal
+    useEffect(() => {
+      const handleEscape = (e) => {
+        if (e.key === "Escape") {
+          console.log("Escape pressed: Ending call and closing modal");
+          endCall();
+        }
+      };
+
+      if (isInCall || isRinging) {
+        document.addEventListener("keydown", handleEscape);
+        return () => document.removeEventListener("keydown", handleEscape);
+      }
+    }, [isInCall, isRinging]);
+
     const initializeJanus = () => {
       console.log("JanusAudioCall: Initializing Janus...");
 
@@ -248,43 +311,75 @@ const JanusAudioCall = forwardRef(
         typeof window === "undefined" ||
         typeof window.Janus === "undefined"
       ) {
-        console.error("JanusAudioCall: Janus library not loaded");
-        setConnectionError(
-          "Janus library not loaded. Audio calls will be simulated in demo mode."
+        console.error(
+          "JanusAudioCall: Janus library not loaded, retrying in 1 second..."
         );
-        if (typeof window !== "undefined") {
-          window.janusLoadFailed = true;
-        }
-        setJanusConnected(true); // Pretend we're connected for demo
+
+        // Retry after a short delay in case the library is still loading
+        setTimeout(() => {
+          if (
+            typeof window !== "undefined" &&
+            typeof window.Janus !== "undefined"
+          ) {
+            console.log("JanusAudioCall: Janus library loaded on retry");
+            initializeJanus();
+          } else {
+            console.error(
+              "JanusAudioCall: Janus library still not available after retry"
+            );
+            setConnectionError(
+              "Janus library not loaded. Audio calls will be simulated in demo mode."
+            );
+            if (typeof window !== "undefined") {
+              window.janusLoadFailed = true;
+            }
+            setJanusConnected(true); // Pretend we're connected for demo
+          }
+        }, 1000);
         return;
       }
 
       try {
-        janusRef.current = new window.Janus({
-          server: JANUS_URL,
-          success: () => {
-            console.log("JanusAudioCall: Janus connected successfully");
-            setJanusConnected(true);
-            setConnectionError(null);
-            attachAudioBridgePlugin();
-          },
-          error: (error) => {
-            console.error("JanusAudioCall: Janus connection failed:", error);
-            setConnectionError(
-              `Janus connection failed: ${error}. Audio calls will be simulated.`
+        // Initialize Janus library first
+        console.log("JanusAudioCall: Initializing Janus library...");
+        window.Janus.init({
+          debug: "all",
+          callback: () => {
+            console.log(
+              "JanusAudioCall: Janus library initialized successfully"
             );
-            setJanusConnected(false);
-            // Fall back to demo mode
-            if (typeof window !== "undefined") {
-              window.janusLoadFailed = true;
-            }
-          },
-          destroyed: () => {
-            console.log("JanusAudioCall: Janus connection destroyed");
-            setJanusConnected(false);
-            setConnectionError(
-              "Janus connection lost. Audio calls will be simulated."
-            );
+
+            // Now create the Janus instance
+            janusRef.current = new window.Janus({
+              server: JANUS_URL,
+              success: () => {
+                console.log("JanusAudioCall: Janus connected successfully");
+                setJanusConnected(true);
+                setConnectionError(null);
+                attachAudioBridgePlugin();
+              },
+              error: (error) => {
+                console.error(
+                  "JanusAudioCall: Janus connection failed:",
+                  error
+                );
+                setConnectionError(
+                  `Janus connection failed: ${error}. Audio calls will be simulated.`
+                );
+                setJanusConnected(false);
+                // Fall back to demo mode
+                if (typeof window !== "undefined") {
+                  window.janusLoadFailed = true;
+                }
+              },
+              destroyed: () => {
+                console.log("JanusAudioCall: Janus connection destroyed");
+                setJanusConnected(false);
+                setConnectionError(
+                  "Janus connection lost. Audio calls will be simulated."
+                );
+              },
+            });
           },
         });
       } catch (error) {
@@ -376,6 +471,14 @@ const JanusAudioCall = forwardRef(
 
         if (result.event === "joined") {
           console.log("JanusAudioCall: Joined room:", result.room);
+          console.log(
+            "JanusAudioCall: Room participants:",
+            result.room?.participants
+          );
+          console.log(
+            "JanusAudioCall: Total participants:",
+            result.room?.participants?.length || 0
+          );
           setRoomId(result.room);
           setCallStatus("Connected");
           setIsCallActive(true);
@@ -413,36 +516,199 @@ const JanusAudioCall = forwardRef(
       // Handle JSEP (WebRTC offer/answer)
       if (jsep) {
         console.log("JanusAudioCall: Processing JSEP:", jsep.type);
-        pluginHandleRef.current.handleRemoteJsep({ jsep });
+        if (jsep.type === "answer") {
+          pluginHandleRef.current.handleRemoteJsep({ jsep });
+        } else if (jsep.type === "offer") {
+          // Handle incoming offer by creating an answer
+          pluginHandleRef.current.createAnswer({
+            jsep: jsep,
+            media: { audio: true, video: false },
+            success: (answerJsep) => {
+              console.log("JanusAudioCall: Created answer:", answerJsep);
+              pluginHandleRef.current.send({
+                message: { request: "configure" },
+                jsep: answerJsep,
+              });
+            },
+            error: (error) => {
+              console.error("JanusAudioCall: Failed to create answer:", error);
+              setConnectionError(`Failed to create answer: ${error}`);
+            },
+          });
+        }
       }
     };
 
     const handleRemoteTrack = (track, mid, on) => {
-      console.log("JanusAudioCall: Remote track:", track, mid, on);
+      console.log(
+        "JanusAudioCall: Remote track:",
+        track,
+        mid,
+        on,
+        "readyState:",
+        track.readyState
+      );
 
       if (on && track.kind === "audio") {
+        console.log("JanusAudioCall: Setting up remote audio track");
+
         // Create audio element for remote audio
         if (!audioRef.current) {
           const audio = document.createElement("audio");
           audio.autoplay = true;
           audio.controls = false;
           audio.style.display = "none";
+          audio.volume = 1.0; // Ensure volume is at maximum
           document.body.appendChild(audio);
           audioRef.current = audio;
+
+          // Add event listeners for debugging
+          audio.addEventListener("loadstart", () =>
+            console.log("JanusAudioCall: Audio loadstart")
+          );
+          audio.addEventListener("canplay", () =>
+            console.log("JanusAudioCall: Audio canplay")
+          );
+          audio.addEventListener("playing", () =>
+            console.log("JanusAudioCall: Audio playing")
+          );
+          audio.addEventListener("error", (e) =>
+            console.error("JanusAudioCall: Audio error:", e)
+          );
         }
 
-        audioRef.current.srcObject = new MediaStream([track]);
-        setAudioConnected(true);
+        const stream = new MediaStream([track]);
+        console.log(
+          "JanusAudioCall: Created MediaStream with track:",
+          stream,
+          "tracks:",
+          stream.getTracks()
+        );
+
+        // Prevent multiple load requests by checking if already set
+        if (audioRef.current.srcObject !== stream) {
+          audioRef.current.srcObject = stream;
+        }
+
+        // Try to play explicitly (some browsers require this)
+        // Add a small delay to prevent interruption by new load requests
+        setTimeout(() => {
+          if (audioRef.current && audioRef.current.srcObject) {
+            audioRef.current
+              .play()
+              .then(() => {
+                console.log("JanusAudioCall: Audio playing successfully");
+                setAudioConnected(true);
+              })
+              .catch((error) => {
+                if (error.name === "AbortError") {
+                  console.log(
+                    "JanusAudioCall: Audio play was interrupted, retrying..."
+                  );
+                  // Retry once after a longer delay
+                  setTimeout(() => {
+                    if (audioRef.current && audioRef.current.srcObject) {
+                      audioRef.current.play().catch(() => {
+                        console.log(
+                          "JanusAudioCall: Audio retry failed, but track is connected"
+                        );
+                      });
+                    }
+                  }, 1000);
+                } else {
+                  console.error("JanusAudioCall: Failed to play audio:", error);
+                }
+                // Still set as connected since the track is there
+                setAudioConnected(true);
+              });
+          }
+        }, 100);
+      } else if (!on && track.kind === "audio") {
+        console.log("JanusAudioCall: Remote audio track ended");
+        if (audioRef.current) {
+          audioRef.current.srcObject = null;
+        }
+        setAudioConnected(false);
       }
     };
 
     const startCall = async () => {
+      if (isInCall || isRinging) {
+        // Prevent duplicate call modals
+        return;
+      }
       // Demo mode - simulate call without Janus
       if (IS_DEMO_MODE) {
         console.log("JanusAudioCall: Demo mode - simulating call");
-        setCallStatus("Demo Call Active");
+
+        // Send call notification in demo mode
+        if (sendCallNotification && selectedReceiver) {
+          console.log("JanusAudioCall: Sending call notification (demo mode)");
+          sendCallNotification(selectedReceiver, 1234); // Use receiver's ID directly
+        }
+
+        // Set calling state (waiting for receiver to accept)
+        setCallStatus("Calling...");
         setIsInCall(true);
+        setIsRinging(true);
+
+        // Don't start the actual call immediately - wait for receiver to accept
+        console.log("JanusAudioCall: Waiting for receiver to accept call...");
+        return;
+      }
+
+      if (!pluginHandleRef.current) {
+        console.error("JanusAudioCall: Plugin not attached");
+        return;
+      }
+
+      try {
+        console.log("JanusAudioCall: Starting call...");
+
+        // First, clean up any existing call
+        await cleanupCall();
+
+        setCallStatus("Calling...");
+        setIsInCall(true);
+        setIsRinging(true);
+
+        // Send call notification to the receiver
+        if (sendCallNotification && selectedReceiver) {
+          const roomId = 1234; // Using a fixed room for simplicity
+          console.log(
+            "JanusAudioCall: Sending call notification to receiver:",
+            selectedReceiver
+          );
+          sendCallNotification(selectedReceiver, roomId);
+
+          // Don't proceed with the call immediately - wait for receiver to accept
+          console.log("JanusAudioCall: Waiting for receiver to accept call...");
+          return;
+        } else {
+          console.warn(
+            "JanusAudioCall: sendCallNotification not available or no receiver selected"
+          );
+          // If we can't send notification, don't start the call
+          setCallStatus("Failed to send notification");
+          cleanupCall();
+          return;
+        }
+      } catch (error) {
+        console.error("JanusAudioCall: Failed to start call:", error);
+        setConnectionError(`Failed to start call: ${error.message}`);
+        cleanupCall();
+      }
+    };
+
+    // Function to actually start the call after receiver accepts
+    const startActualCall = async (roomId) => {
+      console.log("JanusAudioCall: Starting actual call for room:", roomId);
+
+      if (IS_DEMO_MODE) {
+        console.log("JanusAudioCall: Demo mode - simulating actual call start");
+        setCallStatus("Connected");
         setIsCallActive(true);
+        setIsRinging(false);
         setAudioConnected(true);
         setParticipants([
           { id: user.id, username: user.username, publisher: true },
@@ -457,67 +723,199 @@ const JanusAudioCall = forwardRef(
       }
 
       if (!pluginHandleRef.current) {
-        console.error("JanusAudioCall: Plugin not attached");
+        console.error("JanusAudioCall: Plugin not attached for actual call");
         return;
       }
 
       try {
-        console.log("JanusAudioCall: Starting call...");
         setCallStatus("Connecting...");
-        setIsInCall(true);
-        setIsRinging(true);
+        setIsRinging(false);
 
         // Get user media
+        console.log("JanusAudioCall: Requesting user media for actual call...");
         const stream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
           video: false,
         });
 
+        console.log("JanusAudioCall: Got user media stream:", stream);
         localStreamRef.current = stream;
 
-        // Create room or join existing room
-        const roomName = `room_${user.username}_${selectedReceiver}`;
-        const roomId = generateRoomId(roomName);
+        // Set the room ID
+        setRoomId(roomId);
+        setParticipants([]);
 
-        console.log("JanusAudioCall: Joining room:", roomId);
-
-        pluginHandleRef.current.send({
-          message: {
-            request: "join",
-            room: roomId,
-            ptype: "publisher",
-            display: user.username,
-          },
-        });
-
-        // Add local stream
-        pluginHandleRef.current.send({
-          message: { request: "configure" },
-          jsep: {
-            type: "offer",
-            sdp: await createOffer(stream),
-          },
-        });
+        // Try to join or create room
+        attemptJoinOrCreate(roomId, stream);
       } catch (error) {
-        console.error("JanusAudioCall: Failed to start call:", error);
+        console.error("JanusAudioCall: Failed to start actual call:", error);
         setConnectionError(`Failed to start call: ${error.message}`);
         cleanupCall();
       }
     };
 
-    const createOffer = async (stream) => {
-      const pc = new RTCPeerConnection({
-        iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+    const proceedWithCall = async () => {
+      try {
+        // Get user media with better error handling
+        console.log("JanusAudioCall: Requesting user media...");
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+          video: false,
+        });
+
+        console.log("JanusAudioCall: Got user media stream:", stream);
+        localStreamRef.current = stream;
+
+        // Use a simple, fixed room ID for testing
+        const roomId = 1234;
+        console.log("JanusAudioCall: Using room ID:", roomId);
+
+        // Reset room state
+        setRoomId(null);
+        setParticipants([]);
+
+        // Try to join or create room
+        attemptJoinOrCreate(roomId, stream);
+      } catch (error) {
+        console.error("JanusAudioCall: Failed to get user media:", error);
+        setConnectionError(`Failed to access microphone: ${error.message}`);
+        cleanupCall();
+      }
+    };
+
+    const attemptJoinOrCreate = (roomId, stream) => {
+      console.log("JanusAudioCall: Attempting to join existing room first");
+
+      // Set the room ID immediately
+      setRoomId(roomId);
+
+      pluginHandleRef.current.send({
+        message: {
+          request: "join",
+          room: roomId,
+          ptype: "publisher",
+          display: user.username,
+        },
+        success: async (result) => {
+          console.log(
+            "JanusAudioCall: Successfully joined existing room:",
+            result
+          );
+          setCallStatus("Connected to room");
+          setIsCallActive(true);
+          setIsRinging(false);
+
+          // Create offer using Janus WebRTC handling with better error handling
+          try {
+            pluginHandleRef.current.createOffer({
+              media: { audio: true, video: false },
+              stream: stream,
+              success: (jsep) => {
+                console.log("JanusAudioCall: Created offer:", jsep);
+                pluginHandleRef.current.send({
+                  message: { request: "configure", audio: true, video: false },
+                  jsep: jsep,
+                });
+              },
+              error: (error) => {
+                console.error("JanusAudioCall: Failed to create offer:", error);
+                setConnectionError(`Failed to create offer: ${error}`);
+                cleanupCall();
+              },
+            });
+          } catch (error) {
+            console.error("JanusAudioCall: Exception creating offer:", error);
+            setConnectionError(`Exception creating offer: ${error.message}`);
+            cleanupCall();
+          }
+        },
+        error: (error) => {
+          console.log(
+            "JanusAudioCall: Failed to join room, trying to create:",
+            error
+          );
+
+          // If join fails, try to create the room
+          pluginHandleRef.current.send({
+            message: {
+              request: "create",
+              room: roomId,
+              description: `Audio call room ${roomId}`,
+              is_private: false,
+              allowed: [], // Remove restrictions
+            },
+            success: (result) => {
+              console.log("JanusAudioCall: Room created successfully:", result);
+              // Now join the newly created room
+              joinRoom(roomId, stream);
+            },
+            error: (createError) => {
+              console.error(
+                "JanusAudioCall: Failed to create room:",
+                createError
+              );
+
+              // If room creation fails, it might already exist, try joining again
+              if (createError.toString().includes("already exists")) {
+                console.log(
+                  "JanusAudioCall: Room already exists, trying to join again"
+                );
+                joinRoom(roomId, stream);
+              } else {
+                setConnectionError(`Failed to create room: ${createError}`);
+                cleanupCall();
+              }
+            },
+          });
+        },
       });
+    };
 
-      stream.getTracks().forEach((track) => {
-        pc.addTrack(track, stream);
+    const joinRoom = async (roomId, stream) => {
+      console.log("JanusAudioCall: Joining room:", roomId);
+
+      pluginHandleRef.current.send({
+        message: {
+          request: "join",
+          room: roomId,
+          ptype: "publisher",
+          display: user.username,
+        },
+        success: async (result) => {
+          console.log("JanusAudioCall: Successfully joined room:", result);
+
+          // Create offer using Janus WebRTC handling
+          pluginHandleRef.current.createOffer({
+            media: { audio: true, video: false },
+            stream: stream,
+            success: (jsep) => {
+              console.log("JanusAudioCall: Created offer:", jsep);
+              pluginHandleRef.current.send({
+                message: { request: "configure" },
+                jsep: jsep,
+              });
+            },
+            error: (error) => {
+              console.error("JanusAudioCall: Failed to create offer:", error);
+              setConnectionError(`Failed to create offer: ${error}`);
+              cleanupCall();
+            },
+          });
+        },
+        error: (error) => {
+          console.error("JanusAudioCall: Failed to join room:", error);
+          setConnectionError(`Failed to join room: ${error}`);
+          cleanupCall();
+        },
       });
-
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-
-      return offer.sdp;
     };
 
     const generateRoomId = (roomName) => {
@@ -528,7 +926,9 @@ const JanusAudioCall = forwardRef(
         hash = (hash << 5) - hash + char;
         hash = hash & hash; // Convert to 32-bit integer
       }
-      return Math.abs(hash).toString();
+      // Return a smaller positive integer for better compatibility
+      const roomId = Math.abs(hash) % 999999; // Use smaller range (1-999999)
+      return roomId === 0 ? 1234 : roomId; // Ensure it's never 0, use default 1234
     };
 
     const endCall = async () => {
@@ -552,11 +952,22 @@ const JanusAudioCall = forwardRef(
         });
       }
 
+      // Force state updates to be synchronous to ensure modal closes
+      setIsInCall(false);
+      setIsRinging(false);
+      setIsCallActive(false);
+
       cleanupCall();
 
       if (onCallEnd) {
         onCallEnd();
       }
+
+      // Force modal to close with a slight delay to ensure state updates have been processed
+      setTimeout(() => {
+        setIsInCall(false);
+        setIsRinging(false);
+      }, 100);
     };
 
     const toggleMute = () => {
@@ -597,19 +1008,48 @@ const JanusAudioCall = forwardRef(
       setParticipants([]);
       setAudioConnected(false);
 
+      console.log("JanusAudioCall: State after cleanup:", {
+        isInCall: false,
+        isRinging: false,
+      });
+
+      // Clean up local stream
       if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach((track) => track.stop());
+        console.log("JanusAudioCall: Stopping local stream tracks");
+        localStreamRef.current.getTracks().forEach((track) => {
+          track.stop();
+          console.log("JanusAudioCall: Stopped track:", track.kind);
+        });
         localStreamRef.current = null;
       }
 
+      // Clean up remote stream
+      if (remoteStreamRef.current) {
+        console.log("JanusAudioCall: Cleaning up remote stream");
+        remoteStreamRef.current.getTracks().forEach((track) => track.stop());
+        remoteStreamRef.current = null;
+      }
+
+      // Clean up audio element
       if (audioRef.current) {
+        console.log("JanusAudioCall: Cleaning up audio element");
+        audioRef.current.pause();
         audioRef.current.srcObject = null;
-        audioRef.current.remove();
+        audioRef.current.removeAttribute("src");
+        audioRef.current.load();
+
+        // Remove from DOM if it was added
+        if (audioRef.current.parentNode) {
+          audioRef.current.parentNode.removeChild(audioRef.current);
+        }
         audioRef.current = null;
       }
 
       stopCallTimer();
       stopRingtone();
+
+      // Clear any connection errors
+      setConnectionError(null);
     };
 
     const cleanupJanus = () => {
@@ -653,30 +1093,52 @@ const JanusAudioCall = forwardRef(
 
     const playRingtone = () => {
       stopRingtone();
+
+      // Create a more realistic phone ringtone with alternating tones
+      let ringCount = 0;
       ringtoneIntervalRef.current = setInterval(() => {
         const audioContext = new (window.AudioContext ||
           window.webkitAudioContext)();
-        const oscillator = audioContext.createOscillator();
+
+        // Create two oscillators for a richer sound
+        const oscillator1 = audioContext.createOscillator();
+        const oscillator2 = audioContext.createOscillator();
         const gainNode = audioContext.createGain();
 
-        oscillator.connect(gainNode);
+        // Connect oscillators to gain node
+        oscillator1.connect(gainNode);
+        oscillator2.connect(gainNode);
         gainNode.connect(audioContext.destination);
 
-        oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-        oscillator.frequency.setValueAtTime(
-          600,
-          audioContext.currentTime + 0.1
+        // Set different frequencies for alternating tones (like a real phone)
+        const isEvenRing = ringCount % 2 === 0;
+        oscillator1.frequency.setValueAtTime(
+          isEvenRing ? 480 : 620,
+          audioContext.currentTime
+        );
+        oscillator2.frequency.setValueAtTime(
+          isEvenRing ? 620 : 480,
+          audioContext.currentTime
         );
 
-        gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(
-          0.01,
-          audioContext.currentTime + 0.2
-        );
+        // Set oscillator types for better sound
+        oscillator1.type = "sine";
+        oscillator2.type = "sine";
 
-        oscillator.start(audioContext.currentTime);
-        oscillator.stop(audioContext.currentTime + 0.2);
-      }, 2000);
+        // Create a nice envelope for the ringtone
+        const now = audioContext.currentTime;
+        gainNode.gain.setValueAtTime(0, now);
+        gainNode.gain.linearRampToValueAtTime(0.3, now + 0.05);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
+
+        // Start and stop the oscillators
+        oscillator1.start(now);
+        oscillator2.start(now);
+        oscillator1.stop(now + 0.8);
+        oscillator2.stop(now + 0.8);
+
+        ringCount++;
+      }, 1000); // Ring every second
     };
 
     const stopRingtone = () => {
@@ -685,24 +1147,6 @@ const JanusAudioCall = forwardRef(
         ringtoneIntervalRef.current = null;
       }
     };
-
-    // Auto-reconnect on connection loss
-    useEffect(() => {
-      if (!janusConnected && user && !reconnectTimeoutRef.current) {
-        reconnectTimeoutRef.current = setTimeout(() => {
-          console.log("JanusAudioCall: Attempting to reconnect...");
-          initializeJanus();
-          reconnectTimeoutRef.current = null;
-        }, 5000);
-      }
-
-      return () => {
-        if (reconnectTimeoutRef.current) {
-          clearTimeout(reconnectTimeoutRef.current);
-          reconnectTimeoutRef.current = null;
-        }
-      };
-    }, [janusConnected, user]);
 
     if (
       !janusLoaded &&
@@ -718,9 +1162,32 @@ const JanusAudioCall = forwardRef(
       );
     }
 
+    // Only show modal when there's an active call or ringing
+    if (!isInCall && !isRinging) {
+      return null;
+    }
+
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+      <div
+        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+        onClick={(e) => {
+          // Close modal if clicking outside the content
+          if (e.target === e.currentTarget) {
+            console.log("Clicked outside modal: Ending call");
+            endCall();
+          }
+        }}
+      >
+        <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl relative">
+          {/* Close Button */}
+          <button
+            onClick={endCall}
+            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+            title="Close (Esc)"
+          >
+            <FaTimes className="w-5 h-5" />
+          </button>
+
           {/* Demo Mode Notice */}
           {(IS_DEMO_MODE ||
             (typeof window !== "undefined" && window.janusLoadFailed)) && (
