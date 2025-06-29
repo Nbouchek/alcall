@@ -22,7 +22,14 @@ import {
 
 const JanusAudioCall = forwardRef(
   (
-    { user, selectedReceiver, onCallEnd, getUserName, sendCallNotification },
+    {
+      user,
+      selectedReceiver,
+      onCallEnd,
+      getUserName,
+      sendCallNotification,
+      onCallStateChange,
+    },
     ref
   ) => {
     const [isInCall, setIsInCall] = useState(false);
@@ -650,8 +657,11 @@ const JanusAudioCall = forwardRef(
 
         // Set calling state (waiting for receiver to accept)
         setCallStatus("Calling...");
-        setIsInCall(true);
-        setIsRinging(true);
+        updateCallState({
+          isInCall: true,
+          isCallActive: false,
+          callStatus: "Calling...",
+        });
 
         // Don't start the actual call immediately - wait for receiver to accept
         console.log("JanusAudioCall: Waiting for receiver to accept call...");
@@ -707,10 +717,12 @@ const JanusAudioCall = forwardRef(
 
       if (IS_DEMO_MODE) {
         console.log("JanusAudioCall: Demo mode - simulating actual call start");
-        setCallStatus("Connected");
-        setIsCallActive(true);
-        setIsRinging(false);
-        setAudioConnected(true);
+        updateCallState({
+          isInCall: true,
+          isCallActive: true,
+          callStatus: "Connected",
+          audioConnected: true,
+        });
         setParticipants([
           { id: user.id, username: user.username, publisher: true },
           {
@@ -810,8 +822,12 @@ const JanusAudioCall = forwardRef(
             "JanusAudioCall: Successfully joined existing room:",
             result
           );
-          setCallStatus("Connected to room");
-          setIsCallActive(true);
+          updateCallState({
+            isInCall: true,
+            isCallActive: true,
+            callStatus: "Connected to room",
+            audioConnected: true,
+          });
           setIsRinging(false);
 
           // Create offer using Janus WebRTC handling with better error handling
@@ -954,9 +970,12 @@ const JanusAudioCall = forwardRef(
       }
 
       // Force state updates to be synchronous to ensure modal closes
-      setIsInCall(false);
-      setIsRinging(false);
-      setIsCallActive(false);
+      updateCallState({
+        isInCall: false,
+        isCallActive: false,
+        callStatus: "Call ended",
+        audioConnected: false,
+      });
 
       cleanupCall();
 
@@ -1258,6 +1277,38 @@ const JanusAudioCall = forwardRef(
         clearInterval(ringtoneIntervalRef.current);
         ringtoneIntervalRef.current = null;
       }
+    };
+
+    // Report call state changes to parent
+    const reportCallState = (newState) => {
+      if (onCallStateChange) {
+        onCallStateChange({
+          isConnected: newState.isConnected || isCallActive,
+          isConnecting: newState.isConnecting || (isInCall && !isCallActive),
+          isInCall: newState.isInCall || isInCall,
+          callStatus: newState.callStatus || callStatus,
+          audioConnected: newState.audioConnected || audioConnected,
+          janusConnected: newState.janusConnected || janusConnected,
+        });
+      }
+    };
+
+    // Update call state and report to parent
+    const updateCallState = (updates) => {
+      const newState = { ...updates };
+
+      // Update local state
+      if (updates.isInCall !== undefined) setIsInCall(updates.isInCall);
+      if (updates.isCallActive !== undefined)
+        setIsCallActive(updates.isCallActive);
+      if (updates.callStatus !== undefined) setCallStatus(updates.callStatus);
+      if (updates.audioConnected !== undefined)
+        setAudioConnected(updates.audioConnected);
+      if (updates.janusConnected !== undefined)
+        setJanusConnected(updates.janusConnected);
+
+      // Report to parent
+      reportCallState(newState);
     };
 
     if (
