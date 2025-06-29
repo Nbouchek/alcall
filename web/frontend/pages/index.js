@@ -728,15 +728,22 @@ export default function Home() {
             const audioContext = new (window.AudioContext ||
               window.webkitAudioContext)();
 
+            console.log("🔊 Audio context state:", audioContext.state);
+
             // Resume audio context if suspended (required for mobile)
             if (audioContext.state === "suspended") {
+              console.log(
+                "🔊 Audio context suspended, attempting to resume..."
+              );
               audioContext
                 .resume()
                 .then(() => {
-                  console.log("Audio context resumed successfully");
+                  console.log("🔊 Audio context resumed successfully");
+                  // Retry playing the tone after resuming
+                  playRingtoneTone();
                 })
                 .catch((err) => {
-                  console.error("Failed to resume audio context:", err);
+                  console.error("🔊 Failed to resume audio context:", err);
                   // Fallback to HTML5 audio
                   playFallbackRingtone();
                 });
@@ -789,6 +796,7 @@ export default function Home() {
 
       // HTML5 Audio fallback for mobile devices
       const playFallbackRingtone = () => {
+        console.log("🔊 playFallbackRingtone called");
         try {
           // Create a simple beep using HTML5 Audio
           const audio = new Audio();
@@ -815,16 +823,27 @@ export default function Home() {
           source.buffer = buffer;
           source.connect(audioContext.destination);
           source.start();
+          console.log("🔊 Fallback ringtone played using Web Audio API");
         } catch (error) {
-          console.error("Fallback ringtone failed:", error);
-          // Last resort: try to play a silent audio to unlock audio
+          console.error("🔊 Fallback ringtone failed:", error);
+          // Last resort: try a simple HTML5 audio beep
           try {
-            const silentAudio = new Audio();
-            silentAudio.src =
+            console.log("🔊 Trying simple HTML5 audio beep");
+            // Create a simple beep sound using data URL
+            const audio = new Audio();
+            audio.src =
               "data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT";
-            silentAudio.play().catch(() => {});
+            audio.volume = 0.5;
+            audio
+              .play()
+              .then(() => {
+                console.log("🔊 HTML5 audio beep played successfully");
+              })
+              .catch((err) => {
+                console.error("🔊 HTML5 audio beep failed:", err);
+              });
           } catch (e) {
-            console.error("Silent audio unlock failed:", e);
+            console.error("🔊 HTML5 audio beep setup failed:", e);
           }
         }
       };
@@ -1641,6 +1660,36 @@ export default function Home() {
                     <FaVolumeUp className="w-4 h-4 sm:w-5 sm:h-5 relative z-10 animate-pulse group-hover:animate-bounce" />
                     <span className="relative z-10 hidden sm:inline">
                       Test Audio
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      console.log("🔊 Testing ringtone manually");
+                      playIncomingCallRingtone();
+                    }}
+                    className="group relative px-3 py-2 sm:px-4 sm:py-3 rounded-xl transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 flex items-center gap-2 font-bold shadow-lg bg-gradient-to-r from-purple-400 to-pink-500 hover:from-purple-500 hover:to-pink-600 text-white"
+                    title="Test ringtone functionality"
+                  >
+                    {/* Glowing effect */}
+                    <div className="absolute -inset-1 bg-gradient-to-r from-purple-400 to-pink-500 rounded-xl blur opacity-30 group-hover:opacity-50 transition duration-300"></div>
+                    <FaBell className="w-4 h-4 sm:w-5 sm:h-5 relative z-10 animate-pulse group-hover:animate-bounce" />
+                    <span className="relative z-10 hidden sm:inline">
+                      Test Ring
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      console.log("🔊 Stopping ringtone manually");
+                      stopIncomingCallRingtone();
+                    }}
+                    className="group relative px-3 py-2 sm:px-4 sm:py-3 rounded-xl transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 flex items-center gap-2 font-bold shadow-lg bg-gradient-to-r from-red-400 to-red-600 hover:from-red-500 hover:to-red-700 text-white"
+                    title="Stop ringtone"
+                  >
+                    {/* Glowing effect */}
+                    <div className="absolute -inset-1 bg-gradient-to-r from-red-400 to-red-600 rounded-xl blur opacity-30 group-hover:opacity-50 transition duration-300"></div>
+                    <FaPhoneSlash className="w-4 h-4 sm:w-5 sm:h-5 relative z-10" />
+                    <span className="relative z-10 hidden sm:inline">
+                      Stop Ring
                     </span>
                   </button>
                 </div>
