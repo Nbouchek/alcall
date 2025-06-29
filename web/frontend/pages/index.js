@@ -29,7 +29,8 @@ const MESSAGE_API_BASE_URL =
   process.env.NEXT_PUBLIC_MESSAGE_API_URL ||
   "https://unifiedchat-message-service.onrender.com";
 const REALTIME_API_BASE_URL =
-  process.env.NEXT_PUBLIC_REALTIME_API_URL || "http://localhost:8084";
+  process.env.NEXT_PUBLIC_REALTIME_API_URL ||
+  "https://unifiedchat-realtime-service.onrender.com";
 const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
 // IS_RENDER_DEPLOYMENT is now handled as state to avoid hydration issues
@@ -525,54 +526,55 @@ export default function Home() {
 
   // Incoming call ringtone functions
   const playIncomingCallRingtone = () => {
-    stopIncomingCallRingtone();
-
-    let ringCount = 0;
-    const interval = setInterval(() => {
-      const audioContext = new (window.AudioContext ||
-        window.webkitAudioContext)();
-
-      // Create two oscillators for a richer sound
-      const oscillator1 = audioContext.createOscillator();
-      const oscillator2 = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-
-      // Connect oscillators to gain node
-      oscillator1.connect(gainNode);
-      oscillator2.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-
-      // Set different frequencies for alternating tones (like a real phone)
-      const isEvenRing = ringCount % 2 === 0;
-      oscillator1.frequency.setValueAtTime(
-        isEvenRing ? 480 : 620,
-        audioContext.currentTime
-      );
-      oscillator2.frequency.setValueAtTime(
-        isEvenRing ? 620 : 480,
-        audioContext.currentTime
-      );
-
-      // Set oscillator types for better sound
-      oscillator1.type = "sine";
-      oscillator2.type = "sine";
-
-      // Create a nice envelope for the ringtone
-      const now = audioContext.currentTime;
-      gainNode.gain.setValueAtTime(0, now);
-      gainNode.gain.linearRampToValueAtTime(0.3, now + 0.05);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
-
-      // Start and stop the oscillators
-      oscillator1.start(now);
-      oscillator2.start(now);
-      oscillator1.stop(now + 0.8);
-      oscillator2.stop(now + 0.8);
-
-      ringCount++;
-    }, 1000); // Ring every second
-
-    setIncomingCallRingtoneInterval(interval);
+    try {
+      stopIncomingCallRingtone();
+      
+      let ringCount = 0;
+      const interval = setInterval(() => {
+        try {
+          const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          
+          // Create two oscillators for a richer sound
+          const oscillator1 = audioContext.createOscillator();
+          const oscillator2 = audioContext.createOscillator();
+          const gainNode = audioContext.createGain();
+          
+          // Connect oscillators to gain node
+          oscillator1.connect(gainNode);
+          oscillator2.connect(gainNode);
+          gainNode.connect(audioContext.destination);
+          
+          // Set different frequencies for alternating tones (like a real phone)
+          const isEvenRing = ringCount % 2 === 0;
+          oscillator1.frequency.setValueAtTime(isEvenRing ? 480 : 620, audioContext.currentTime);
+          oscillator2.frequency.setValueAtTime(isEvenRing ? 620 : 480, audioContext.currentTime);
+          
+          // Set oscillator types for better sound
+          oscillator1.type = 'sine';
+          oscillator2.type = 'sine';
+          
+          // Create a nice envelope for the ringtone
+          const now = audioContext.currentTime;
+          gainNode.gain.setValueAtTime(0, now);
+          gainNode.gain.linearRampToValueAtTime(0.3, now + 0.05);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
+          
+          // Start and stop the oscillators
+          oscillator1.start(now);
+          oscillator2.start(now);
+          oscillator1.stop(now + 0.8);
+          oscillator2.stop(now + 0.8);
+          
+          ringCount++;
+        } catch (error) {
+          console.error("Error playing ringtone tone:", error);
+        }
+      }, 1000); // Ring every second
+      
+      setIncomingCallRingtoneInterval(interval);
+    } catch (error) {
+      console.error("Error setting up incoming call ringtone:", error);
+    }
   };
 
   const stopIncomingCallRingtone = () => {

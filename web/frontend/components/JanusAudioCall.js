@@ -1092,53 +1092,61 @@ const JanusAudioCall = forwardRef(
     };
 
     const playRingtone = () => {
-      stopRingtone();
+      try {
+        stopRingtone();
 
-      // Create a more realistic phone ringtone with alternating tones
-      let ringCount = 0;
-      ringtoneIntervalRef.current = setInterval(() => {
-        const audioContext = new (window.AudioContext ||
-          window.webkitAudioContext)();
+        // Create a more realistic phone ringtone with alternating tones
+        let ringCount = 0;
+        ringtoneIntervalRef.current = setInterval(() => {
+          try {
+            const audioContext = new (window.AudioContext ||
+              window.webkitAudioContext)();
 
-        // Create two oscillators for a richer sound
-        const oscillator1 = audioContext.createOscillator();
-        const oscillator2 = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
+            // Create two oscillators for a richer sound
+            const oscillator1 = audioContext.createOscillator();
+            const oscillator2 = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
 
-        // Connect oscillators to gain node
-        oscillator1.connect(gainNode);
-        oscillator2.connect(gainNode);
-        gainNode.connect(audioContext.destination);
+            // Connect oscillators to gain node
+            oscillator1.connect(gainNode);
+            oscillator2.connect(gainNode);
+            gainNode.connect(audioContext.destination);
 
-        // Set different frequencies for alternating tones (like a real phone)
-        const isEvenRing = ringCount % 2 === 0;
-        oscillator1.frequency.setValueAtTime(
-          isEvenRing ? 480 : 620,
-          audioContext.currentTime
-        );
-        oscillator2.frequency.setValueAtTime(
-          isEvenRing ? 620 : 480,
-          audioContext.currentTime
-        );
+            // Set different frequencies for alternating tones (like a real phone)
+            const isEvenRing = ringCount % 2 === 0;
+            oscillator1.frequency.setValueAtTime(
+              isEvenRing ? 480 : 620,
+              audioContext.currentTime
+            );
+            oscillator2.frequency.setValueAtTime(
+              isEvenRing ? 620 : 480,
+              audioContext.currentTime
+            );
 
-        // Set oscillator types for better sound
-        oscillator1.type = "sine";
-        oscillator2.type = "sine";
+            // Set oscillator types for better sound
+            oscillator1.type = "sine";
+            oscillator2.type = "sine";
 
-        // Create a nice envelope for the ringtone
-        const now = audioContext.currentTime;
-        gainNode.gain.setValueAtTime(0, now);
-        gainNode.gain.linearRampToValueAtTime(0.3, now + 0.05);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
+            // Create a nice envelope for the ringtone
+            const now = audioContext.currentTime;
+            gainNode.gain.setValueAtTime(0, now);
+            gainNode.gain.linearRampToValueAtTime(0.3, now + 0.05);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
 
-        // Start and stop the oscillators
-        oscillator1.start(now);
-        oscillator2.start(now);
-        oscillator1.stop(now + 0.8);
-        oscillator2.stop(now + 0.8);
+            // Start and stop the oscillators
+            oscillator1.start(now);
+            oscillator2.start(now);
+            oscillator1.stop(now + 0.8);
+            oscillator2.stop(now + 0.8);
 
-        ringCount++;
-      }, 1000); // Ring every second
+            ringCount++;
+          } catch (error) {
+            console.error("Error playing ringtone tone:", error);
+          }
+        }, 1000); // Ring every second
+      } catch (error) {
+        console.error("Error setting up ringtone:", error);
+      }
     };
 
     const stopRingtone = () => {
