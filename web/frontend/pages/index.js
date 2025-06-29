@@ -507,18 +507,33 @@ export default function Home() {
   const sendMessage = async () => {
     if (!newMessage.trim()) return;
 
-    // Demo mode for Render deployment
-    if (isRenderDeployment) {
-      const demoMessage = {
-        id: Date.now(),
-        sender_id: user.id,
-        receiver_id: selectedReceiver,
-        content: newMessage,
-        timestamp: new Date().toISOString(),
+    const messageData = {
+      id: Date.now(),
+      sender_id: user.id,
+      receiver_id: selectedReceiver,
+      content: newMessage,
+      timestamp: new Date().toISOString(),
+    };
+
+    // Add message to local state immediately for better UX
+    setMessages((prev) => [...prev, messageData]);
+    setNewMessage("");
+    scrollToBottom();
+
+    // Send via WebSocket for real-time delivery to other users
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      const wsMessage = {
+        type: "chat_message",
+        ...messageData,
       };
-      setMessages((prev) => [...prev, demoMessage]);
-      setNewMessage("");
-      scrollToBottom();
+      console.log("Sending chat message via WebSocket:", wsMessage);
+      wsRef.current.send(JSON.stringify(wsMessage));
+    } else {
+      console.warn("WebSocket not available for message sending");
+    }
+
+    // Demo mode for Render deployment - skip backend API call
+    if (isRenderDeployment) {
       return;
     }
 
@@ -1089,6 +1104,59 @@ export default function Home() {
             }
             // Also call the handler to ensure modal closes
             handleAudioCallEnd();
+          } else if (data.type === "call_ended") {
+            console.log("Call ended for user", user.username + ":", data);
+            console.log("AudioCall ref available:", !!audioCallRef.current);
+            // Both caller and receiver should close their call modal
+            if (audioCallRef.current) {
+              console.log("Force closing audio call modal due to call end");
+              audioCallRef.current.forceClose();
+            } else {
+              console.error("AudioCall ref not available for call end");
+            }
+            // Also call the handler to ensure modal closes
+            handleAudioCallEnd();
+          } else if (data.type === "chat_message") {
+            console.log(
+              "Received chat message for user",
+              user.username + ":",
+              data
+            );
+
+            // Ensure consistent ID types for comparison
+            const currentUserId = Number(user.id);
+            const receiverId = Number(data.receiver_id);
+            const senderId = Number(data.sender_id);
+
+            console.log("Chat message ID comparison:", {
+              currentUserId,
+              receiverId,
+              senderId,
+              isForCurrentUser: receiverId === currentUserId,
+              isFromCurrentUser: senderId === currentUserId,
+            });
+
+            // Only add message if it's for the current user and not from themselves
+            if (receiverId === currentUserId && senderId !== currentUserId) {
+              console.log(
+                "Adding received message to chat for user:",
+                user.username
+              );
+              setMessages((prev) => {
+                // Check if message already exists to avoid duplicates
+                const messageExists = prev.some((msg) => msg.id === data.id);
+                if (messageExists) {
+                  console.log("Message already exists, skipping duplicate");
+                  return prev;
+                }
+                return [...prev, data];
+              });
+              scrollToBottom();
+            } else {
+              console.log(
+                "Ignoring chat message (not for current user or from self)"
+              );
+            }
           }
         } catch (error) {
           console.log(
@@ -1591,12 +1659,29 @@ export default function Home() {
                 <div className="flex items-center gap-2">
                   {/* Audio Call Button */}
                   <button
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
                       console.log("Audio call button clicked");
                       console.log("Audio service status:", audioServiceStatus);
                       console.log("AudioCall ref:", audioCallRef.current);
                       console.log("User:", user);
                       console.log("Selected receiver:", selectedReceiver);
+
+                      // Initialize mobile audio first if needed
+                      if (
+                        typeof window !== "undefined" &&
+                        window.AudioContext
+                      ) {
+                        const audioContext = new (window.AudioContext ||
+                          window.webkitAudioContext)();
+                        if (audioContext.state === "suspended") {
+                          console.log(
+                            "Resuming audio context for mobile compatibility"
+                          );
+                          audioContext.resume();
+                        }
+                      }
 
                       if (audioServiceStatus === "available") {
                         // Use the ref to call startCall directly
@@ -1619,6 +1704,11 @@ export default function Home() {
                           "Audio service is not available. Please check if the audio service is deployed."
                         );
                       }
+                    }}
+                    onTouchStart={(e) => {
+                      // Prevent double-tap zoom on mobile
+                      e.preventDefault();
+                      console.log("Audio call button touched (mobile)");
                     }}
                     className={`group relative px-3 py-2 sm:px-4 sm:py-3 rounded-xl transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 flex items-center gap-2 font-bold shadow-lg ${
                       audioServiceStatus === "available"
@@ -1644,12 +1734,29 @@ export default function Home() {
 
                   {/* Video Call Button */}
                   <button
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
                       console.log("Video call button clicked");
                       console.log("Audio service status:", audioServiceStatus);
                       console.log("VideoCall ref:", videoCallRef.current);
                       console.log("User:", user);
                       console.log("Selected receiver:", selectedReceiver);
+
+                      // Initialize mobile audio/video first if needed
+                      if (
+                        typeof window !== "undefined" &&
+                        window.AudioContext
+                      ) {
+                        const audioContext = new (window.AudioContext ||
+                          window.webkitAudioContext)();
+                        if (audioContext.state === "suspended") {
+                          console.log(
+                            "Resuming audio context for mobile compatibility"
+                          );
+                          audioContext.resume();
+                        }
+                      }
 
                       if (audioServiceStatus === "available") {
                         // Use the ref to call startVideoCall directly
@@ -1672,6 +1779,11 @@ export default function Home() {
                           "Video service is not available. Please check if the video service is deployed."
                         );
                       }
+                    }}
+                    onTouchStart={(e) => {
+                      // Prevent double-tap zoom on mobile
+                      e.preventDefault();
+                      console.log("Video call button touched (mobile)");
                     }}
                     className={`group relative px-3 py-2 sm:px-4 sm:py-3 rounded-xl transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 flex items-center gap-2 font-bold shadow-lg ${
                       audioServiceStatus === "available"
@@ -1770,6 +1882,7 @@ export default function Home() {
                     onCallEnd={handleAudioCallEnd}
                     getUserName={getUserName}
                     sendCallNotification={sendCallNotification}
+                    wsRef={wsRef}
                   />
                   <JanusVideoCall
                     ref={videoCallRef}
@@ -2034,10 +2147,13 @@ export default function Home() {
             </p>
             <div className="flex justify-around">
               <button
-                onClick={() => {
+                onClick={async () => {
+                  console.log("🔔 CALL ACCEPTED by receiver:", user.username);
+
                   // Stop the ringtone
                   stopIncomingCallRingtone();
 
+                  // Send acceptance message to caller
                   if (
                     wsRef.current &&
                     wsRef.current.readyState === WebSocket.OPEN
@@ -2050,12 +2166,49 @@ export default function Home() {
                       room_id: incomingCall.room_id,
                     };
                     wsRef.current.send(JSON.stringify(acceptanceMessage));
+                    console.log(
+                      "🔔 Sent call acceptance message:",
+                      acceptanceMessage
+                    );
                   }
-                  // Receiver joins the room
-                  if (audioCallRef.current) {
-                    audioCallRef.current.joinRoom(incomingCall.room_id);
-                  }
+
+                  // Set the receiver as the selected receiver for the call interface
+                  setSelectedReceiver(incomingCall.from_user_id);
+
+                  // Clear incoming call state
                   setIncomingCall(null);
+
+                  // Give a moment for state to update, then join the room
+                  setTimeout(async () => {
+                    if (audioCallRef.current) {
+                      console.log(
+                        "🔔 Receiver joining room:",
+                        incomingCall.room_id
+                      );
+                      try {
+                        // Set the other party ID for call end notifications
+                        audioCallRef.current.setOtherPartyId(
+                          incomingCall.from_user_id
+                        );
+
+                        await audioCallRef.current.joinRoom(
+                          incomingCall.room_id
+                        );
+                        console.log("🔔 Receiver successfully joined room");
+                      } catch (error) {
+                        console.error(
+                          "🔔 Receiver failed to join room:",
+                          error
+                        );
+                        alert("Failed to join call: " + error.message);
+                      }
+                    } else {
+                      console.error(
+                        "🔔 AudioCall ref not available for receiver"
+                      );
+                      alert("Call system not ready. Please try again.");
+                    }
+                  }, 100);
                 }}
                 className="bg-green-500 text-white px-6 py-2 rounded-lg"
               >

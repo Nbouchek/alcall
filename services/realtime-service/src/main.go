@@ -41,6 +41,11 @@ type Message struct {
 	CallID       string      `json:"call_id,omitempty"`
 	Timestamp    int64       `json:"timestamp,omitempty"`
 	OnlineUsers  []string    `json:"online_users,omitempty"`
+	// Chat message fields
+	ID         interface{} `json:"id,omitempty"`
+	SenderID   interface{} `json:"sender_id,omitempty"`
+	ReceiverID interface{} `json:"receiver_id,omitempty"`
+	Content    string      `json:"content,omitempty"`
 }
 
 // Hub manages clients and broadcasts messages.
@@ -282,6 +287,12 @@ func (c *Client) readPump() {
 			log.Printf("Forwarding '%s' from %s to %v", msg.Type, msg.FromUsername, msg.ToUserID)
 			if !hub.sendToUser(msg.ToUserID, messageBytes) {
 				log.Printf("Failed to forward message type %s - user %v not found", msg.Type, msg.ToUserID)
+			}
+
+		case "chat_message":
+			log.Printf("Forwarding chat message from %v to %v", msg.SenderID, msg.ReceiverID)
+			if !hub.sendToUser(msg.ReceiverID, messageBytes) {
+				log.Printf("Failed to forward chat message - user %v not found", msg.ReceiverID)
 			}
 
 		default:

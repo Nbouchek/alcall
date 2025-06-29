@@ -22,7 +22,14 @@ import {
 
 const JanusAudioCall = forwardRef(
   (
-    { user, selectedReceiver, onCallEnd, getUserName, sendCallNotification },
+    {
+      user,
+      selectedReceiver,
+      onCallEnd,
+      getUserName,
+      sendCallNotification,
+      wsRef,
+    },
     ref
   ) => {
     const [isInCall, setIsInCall] = useState(false);
@@ -38,6 +45,7 @@ const JanusAudioCall = forwardRef(
     const [participants, setParticipants] = useState([]);
     const [connectionError, setConnectionError] = useState(null);
     const [janusLoaded, setJanusLoaded] = useState(false);
+    const [otherPartyId, setOtherPartyId] = useState(null);
 
     // Check if we're in demo mode (Render deployment)
     const IS_DEMO_MODE =
@@ -166,6 +174,10 @@ const JanusAudioCall = forwardRef(
         if (onCallEnd) {
           onCallEnd();
         }
+      },
+      setOtherPartyId: (partyId) => {
+        console.log("JanusAudioCall: Setting other party ID:", partyId);
+        setOtherPartyId(partyId);
       },
     }));
 
@@ -638,6 +650,12 @@ const JanusAudioCall = forwardRef(
         // Prevent duplicate call modals
         return;
       }
+
+      // Set the other party ID for call end notifications
+      if (selectedReceiver) {
+        setOtherPartyId(selectedReceiver);
+      }
+
       // Demo mode - simulate call without Janus
       if (IS_DEMO_MODE) {
         console.log("JanusAudioCall: Demo mode - simulating call");
@@ -704,6 +722,10 @@ const JanusAudioCall = forwardRef(
     // Function to actually start the call after receiver accepts
     const startActualCall = async (roomId) => {
       console.log("JanusAudioCall: Starting actual call for room:", roomId);
+
+      // Set the call state to show the modal for receiver
+      setIsInCall(true);
+      setCallStatus("Joining call...");
 
       if (IS_DEMO_MODE) {
         console.log("JanusAudioCall: Demo mode - simulating actual call start");
@@ -935,6 +957,37 @@ const JanusAudioCall = forwardRef(
     const endCall = async () => {
       console.log("JanusAudioCall: Ending call...");
 
+      // Send call end notification to the other party
+      if (sendCallNotification && otherPartyId && roomId) {
+        console.log(
+          "JanusAudioCall: Sending call end notification to:",
+          otherPartyId
+        );
+        try {
+          // Create a custom call end notification
+          const callEndMessage = {
+            type: "call_ended",
+            from_user_id: user.id,
+            from_username: user.username,
+            to_user_id: otherPartyId,
+            room_id: roomId,
+          };
+
+          // Send via WebSocket if available
+          if (wsRef?.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify(callEndMessage));
+            console.log(
+              "JanusAudioCall: Call end notification sent via WebSocket"
+            );
+          }
+        } catch (error) {
+          console.error(
+            "JanusAudioCall: Failed to send call end notification:",
+            error
+          );
+        }
+      }
+
       // Demo mode - just cleanup
       if (IS_DEMO_MODE) {
         console.log("JanusAudioCall: Demo mode - ending simulated call");
@@ -1008,6 +1061,7 @@ const JanusAudioCall = forwardRef(
       setRoomId(null);
       setParticipants([]);
       setAudioConnected(false);
+      setOtherPartyId(null);
 
       console.log("JanusAudioCall: State after cleanup:", {
         isInCall: false,
