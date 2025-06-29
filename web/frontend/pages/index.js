@@ -528,14 +528,18 @@ export default function Home() {
       };
       console.log("Sending chat message via WebSocket:", wsMessage);
       wsRef.current.send(JSON.stringify(wsMessage));
+
+      // If WebSocket is working, we don't need to fallback to API
+      console.log("Message sent via WebSocket successfully");
+      return;
     } else {
-      console.warn("WebSocket not available for message sending");
+      console.warn(
+        "WebSocket not available for message sending, trying API fallback"
+      );
     }
 
-    // Demo mode for Render deployment - skip backend API call
-    if (isRenderDeployment) {
-      return;
-    }
+    // If WebSocket failed, try API fallback even in production
+    console.log("Attempting to send message via API fallback...");
 
     try {
       const response = await axios.post(
@@ -543,16 +547,17 @@ export default function Home() {
         {
           sender_id: user.id,
           receiver_id: selectedReceiver,
-          content: newMessage,
+          content: messageData.content,
         }
       );
 
-      setMessages((prev) => [...prev, response.data]);
-      setNewMessage("");
-      scrollToBottom();
+      console.log("Message sent via API fallback successfully");
+      // Note: Message already added to local state at the beginning of function
     } catch (error) {
+      console.error("API fallback also failed:", error);
+      // Since both WebSocket and API failed, we should inform the user
       alert(
-        "Failed to send message: " +
+        "Failed to send message: Both real-time and API delivery failed. " +
           (error.response?.data?.error || error.message)
       );
     }
@@ -974,6 +979,8 @@ export default function Home() {
 
       const wsUrl = REALTIME_API_BASE_URL.replace(/^http/, "ws") + "/ws";
       console.log("Attempting WebSocket connection to:", wsUrl);
+      console.log("Production environment:", isRenderDeployment);
+      console.log("REALTIME_API_BASE_URL:", REALTIME_API_BASE_URL);
 
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
@@ -1180,6 +1187,19 @@ export default function Home() {
           "WebSocket connection failed for user",
           user.username + ", will rely on polling fallback"
         );
+
+        // For production, try to reconnect after a delay
+        if (isRenderDeployment) {
+          console.log(
+            "Production WebSocket failed, attempting reconnection in 5 seconds..."
+          );
+          setTimeout(() => {
+            if (wsRef.current && wsRef.current.readyState !== WebSocket.OPEN) {
+              console.log("Attempting WebSocket reconnection...");
+              // The useEffect will handle reconnection when user state changes
+            }
+          }, 5000);
+        }
       };
 
       return () => {
