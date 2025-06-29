@@ -715,151 +715,94 @@ export default function Home() {
   // Incoming call ringtone functions
   const playIncomingCallRingtone = () => {
     try {
-      console.log("🔔 STARTING INCOMING CALL RINGTONE");
       stopIncomingCallRingtone();
+      console.log("Starting incoming call ringtone...");
 
-      // Mobile-friendly ringtone system
-      const playRingtoneTone = () => {
-        console.log("🎵 Playing ringtone tone...");
+      // Create a simple, reliable ringtone using HTML5 Audio
+      const createRingtone = () => {
         try {
-          // Try Web Audio API first (better quality)
-          if (window.AudioContext || window.webkitAudioContext) {
-            const audioContext = new (window.AudioContext ||
-              window.webkitAudioContext)();
-
-            // Resume audio context if suspended (required for mobile)
-            if (audioContext.state === "suspended") {
-              console.log(
-                "🔊 Audio context suspended, attempting to resume..."
-              );
-              audioContext
-                .resume()
-                .then(() => {
-                  console.log("✅ Audio context resumed successfully");
-                  // Try playing the tone again after resuming
-                  setTimeout(() => playRingtoneTone(), 100);
-                })
-                .catch((err) => {
-                  console.error("❌ Failed to resume audio context:", err);
-                  // Fallback to HTML5 audio
-                  playFallbackRingtone();
-                });
-              return;
-            }
-
-            // Create oscillators for alternating tones
-            const oscillator1 = audioContext.createOscillator();
-            const oscillator2 = audioContext.createOscillator();
-            const gainNode = audioContext.createGain();
-
-            oscillator1.connect(gainNode);
-            oscillator2.connect(gainNode);
-            gainNode.connect(audioContext.destination);
-
-            // Alternating frequencies for realistic ringtone
-            const isEvenRing = (Date.now() / 1000) % 2 === 0;
-            oscillator1.frequency.setValueAtTime(
-              isEvenRing ? 480 : 620,
-              audioContext.currentTime
-            );
-            oscillator2.frequency.setValueAtTime(
-              isEvenRing ? 620 : 480,
-              audioContext.currentTime
-            );
-
-            oscillator1.type = "sine";
-            oscillator2.type = "sine";
-
-            // Mobile-friendly envelope (shorter, louder)
-            const now = audioContext.currentTime;
-            gainNode.gain.setValueAtTime(0, now);
-            gainNode.gain.linearRampToValueAtTime(0.4, now + 0.05);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
-
-            oscillator1.start(now);
-            oscillator2.start(now);
-            oscillator1.stop(now + 0.6);
-            oscillator2.stop(now + 0.6);
-
-            console.log("🎶 Ringtone oscillators started successfully");
-          } else {
-            // Fallback for older browsers
-            playFallbackRingtone();
-          }
-        } catch (error) {
-          console.error("Web Audio API failed, using fallback:", error);
-          playFallbackRingtone();
-        }
-      };
-
-      // HTML5 Audio fallback for mobile devices
-      const playFallbackRingtone = () => {
-        console.log("🔊 Using HTML5 Audio fallback for ringtone");
-        try {
-          // Create a simple beep tone using data URL
-          const audio = new Audio();
-          // Simple beep sound as data URL
-          audio.src =
-            "data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT";
-          audio.volume = 0.8;
-
-          const playPromise = audio.play();
-          if (playPromise !== undefined) {
-            playPromise
-              .then(() => {
-                console.log("✅ Fallback ringtone played successfully");
-              })
-              .catch((error) => {
-                console.error("❌ Fallback ringtone play failed:", error);
-                // Try alternative approach
-                tryAlternativeRingtone();
-              });
-          }
-        } catch (error) {
-          console.error("❌ Fallback ringtone setup failed:", error);
-          tryAlternativeRingtone();
-        }
-      };
-
-      // Alternative ringtone approach
-      const tryAlternativeRingtone = () => {
-        console.log("🔔 Trying alternative ringtone approach");
-        try {
-          // Create a simple beep using HTML5 Audio with generated tone
+          // Create a simple beep sound using Web Audio API
           const audioContext = new (window.AudioContext ||
             window.webkitAudioContext)();
-          const buffer = audioContext.createBuffer(1, 44100 * 0.6, 44100);
-          const channelData = buffer.getChannelData(0);
 
-          for (let i = 0; i < 44100 * 0.6; i++) {
-            channelData[i] = Math.sin((2 * Math.PI * 480 * i) / 44100) * 0.3;
+          // Resume audio context if suspended (required for mobile)
+          if (audioContext.state === "suspended") {
+            audioContext
+              .resume()
+              .then(() => {
+                console.log("Audio context resumed successfully");
+              })
+              .catch((err) => {
+                console.error("Failed to resume audio context:", err);
+              });
           }
 
-          const source = audioContext.createBufferSource();
-          source.buffer = buffer;
-          source.connect(audioContext.destination);
-          source.start();
-          console.log("✅ Alternative ringtone started");
+          // Create a simple beep tone
+          const oscillator = audioContext.createOscillator();
+          const gainNode = audioContext.createGain();
+
+          oscillator.connect(gainNode);
+          gainNode.connect(audioContext.destination);
+
+          // Set frequency and type
+          oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+          oscillator.type = "sine";
+
+          // Set volume envelope
+          const now = audioContext.currentTime;
+          gainNode.gain.setValueAtTime(0, now);
+          gainNode.gain.linearRampToValueAtTime(0.3, now + 0.1);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+
+          // Play the tone
+          oscillator.start(now);
+          oscillator.stop(now + 0.5);
+
+          console.log("Ringtone tone played successfully");
         } catch (error) {
-          console.error("❌ Alternative ringtone failed:", error);
+          console.error("Web Audio API failed, using fallback:", error);
+          // Fallback: try to play a simple beep using HTML5 Audio
+          try {
+            const audio = new Audio();
+            // Create a simple beep using data URL - this is a short beep sound
+            audio.src =
+              "data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWTQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT";
+            audio.volume = 0.5;
+            audio.play().catch((e) => {
+              console.error("Fallback audio failed:", e);
+              // Last resort: try to unlock audio with silent audio
+              try {
+                const silentAudio = new Audio();
+                silentAudio.src =
+                  "data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT";
+                silentAudio.play().catch(() => {});
+              } catch (silentError) {
+                console.error("Silent audio unlock failed:", silentError);
+              }
+            });
+          } catch (e) {
+            console.error("All audio methods failed:", e);
+          }
         }
       };
 
-      // Start ringing with mobile-friendly interval
+      // Start ringing with 1-second interval
       let ringCount = 0;
       const interval = setInterval(() => {
-        playRingtoneTone();
+        createRingtone();
         ringCount++;
 
         // Stop after 30 seconds to prevent infinite ringing
         if (ringCount >= 30) {
+          console.log("Stopping ringtone after 30 seconds");
           stopIncomingCallRingtone();
         }
       }, 1000);
 
       setIncomingCallRingtoneInterval(interval);
+      console.log("Incoming call ringtone started successfully");
 
-      // Also try to unlock audio immediately on user interaction
+      // Try to unlock audio on user interaction
       const unlockAudio = () => {
         try {
           if (window.AudioContext || window.webkitAudioContext) {
@@ -892,6 +835,7 @@ export default function Home() {
     if (incomingCallRingtoneInterval) {
       clearInterval(incomingCallRingtoneInterval);
       setIncomingCallRingtoneInterval(null);
+      console.log("Incoming call ringtone stopped");
     }
   };
 
@@ -1268,26 +1212,6 @@ export default function Home() {
           <div>
             WebSocket State:{" "}
             {wsRef.current ? wsRef.current.readyState : "no ref"}
-          </div>
-          <div className="mt-2">
-            <button
-              onClick={() => {
-                console.log("🧪 Testing ringtone manually...");
-                playIncomingCallRingtone();
-              }}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs mr-2"
-            >
-              Test Ringtone
-            </button>
-            <button
-              onClick={() => {
-                console.log("🔇 Stopping ringtone manually...");
-                stopIncomingCallRingtone();
-              }}
-              className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs"
-            >
-              Stop Ringtone
-            </button>
           </div>
         </div>
       )}
