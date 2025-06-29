@@ -24,16 +24,17 @@ import {
   FaVolumeUp,
 } from "react-icons/fa";
 
+// Smart URL detection for both development and production
 const AUTH_API_BASE_URL =
   process.env.NEXT_PUBLIC_AUTH_API_URL ||
   (typeof window !== "undefined" && window.location.hostname === "localhost"
     ? "http://localhost:8080"
-    : "https://unifiedchat-auth-service.onrender.com");
+    : "https://unifiedchat-gateway-service.onrender.com");
 const MESSAGE_API_BASE_URL =
   process.env.NEXT_PUBLIC_MESSAGE_API_URL ||
   (typeof window !== "undefined" && window.location.hostname === "localhost"
-    ? "http://localhost:8083"
-    : "https://unifiedchat-message-service.onrender.com");
+    ? "http://localhost:8080"
+    : "https://unifiedchat-gateway-service.onrender.com");
 const REALTIME_API_BASE_URL =
   process.env.NEXT_PUBLIC_REALTIME_API_URL ||
   (typeof window !== "undefined" && window.location.hostname === "localhost"
