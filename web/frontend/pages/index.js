@@ -25,13 +25,19 @@ import {
 
 const AUTH_API_BASE_URL =
   process.env.NEXT_PUBLIC_AUTH_API_URL ||
-  "https://unifiedchat-auth-service.onrender.com";
+  (typeof window !== "undefined" && window.location.hostname === "localhost"
+    ? "http://localhost:8080"
+    : "https://unifiedchat-auth-service.onrender.com");
 const MESSAGE_API_BASE_URL =
   process.env.NEXT_PUBLIC_MESSAGE_API_URL ||
-  "https://unifiedchat-message-service.onrender.com";
+  (typeof window !== "undefined" && window.location.hostname === "localhost"
+    ? "http://localhost:8083"
+    : "https://unifiedchat-message-service.onrender.com");
 const REALTIME_API_BASE_URL =
   process.env.NEXT_PUBLIC_REALTIME_API_URL ||
-  "https://unifiedchat-realtime-service.onrender.com";
+  (typeof window !== "undefined" && window.location.hostname === "localhost"
+    ? "http://localhost:8084"
+    : "https://unifiedchat-realtime-service.onrender.com");
 const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
 // IS_RENDER_DEPLOYMENT is now handled as state to avoid hydration issues
@@ -171,7 +177,7 @@ export default function Home() {
       console.log("Found existing token, attempting to restore login state");
       // For now, just set a basic user state
       // In a real app, you'd verify the token with the backend
-      setUser({ id: 10, username: "Nacer" }); // Default user
+      setUser({ id: 2, username: "Nacer" }); // Default user
       setIsLoggedIn(true);
     }
   }, []);
@@ -230,7 +236,7 @@ export default function Home() {
     if (FORCE_NORMAL_MODE || !isRenderDeployment) {
       setLoadingUsers(true);
       try {
-        const response = await axios.get(`${AUTH_API_BASE_URL}/users`);
+        const response = await axios.get(`${AUTH_API_BASE_URL}/api/v1/users`);
         if (response.data && Array.isArray(response.data)) {
           setUsers(response.data);
           console.log("Fetched users from backend:", response.data);
@@ -239,34 +245,34 @@ export default function Home() {
           // Fallback to hardcoded users if backend doesn't work
           setUsers([
             { id: 1, username: "admin" },
-            { id: 2, username: "user2" },
-            { id: 3, username: "user3" },
+            { id: 2, username: "Nacer" },
             { id: 4, username: "Linda" },
             { id: 5, username: "Hana" },
             { id: 6, username: "Adam" },
             { id: 7, username: "Ahmed" },
             { id: 8, username: "Hamid" },
             { id: 9, username: "Mueen" },
-            { id: 10, username: "Nacer" },
           ]);
         }
       } catch (error) {
         console.error("Failed to fetch users:", error);
         if (error.response && error.response.status === 404) {
           console.log("Users endpoint not available yet, using fallback");
+        } else if (error.response && error.response.status === 501) {
+          console.log(
+            "Backend returned 501 Not Implemented for users, using fallback (MVP mode)"
+          );
         }
         // Fallback to hardcoded users if backend doesn't work
         setUsers([
           { id: 1, username: "admin" },
-          { id: 2, username: "user2" },
-          { id: 3, username: "user3" },
+          { id: 2, username: "Nacer" },
           { id: 4, username: "Linda" },
           { id: 5, username: "Hana" },
           { id: 6, username: "Adam" },
           { id: 7, username: "Ahmed" },
           { id: 8, username: "Hamid" },
           { id: 9, username: "Mueen" },
-          { id: 10, username: "Nacer" },
         ]);
       } finally {
         setLoadingUsers(false);
@@ -279,15 +285,13 @@ export default function Home() {
       console.log("Demo mode: Using hardcoded users (fast path)");
       setUsers([
         { id: 1, username: "admin" },
-        { id: 2, username: "user2" },
-        { id: 3, username: "user3" },
+        { id: 2, username: "Nacer" },
         { id: 4, username: "Linda" },
         { id: 5, username: "Hana" },
         { id: 6, username: "Adam" },
         { id: 7, username: "Ahmed" },
         { id: 8, username: "Hamid" },
         { id: 9, username: "Mueen" },
-        { id: 10, username: "Nacer" },
       ]);
       return;
     }
@@ -347,7 +351,12 @@ export default function Home() {
       if (DEMO_MODE) {
         console.log("Demo mode: Simulating login for demo/testing");
         const demoUser = {
-          id: loginForm.username === "admin" ? 1 : 10,
+          id:
+            loginForm.username === "admin"
+              ? 1
+              : loginForm.username === "Nacer"
+              ? 2
+              : 10,
           username: loginForm.username,
         };
         console.log("Setting demo user:", demoUser);
@@ -356,9 +365,9 @@ export default function Home() {
         // Set demo users
         setUsers([
           { id: 1, username: "admin" },
-          { id: 10, username: "Nacer" },
-          { id: 2, username: "user2" },
-          { id: 3, username: "user3" },
+          { id: 2, username: "Nacer" },
+          { id: 4, username: "Linda" },
+          { id: 5, username: "Hana" },
         ]);
         setDefaultReceiver(demoUser);
         console.log("Demo login completed");
@@ -370,7 +379,7 @@ export default function Home() {
         console.log("Using normal backend mode for login");
 
         try {
-          const loginUrl = `${AUTH_API_BASE_URL}/login`;
+          const loginUrl = `${AUTH_API_BASE_URL}/api/v1/auth/login`;
           console.log("Sending login request to:", loginUrl);
           console.log("Login request body:", loginForm);
           const response = await axios.post(loginUrl, loginForm);
@@ -392,6 +401,40 @@ export default function Home() {
           }
         } catch (error) {
           console.error("Login error:", error);
+
+          // Check if it's a 501 Not Implemented error (MVP stub)
+          if (error.response && error.response.status === 501) {
+            console.log(
+              "Backend returned 501 Not Implemented, falling back to demo mode"
+            );
+            const demoUser = {
+              id:
+                loginForm.username === "admin"
+                  ? 1
+                  : loginForm.username === "Nacer"
+                  ? 2
+                  : 10,
+              username: loginForm.username,
+            };
+            console.log("Setting demo user:", demoUser);
+            setUser(demoUser);
+            setIsLoggedIn(true);
+            // Set demo users
+            setUsers([
+              { id: 1, username: "admin" },
+              { id: 2, username: "Nacer" },
+              { id: 4, username: "Linda" },
+              { id: 5, username: "Hana" },
+              { id: 6, username: "Adam" },
+              { id: 7, username: "Ahmed" },
+              { id: 8, username: "Hamid" },
+              { id: 9, username: "Mueen" },
+            ]);
+            setDefaultReceiver(demoUser);
+            console.log("Demo login completed for MVP backend");
+            return;
+          }
+
           let msg = "Login failed: ";
           if (
             error.response &&
@@ -413,7 +456,12 @@ export default function Home() {
       // Fallback to demo mode only if backend fails and we're on Render
       console.log("Render deployment detected, using demo mode for login");
       const demoUser = {
-        id: loginForm.username === "admin" ? 1 : 10,
+        id:
+          loginForm.username === "admin"
+            ? 1
+            : loginForm.username === "Nacer"
+            ? 2
+            : 10,
         username: loginForm.username,
       };
       console.log("Setting demo user:", demoUser);
@@ -422,13 +470,13 @@ export default function Home() {
       // Set demo users
       setUsers([
         { id: 1, username: "admin" },
+        { id: 2, username: "Nacer" },
         { id: 4, username: "Linda" },
         { id: 5, username: "Hana" },
         { id: 6, username: "Adam" },
         { id: 7, username: "Ahmed" },
         { id: 8, username: "Hamid" },
         { id: 9, username: "Mueen" },
-        { id: 10, username: "Nacer" },
       ]);
       setDefaultReceiver(demoUser);
       console.log("Demo login completed for Render deployment");
@@ -666,11 +714,14 @@ export default function Home() {
 
   // Incoming call ringtone functions
   const playIncomingCallRingtone = () => {
+    console.log("🔊 playIncomingCallRingtone called");
     try {
       stopIncomingCallRingtone();
+      console.log("🔊 Previous ringtone stopped");
 
       // Mobile-friendly ringtone system
       const playRingtoneTone = () => {
+        console.log("🔊 playRingtoneTone called");
         try {
           // Try Web Audio API first (better quality)
           if (window.AudioContext || window.webkitAudioContext) {
@@ -725,6 +776,7 @@ export default function Home() {
             oscillator2.start(now);
             oscillator1.stop(now + 0.6);
             oscillator2.stop(now + 0.6);
+            console.log("🔊 Web Audio API ringtone played");
           } else {
             // Fallback for older browsers
             playFallbackRingtone();
@@ -779,17 +831,21 @@ export default function Home() {
 
       // Start ringing with mobile-friendly interval
       let ringCount = 0;
+      console.log("🔊 Setting up ringtone interval");
       const interval = setInterval(() => {
+        console.log("🔊 Ringtone interval tick #" + (ringCount + 1));
         playRingtoneTone();
         ringCount++;
 
         // Stop after 30 seconds to prevent infinite ringing
         if (ringCount >= 30) {
+          console.log("🔊 Stopping ringtone after 30 rings");
           stopIncomingCallRingtone();
         }
       }, 1000);
 
       setIncomingCallRingtoneInterval(interval);
+      console.log("🔊 Ringtone interval set up successfully");
 
       // Also try to unlock audio immediately on user interaction
       const unlockAudio = () => {
@@ -920,7 +976,13 @@ export default function Home() {
               console.log("Processing incoming call for user:", user.username);
               setIncomingCall(data);
               // Start playing ringtone for incoming call
-              playIncomingCallRingtone();
+              console.log("🔊 ATTEMPTING TO PLAY RINGTONE FOR INCOMING CALL");
+              try {
+                playIncomingCallRingtone();
+                console.log("🔊 Ringtone function called successfully");
+              } catch (error) {
+                console.error("🔊 ERROR calling ringtone function:", error);
+              }
             } else {
               console.log(
                 "Ignoring own call notification for user:",
