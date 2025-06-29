@@ -111,11 +111,11 @@ func (h *Hub) broadcastPresenceUpdate() {
 
 	log.Printf("Broadcasting presence update to %d clients. Users: %v", len(h.clients), onlineUsers)
 
-	for _, client := range h.clients {
+	for clientID, client := range h.clients {
         select {
         case client.Send <- updateBytes:
         default:
-			log.Printf("Client channel full or closed for %s.", client.ID)
+			log.Printf("Client channel full or closed for %s.", clientID)
 		}
 	}
 }
@@ -134,7 +134,7 @@ func (h *Hub) sendToUser(targetUserID interface{}, message []byte) bool {
 				log.Printf("Message sent successfully to user ID: %v", targetUserID)
 				return true
 			default:
-				log.Printf("Client channel full for user ID: %v", targetUserID)
+				log.Printf("Client channel full or closed for user ID: %v", targetUserID)
 			}
 		}
 	}
@@ -236,8 +236,8 @@ func handleWebSocket(c *gin.Context) {
 
 func (c *Client) readPump() {
     defer func() {
-		hub.unregisterClient(c)
         c.Conn.Close()
+		hub.unregisterClient(c)
 		hub.broadcastPresenceUpdate()
     }()
 
