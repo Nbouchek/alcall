@@ -91,6 +91,7 @@ func (h *Hub) unregisterClient(client *Client) {
 
 func (h *Hub) broadcastPresenceUpdate() {
 	h.mu.RLock()
+	defer h.mu.RUnlock()
 
 	onlineUsers := make([]string, 0, len(h.usernameToClientID))
 	for username := range h.usernameToClientID {
@@ -105,39 +106,24 @@ func (h *Hub) broadcastPresenceUpdate() {
     updateBytes, err := json.Marshal(update)
     if err != nil {
         log.Println("Error marshaling presence update:", err)
-		h.mu.RUnlock()
         return
     }
 
 	log.Printf("Broadcasting presence update to %d clients. Users: %v", len(h.clients), onlineUsers)
 
-	// Create a copy of clients to avoid concurrent map access
-	clientsCopy := make(map[string]*Client)
-	for id, client := range h.clients {
-		clientsCopy[id] = client
-	}
-	h.mu.RUnlock()
-
-	// Send to clients without holding the lock
-	for clientID, client := range clientsCopy {
-		// Check if client still exists and channel is open
-		if client != nil && client.Send != nil {
-			// Use a defer/recover to catch any panic from sending to closed channel
-			func() {
-				defer func() {
-					if r := recover(); r != nil {
-						log.Printf("Recovered from panic sending to client %s: %v", clientID, r)
-					}
-				}()
-
-				select {
-				case client.Send <- updateBytes:
-					// Successfully sent
-				default:
-					log.Printf("Client channel full or closed for %s.", clientID)
-					// Channel is closed or full, skip this client
-				}
-			}()
+	for clientID, client := range h.clients {
+        select {
+        case client.Send <- updateBytes:
+        default:
+			log.Printf("Client channel full or closed for %s. Removing client.", clientID)
+			// Remove client if channel is closed
+			delete(h.clients, clientID)
+			if client.Username != "" {
+				delete(h.usernameToClientID, client.Username)
+			}
+			if client.UserID != nil {
+				delete(h.userIDToClientID, client.UserID)
+			}
 		}
 	}
 }
@@ -156,7 +142,13 @@ func (h *Hub) sendToUser(targetUserID interface{}, message []byte) bool {
 				log.Printf("Message sent successfully to user ID: %v", targetUserID)
 				return true
 			default:
-				log.Printf("Client channel full or closed for user ID: %v", targetUserID)
+				log.Printf("Client channel full or closed for user ID: %v. Cleaning up.", targetUserID)
+				// Clean up closed client
+				delete(h.clients, clientID)
+				delete(h.userIDToClientID, targetUserID)
+				if client.Username != "" {
+					delete(h.usernameToClientID, client.Username)
+				}
 			}
 		}
 	}
@@ -173,7 +165,13 @@ func (h *Hub) sendToUser(targetUserID interface{}, message []byte) bool {
 					log.Printf("Message sent successfully to converted user ID: %v", int(v))
 					return true
 				default:
-					log.Printf("Client channel full for converted user ID: %v", int(v))
+					log.Printf("Client channel full or closed for converted user ID: %v. Cleaning up.", int(v))
+					// Clean up closed client
+					delete(h.clients, clientID)
+					delete(h.userIDToClientID, int(v))
+					if client.Username != "" {
+						delete(h.usernameToClientID, client.Username)
+					}
 				}
 			}
 		}
@@ -187,7 +185,13 @@ func (h *Hub) sendToUser(targetUserID interface{}, message []byte) bool {
 					log.Printf("Message sent successfully to converted user ID: %v", float64(v))
 					return true
 				default:
-					log.Printf("Client channel full for converted user ID: %v", float64(v))
+					log.Printf("Client channel full or closed for converted user ID: %v. Cleaning up.", float64(v))
+					// Clean up closed client
+					delete(h.clients, clientID)
+					delete(h.userIDToClientID, float64(v))
+					if client.Username != "" {
+						delete(h.usernameToClientID, client.Username)
+					}
             }
         }
     }
@@ -258,8 +262,8 @@ func handleWebSocket(c *gin.Context) {
 
 func (c *Client) readPump() {
     defer func() {
-        c.Conn.Close()
 		hub.unregisterClient(c)
+        c.Conn.Close()
 		hub.broadcastPresenceUpdate()
     }()
 
