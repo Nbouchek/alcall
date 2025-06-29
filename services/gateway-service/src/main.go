@@ -28,6 +28,7 @@ func main() {
         api.POST("/auth/register", proxyToAuthService)
 
         // User routes
+        api.GET("/users", proxyToUserService)
         api.GET("/users/:id", proxyToUserService)
         api.PUT("/users/:id", proxyToUserService)
 

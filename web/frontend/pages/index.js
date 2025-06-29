@@ -190,15 +190,10 @@ export default function Home() {
       REALTIME_API_BASE_URL,
     });
 
-    // Check for existing login state
-    const token = localStorage.getItem("token");
-    if (token) {
-      console.log("Found existing token, attempting to restore login state");
-      // For now, just set a basic user state
-      // In a real app, you'd verify the token with the backend
-      setUser({ id: 2, username: "Nacer" }); // Default user
-      setIsLoggedIn(true);
-    }
+    // Clear any cached login state for now (MVP mode)
+    // In a real app, you'd verify the token with the backend
+    localStorage.removeItem("token");
+    console.log("Cleared any cached login state for fresh session");
   }, []);
 
   // Debug: Monitor AudioCall ref
@@ -727,6 +722,15 @@ export default function Home() {
   // Incoming call ringtone functions
   const playIncomingCallRingtone = () => {
     console.log("🔊 playIncomingCallRingtone called");
+    console.log(
+      "🔊 Document has user interaction:",
+      document.hasStoredUserActivation || false
+    );
+    console.log(
+      "🔊 AudioContext available:",
+      !!(window.AudioContext || window.webkitAudioContext)
+    );
+
     try {
       stopIncomingCallRingtone();
       console.log("🔊 Previous ringtone stopped");
@@ -965,7 +969,11 @@ export default function Home() {
           user_id: user.id,
           username: user.username,
         };
-        console.log("Sending registration message:", registerMessage);
+        console.log("🔍 WEBSOCKET REGISTRATION DEBUG:");
+        console.log("  - User object:", user);
+        console.log("  - User ID:", user.id, "Type:", typeof user.id);
+        console.log("  - Username:", user.username);
+        console.log("  - Registration message:", registerMessage);
         ws.send(JSON.stringify(registerMessage));
       };
 
@@ -1006,11 +1014,53 @@ export default function Home() {
             if (toUserId === currentUserId && fromUserId !== currentUserId) {
               console.log("Processing incoming call for user:", user.username);
               setIncomingCall(data);
+
               // Start playing ringtone for incoming call
               console.log("🔊 ATTEMPTING TO PLAY RINGTONE FOR INCOMING CALL");
+              console.log(
+                "🔊 User:",
+                user.username,
+                "receiving call from:",
+                data.from_username
+              );
+
               try {
+                // Try multiple ringtone methods for better compatibility
                 playIncomingCallRingtone();
                 console.log("🔊 Ringtone function called successfully");
+
+                // Also show a browser notification as backup
+                if ("Notification" in window) {
+                  if (Notification.permission === "granted") {
+                    new Notification(
+                      `Incoming call from ${data.from_username}`,
+                      {
+                        body: "Click to answer",
+                        icon: "/favicon.ico",
+                        tag: "incoming-call",
+                      }
+                    );
+                  } else if (Notification.permission !== "denied") {
+                    Notification.requestPermission().then((permission) => {
+                      if (permission === "granted") {
+                        new Notification(
+                          `Incoming call from ${data.from_username}`,
+                          {
+                            body: "Click to answer",
+                            icon: "/favicon.ico",
+                            tag: "incoming-call",
+                          }
+                        );
+                      }
+                    });
+                  }
+                }
+
+                // Visual alert as additional backup
+                console.log(
+                  "🔔 VISUAL ALERT: Incoming call from",
+                  data.from_username
+                );
               } catch (error) {
                 console.error("🔊 ERROR calling ringtone function:", error);
               }
@@ -1174,13 +1224,15 @@ export default function Home() {
     // Debug: Log user information before sending notification
     console.log("=== SENDING CALL NOTIFICATION ===");
     debugUserInfo();
-    console.log("Receiver ID:", receiverId, "Type:", typeof receiverId);
+    console.log("🔍 CALL NOTIFICATION DEBUG:");
+    console.log("  - Current user object:", user);
+    console.log("  - Receiver ID:", receiverId, "Type:", typeof receiverId);
     console.log(
-      "Receiver user:",
+      "  - Receiver user:",
       users.find((u) => u.id === receiverId)
     );
-    console.log("From User ID:", fromUserId, "Type:", typeof fromUserId);
-    console.log("To User ID:", toUserId, "Type:", typeof toUserId);
+    console.log("  - From User ID:", fromUserId, "Type:", typeof fromUserId);
+    console.log("  - To User ID:", toUserId, "Type:", typeof toUserId);
 
     const callData = {
       type: "incoming_call",

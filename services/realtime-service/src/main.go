@@ -86,18 +86,12 @@ func (h *Hub) unregisterClient(client *Client) {
 
 func (h *Hub) broadcastPresenceUpdate() {
 	h.mu.RLock()
+	defer h.mu.RUnlock()
 
 	onlineUsers := make([]string, 0, len(h.usernameToClientID))
 	for username := range h.usernameToClientID {
         onlineUsers = append(onlineUsers, username)
     }
-
-	clientsCopy := make([]*Client, 0, len(h.clients))
-	for _, client := range h.clients {
-		clientsCopy = append(clientsCopy, client)
-	}
-
-	h.mu.RUnlock()
 
 	update := Message{
 		Type:        "presence_update",
@@ -110,13 +104,13 @@ func (h *Hub) broadcastPresenceUpdate() {
         return
     }
 
-	log.Printf("Broadcasting presence update to %d clients. Users: %v", len(clientsCopy), onlineUsers)
+	log.Printf("Broadcasting presence update to %d clients. Users: %v", len(h.clients), onlineUsers)
 
-	for _, client := range clientsCopy {
+	for _, client := range h.clients {
         select {
         case client.Send <- updateBytes:
         default:
-			log.Printf("Client channel full for %s. The connection will be closed by its own pump.", client.ID)
+			log.Printf("Client channel full or closed for %s.", client.ID)
 		}
 	}
 }
