@@ -19,18 +19,27 @@ var upgrader = websocket.Upgrader{
 type Client struct {
     ID       string
     Username string
+    UserID   interface{}
     Conn     *websocket.Conn
     Send     chan []byte
 }
 
-type PresenceUpdate struct {
-    Type     string   `json:"type"`
-    Username string   `json:"username,omitempty"`
-    OnlineUsers []string `json:"online_users,omitempty"`
+type Message struct {
+    Type         string      `json:"type"`
+    Username     string      `json:"username,omitempty"`
+    UserID       interface{} `json:"user_id,omitempty"`
+    FromUserID   interface{} `json:"from_user_id,omitempty"`
+    FromUsername string      `json:"from_username,omitempty"`
+    ToUserID     interface{} `json:"to_user_id,omitempty"`
+    RoomID       interface{} `json:"room_id,omitempty"`
+    CallID       string      `json:"call_id,omitempty"`
+    Timestamp    int64       `json:"timestamp,omitempty"`
+    OnlineUsers  []string    `json:"online_users,omitempty"`
 }
 
 var clients = make(map[string]*Client)
 var usernameToClientID = make(map[string]string)
+var userIDToClientID = make(map[interface{}]string)
 
 // Broadcast presence update to all connected clients
 func broadcastPresenceUpdate() {
@@ -39,7 +48,7 @@ func broadcastPresenceUpdate() {
         onlineUsers = append(onlineUsers, username)
     }
 
-    update := PresenceUpdate{
+    update := Message{
         Type: "presence_update",
         OnlineUsers: onlineUsers,
     }
@@ -56,11 +65,57 @@ func broadcastPresenceUpdate() {
         default:
             // Channel is full, close connection
             close(client.Send)
-            delete(clients, client.ID)
-            if client.Username != "" {
-                delete(usernameToClientID, client.Username)
+            removeClient(client)
+        }
+    }
+}
+
+// Send message to specific user
+func sendToUser(targetUserID interface{}, targetUsername string, message []byte) bool {
+    log.Printf("Attempting to send message to user: ID=%v, Username=%s", targetUserID, targetUsername)
+
+    // Try to find client by user ID first
+    if clientID, exists := userIDToClientID[targetUserID]; exists {
+        if client, exists := clients[clientID]; exists {
+            log.Printf("Found client by user ID: %v", targetUserID)
+            select {
+            case client.Send <- message:
+                log.Printf("Message sent successfully to user ID: %v", targetUserID)
+                return true
+            default:
+                log.Printf("Client channel full for user ID: %v", targetUserID)
+                removeClient(client)
             }
         }
+    }
+
+    // Fallback: try to find client by username
+    if clientID, exists := usernameToClientID[targetUsername]; exists {
+        if client, exists := clients[clientID]; exists {
+            log.Printf("Found client by username: %s", targetUsername)
+            select {
+            case client.Send <- message:
+                log.Printf("Message sent successfully to username: %s", targetUsername)
+                return true
+            default:
+                log.Printf("Client channel full for username: %s", targetUsername)
+                removeClient(client)
+            }
+        }
+    }
+
+    log.Printf("No client found for user ID: %v, username: %s", targetUserID, targetUsername)
+    return false
+}
+
+// Remove client from all maps
+func removeClient(client *Client) {
+    delete(clients, client.ID)
+    if client.Username != "" {
+        delete(usernameToClientID, client.Username)
+    }
+    if client.UserID != nil {
+        delete(userIDToClientID, client.UserID)
     }
 }
 
@@ -112,28 +167,15 @@ func handleWebSocket(c *gin.Context) {
         return
     }
 
-    // Wait for the first message to be the username (as plain text)
-    _, msg, err := conn.ReadMessage()
-    if err != nil {
-        log.Println("Failed to read username from client:", err)
-        conn.Close()
-        return
-    }
-    username := string(msg)
-    log.Println("WebSocket client connected with username:", username)
+    log.Println("New WebSocket connection established")
 
     client := &Client{
-        ID:       generateID(),
-        Username: username,
-        Conn:     conn,
-        Send:     make(chan []byte, 256),
+        ID:   generateID(),
+        Conn: conn,
+        Send: make(chan []byte, 256),
     }
 
     clients[client.ID] = client
-    usernameToClientID[username] = client.ID
-
-    // Broadcast presence update to all clients
-    broadcastPresenceUpdate()
 
     go client.readPump()
     go client.writePump()
@@ -141,29 +183,77 @@ func handleWebSocket(c *gin.Context) {
 
 func (c *Client) readPump() {
     defer func() {
-        delete(clients, c.ID)
-        if c.Username != "" {
-            delete(usernameToClientID, c.Username)
-        }
+        removeClient(c)
         c.Conn.Close()
-
         // Broadcast presence update when user disconnects
         broadcastPresenceUpdate()
+        log.Printf("Client %s disconnected", c.ID)
     }()
 
     for {
-        _, message, err := c.Conn.ReadMessage()
+        _, messageBytes, err := c.Conn.ReadMessage()
         if err != nil {
+            log.Printf("Error reading message from client %s: %v", c.ID, err)
             break
         }
-        // For MVP, just echo back
-        c.Send <- message
+
+        // Try to parse as JSON message
+        var msg Message
+        if err := json.Unmarshal(messageBytes, &msg); err != nil {
+            // If not JSON, treat as plain text username (backward compatibility)
+            username := string(messageBytes)
+            log.Printf("Received plain text username: %s", username)
+            c.Username = username
+            usernameToClientID[username] = c.ID
+            broadcastPresenceUpdate()
+            continue
+        }
+
+        log.Printf("Received JSON message: %+v", msg)
+
+        // Handle different message types
+        switch msg.Type {
+        case "register":
+            log.Printf("Registering user: ID=%v, Username=%s", msg.UserID, msg.Username)
+            c.Username = msg.Username
+            c.UserID = msg.UserID
+            usernameToClientID[msg.Username] = c.ID
+            userIDToClientID[msg.UserID] = c.ID
+            broadcastPresenceUpdate()
+
+        case "incoming_call":
+            log.Printf("Processing incoming call from %v (%s) to %v", msg.FromUserID, msg.FromUsername, msg.ToUserID)
+            // Forward the call notification to the target user
+            if sendToUser(msg.ToUserID, "", messageBytes) {
+                log.Printf("Call notification forwarded successfully")
+            } else {
+                log.Printf("Failed to forward call notification - user not found")
+            }
+
+        case "call_ended":
+            log.Printf("Processing call end from %v (%s) to %v", msg.FromUserID, msg.FromUsername, msg.ToUserID)
+            // Forward the call end notification to the target user
+            if sendToUser(msg.ToUserID, "", messageBytes) {
+                log.Printf("Call end notification forwarded successfully")
+            } else {
+                log.Printf("Failed to forward call end notification - user not found")
+            }
+
+        default:
+            log.Printf("Unknown message type: %s", msg.Type)
+            // For unknown types, just echo back for now
+            c.Send <- messageBytes
+        }
     }
 }
 
 func (c *Client) writePump() {
+    defer c.Conn.Close()
     for msg := range c.Send {
-        c.Conn.WriteMessage(websocket.TextMessage, msg)
+        if err := c.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+            log.Printf("Error writing message to client %s: %v", c.ID, err)
+            break
+        }
     }
 }
 
