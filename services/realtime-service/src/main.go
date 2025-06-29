@@ -124,6 +124,7 @@ func (h *Hub) broadcastPresenceUpdate() {
         case client.Send <- updateBytes:
         default:
 			log.Printf("Client channel full or closed for %s.", clientID)
+			// Channel is closed or full, skip this client
 		}
 	}
 }

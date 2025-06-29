@@ -215,6 +215,18 @@ export default function Home() {
         return;
       }
 
+      // For localhost development, assume Janus is available for testing
+      if (
+        typeof window !== "undefined" &&
+        window.location.hostname === "localhost"
+      ) {
+        console.log(
+          "Local development: Setting audio service as available for testing"
+        );
+        setAudioServiceStatus("available");
+        return;
+      }
+
       try {
         const janusUrl =
           process.env.NEXT_PUBLIC_JANUS_HTTP_URL ||
@@ -1702,36 +1714,110 @@ export default function Home() {
                           console.log(
                             "Resuming audio context for mobile compatibility"
                           );
-                          audioContext.resume();
+                          audioContext
+                            .resume()
+                            .then(() => {
+                              console.log(
+                                "Audio context resumed successfully for call"
+                              );
+                            })
+                            .catch((err) => {
+                              console.error(
+                                "Failed to resume audio context for call:",
+                                err
+                              );
+                            });
                         }
                       }
 
-                      if (audioServiceStatus === "available") {
-                        // Use the ref to call startCall directly
-                        if (audioCallRef.current) {
-                          console.log("Calling startCall via ref");
-                          audioCallRef.current.startCall();
-                        } else {
-                          console.error("AudioCall ref not available");
-                          console.log("AudioCall ref details:", {
-                            ref: audioCallRef,
-                            current: audioCallRef.current,
-                            shouldShowChat,
+                      // Request media permissions for mobile
+                      if (
+                        navigator.mediaDevices &&
+                        navigator.mediaDevices.getUserMedia
+                      ) {
+                        console.log("Requesting media permissions for call");
+                        navigator.mediaDevices
+                          .getUserMedia({ audio: true })
+                          .then((stream) => {
+                            console.log("Audio permissions granted for call");
+                            // Stop the stream, we just wanted permissions
+                            stream.getTracks().forEach((track) => track.stop());
+
+                            // Now proceed with the call
+                            if (audioServiceStatus === "available") {
+                              if (audioCallRef.current) {
+                                console.log("Calling startCall via ref");
+                                audioCallRef.current.startCall();
+                              } else {
+                                console.error("AudioCall ref not available");
+                                alert(
+                                  "Audio call feature is loading... Please wait a moment and try again."
+                                );
+                              }
+                            } else {
+                              alert(
+                                "Audio service is not available. Please check if the audio service is deployed."
+                              );
+                            }
+                          })
+                          .catch((err) => {
+                            console.log(
+                              "Media permissions denied for call:",
+                              err
+                            );
+                            alert(
+                              "Microphone access is required for audio calls. Please allow microphone access and try again."
+                            );
                           });
+                      } else {
+                        // Fallback for browsers without getUserMedia
+                        if (audioServiceStatus === "available") {
+                          if (audioCallRef.current) {
+                            console.log(
+                              "Calling startCall via ref (no media check)"
+                            );
+                            audioCallRef.current.startCall();
+                          } else {
+                            console.error("AudioCall ref not available");
+                            alert(
+                              "Audio call feature is loading... Please wait a moment and try again."
+                            );
+                          }
+                        } else {
                           alert(
-                            "Audio call feature is loading... Please wait a moment and try again."
+                            "Audio service is not available. Please check if the audio service is deployed."
                           );
                         }
-                      } else {
-                        alert(
-                          "Audio service is not available. Please check if the audio service is deployed."
-                        );
                       }
                     }}
                     onTouchStart={(e) => {
                       // Prevent double-tap zoom on mobile
                       e.preventDefault();
+                      e.stopPropagation();
                       console.log("Audio call button touched (mobile)");
+
+                      // Initialize mobile audio context immediately on touch
+                      if (
+                        typeof window !== "undefined" &&
+                        window.AudioContext
+                      ) {
+                        const audioContext = new (window.AudioContext ||
+                          window.webkitAudioContext)();
+                        if (audioContext.state === "suspended") {
+                          console.log("Resuming audio context on mobile touch");
+                          audioContext
+                            .resume()
+                            .then(() => {
+                              console.log("Audio context resumed successfully");
+                            })
+                            .catch((err) => {
+                              console.error(
+                                "Failed to resume audio context:",
+                                err
+                              );
+                            });
+                        }
+                      }
                     }}
                     className={`group relative px-3 py-2 sm:px-4 sm:py-3 rounded-xl transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 flex items-center gap-2 font-bold shadow-lg ${
                       audioServiceStatus === "available"
@@ -1777,36 +1863,137 @@ export default function Home() {
                           console.log(
                             "Resuming audio context for mobile compatibility"
                           );
-                          audioContext.resume();
+                          audioContext
+                            .resume()
+                            .then(() => {
+                              console.log(
+                                "Audio context resumed successfully for video call"
+                              );
+                            })
+                            .catch((err) => {
+                              console.error(
+                                "Failed to resume audio context for video call:",
+                                err
+                              );
+                            });
                         }
                       }
 
-                      if (audioServiceStatus === "available") {
-                        // Use the ref to call startVideoCall directly
-                        if (videoCallRef.current) {
-                          console.log("Calling startVideoCall via ref");
-                          videoCallRef.current.startVideoCall();
-                        } else {
-                          console.error("VideoCall ref not available");
-                          console.log("VideoCall ref details:", {
-                            ref: videoCallRef,
-                            current: videoCallRef.current,
-                            shouldShowChat,
+                      // Request media permissions for mobile video call
+                      if (
+                        navigator.mediaDevices &&
+                        navigator.mediaDevices.getUserMedia
+                      ) {
+                        console.log(
+                          "Requesting media permissions for video call"
+                        );
+                        navigator.mediaDevices
+                          .getUserMedia({ audio: true, video: true })
+                          .then((stream) => {
+                            console.log(
+                              "Audio/video permissions granted for call"
+                            );
+                            // Stop the stream, we just wanted permissions
+                            stream.getTracks().forEach((track) => track.stop());
+
+                            // Now proceed with the video call
+                            if (audioServiceStatus === "available") {
+                              if (videoCallRef.current) {
+                                console.log("Calling startVideoCall via ref");
+                                videoCallRef.current.startVideoCall();
+                              } else {
+                                console.error("VideoCall ref not available");
+                                alert(
+                                  "Video call feature is loading... Please wait a moment and try again."
+                                );
+                              }
+                            } else {
+                              alert(
+                                "Video service is not available. Please check if the video service is deployed."
+                              );
+                            }
+                          })
+                          .catch((err) => {
+                            console.log(
+                              "Media permissions denied for video call:",
+                              err
+                            );
+                            alert(
+                              "Camera and microphone access are required for video calls. Please allow access and try again."
+                            );
                           });
+                      } else {
+                        // Fallback for browsers without getUserMedia
+                        if (audioServiceStatus === "available") {
+                          if (videoCallRef.current) {
+                            console.log(
+                              "Calling startVideoCall via ref (no media check)"
+                            );
+                            videoCallRef.current.startVideoCall();
+                          } else {
+                            console.error("VideoCall ref not available");
+                            alert(
+                              "Video call feature is loading... Please wait a moment and try again."
+                            );
+                          }
+                        } else {
                           alert(
-                            "Video call feature is loading... Please wait a moment and try again."
+                            "Video service is not available. Please check if the video service is deployed."
                           );
                         }
-                      } else {
-                        alert(
-                          "Video service is not available. Please check if the video service is deployed."
-                        );
                       }
                     }}
                     onTouchStart={(e) => {
                       // Prevent double-tap zoom on mobile
                       e.preventDefault();
+                      e.stopPropagation();
                       console.log("Video call button touched (mobile)");
+
+                      // Initialize mobile audio/video context immediately on touch
+                      if (
+                        typeof window !== "undefined" &&
+                        window.AudioContext
+                      ) {
+                        const audioContext = new (window.AudioContext ||
+                          window.webkitAudioContext)();
+                        if (audioContext.state === "suspended") {
+                          console.log("Resuming audio context on mobile touch");
+                          audioContext
+                            .resume()
+                            .then(() => {
+                              console.log("Audio context resumed successfully");
+                            })
+                            .catch((err) => {
+                              console.error(
+                                "Failed to resume audio context:",
+                                err
+                              );
+                            });
+                        }
+                      }
+
+                      // Request media permissions on mobile
+                      if (
+                        navigator.mediaDevices &&
+                        navigator.mediaDevices.getUserMedia
+                      ) {
+                        console.log(
+                          "Pre-requesting media permissions on mobile"
+                        );
+                        navigator.mediaDevices
+                          .getUserMedia({ audio: true, video: true })
+                          .then((stream) => {
+                            console.log("Media permissions granted on mobile");
+                            // Stop the stream immediately, we just wanted permissions
+                            stream.getTracks().forEach((track) => track.stop());
+                          })
+                          .catch((err) => {
+                            console.log(
+                              "Media permissions denied or unavailable:",
+                              err
+                            );
+                          });
+                      }
                     }}
                     className={`group relative px-3 py-2 sm:px-4 sm:py-3 rounded-xl transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 flex items-center gap-2 font-bold shadow-lg ${
                       audioServiceStatus === "available"
