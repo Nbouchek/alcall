@@ -7,6 +7,7 @@ import JanusAudioCall from "../components/JanusAudioCall";
 import JanusVideoCall from "../components/JanusVideoCall";
 import {
   FaPhone,
+  FaPhoneSlash,
   FaPaperPlane,
   FaUser,
   FaSignOutAlt,
@@ -47,6 +48,24 @@ const FORCE_NORMAL_MODE =
   process.env.NEXT_PUBLIC_FORCE_NORMAL_MODE === "true" || true;
 
 // Debug: Log the detection will happen in useEffect after component mounts
+
+// Configure axios to handle 501 errors gracefully
+axios.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    // Suppress 501 errors from appearing as red errors in console
+    if (error.response && error.response.status === 501) {
+      // Create a custom error that won't trigger console.error
+      const customError = new Error(
+        `MVP Service: ${error.config.url} returned 501 Not Implemented`
+      );
+      customError.response = error.response;
+      customError.config = error.config;
+      return Promise.reject(customError);
+    }
+    return Promise.reject(error);
+  }
+);
 
 export default function Home() {
   const [user, setUser] = useState(null);
@@ -255,13 +274,15 @@ export default function Home() {
           ]);
         }
       } catch (error) {
-        console.error("Failed to fetch users:", error);
-        if (error.response && error.response.status === 404) {
-          console.log("Users endpoint not available yet, using fallback");
-        } else if (error.response && error.response.status === 501) {
+        // Suppress 501 errors in console - they're expected for MVP stub services
+        if (error.response && error.response.status === 501) {
           console.log(
-            "Backend returned 501 Not Implemented for users, using fallback (MVP mode)"
+            "Backend returned 501 Not Implemented for users - using demo fallback (MVP mode)"
           );
+        } else if (error.response && error.response.status === 404) {
+          console.log("Users endpoint not available yet - using demo fallback");
+        } else {
+          console.error("Failed to fetch users:", error);
         }
         // Fallback to hardcoded users if backend doesn't work
         setUsers([
@@ -400,12 +421,10 @@ export default function Home() {
             alert("Login failed: Invalid response from server.");
           }
         } catch (error) {
-          console.error("Login error:", error);
-
           // Check if it's a 501 Not Implemented error (MVP stub)
           if (error.response && error.response.status === 501) {
             console.log(
-              "Backend returned 501 Not Implemented, falling back to demo mode"
+              "Backend returned 501 Not Implemented - falling back to demo mode (MVP mode)"
             );
             const demoUser = {
               id:
@@ -434,6 +453,9 @@ export default function Home() {
             console.log("Demo login completed for MVP backend");
             return;
           }
+
+          // Log other errors
+          console.error("Login error:", error);
 
           let msg = "Login failed: ";
           if (
