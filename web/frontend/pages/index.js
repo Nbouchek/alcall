@@ -94,7 +94,10 @@ export default function Home() {
     roomId: null, // Room ID for the call
     callStartTime: null, // When the call started
     callDuration: 0, // Call duration in seconds
+    callStatus: "", // Add status for better UX
   });
+
+  const [callOutcomeMessage, setCallOutcomeMessage] = useState(null); // Add for temporary status messages
 
   // Call duration timer
   const callDurationInterval = useRef(null);
@@ -150,6 +153,7 @@ export default function Home() {
       roomId: roomId,
       callStartTime: null,
       callDuration: 0,
+      callStatus: "Calling...", // Add status for better UX
     });
 
     // Send call notification
@@ -173,6 +177,7 @@ export default function Home() {
       roomId: incomingCall.room_id,
       callStartTime: Date.now(),
       callDuration: 0,
+      callStatus: "Connecting...", // Add status for better UX
     });
 
     // Stop ringtone
@@ -205,6 +210,13 @@ export default function Home() {
     // Stop ringtone
     stopIncomingCallRingtone();
 
+    // Show temporary message for receiver
+    setCallOutcomeMessage({
+      type: "declined",
+      message: `You declined ${incomingCall.from_username}'s call`,
+      duration: 3000,
+    });
+
     // Send decline message
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       const declineMessage = {
@@ -225,7 +237,17 @@ export default function Home() {
     setCallState((prev) => ({
       ...prev,
       isEnding: true,
+      callStatus: "Ending call...", // Add status for better UX
     }));
+
+    // Show temporary message
+    setCallOutcomeMessage({
+      type: "ended",
+      message: `You ended the call with ${
+        callState.callPartner?.username || "Unknown"
+      }`,
+      duration: 3000,
+    });
 
     // Send call ended message
     if (
@@ -261,6 +283,7 @@ export default function Home() {
         roomId: null,
         callStartTime: null,
         callDuration: 0,
+        callStatus: "", // Clear status
       });
       stopCallTimer();
     }, 1000);
@@ -268,24 +291,31 @@ export default function Home() {
 
   // Handle call state changes from audio component
   const handleCallStateChange = (newState) => {
-    if (newState.isConnected && !callState.isConnected) {
-      // Call just connected
-      setCallState((prev) => ({
-        ...prev,
-        isConnecting: false,
-        isConnected: true,
-        callStartTime: Date.now(),
-      }));
-      startCallTimer();
-    } else if (!newState.isConnected && callState.isConnected) {
-      // Call disconnected
-      setCallState((prev) => ({
-        ...prev,
-        isConnected: false,
-        isEnding: true,
-      }));
-      stopCallTimer();
-    }
+    console.log("Call state changed:", newState);
+
+    // Update call state based on audio call component feedback
+    setCallState((prev) => {
+      const updates = { ...prev };
+
+      if (newState.isConnected && !prev.isConnected) {
+        updates.isConnected = true;
+        updates.isConnecting = false;
+        updates.isInitiating = false;
+        updates.callStatus = "Connected";
+        if (!prev.callStartTime) {
+          updates.callStartTime = Date.now();
+        }
+        startCallTimer();
+      } else if (newState.isConnecting && !prev.isConnecting) {
+        updates.isConnecting = true;
+        updates.isInitiating = false;
+        updates.callStatus = "Connecting...";
+      } else if (newState.callStatus) {
+        updates.callStatus = newState.callStatus;
+      }
+
+      return updates;
+    });
   };
 
   // Debug: Component mount
@@ -800,26 +830,28 @@ export default function Home() {
   // Handlers for call end events
   const handleAudioCallEnd = () => {
     console.log("Audio call ended, closing modal");
-    setShowAudioCallModal(false);
-    setIncomingCall(null); // Clear any incoming call state
 
-    // Last resort: directly remove any audio call modals from the DOM
-    if (typeof window !== "undefined") {
-      setTimeout(() => {
-        const audioCallModals = document.querySelectorAll(
-          ".fixed.inset-0.bg-black.bg-opacity-50"
-        );
-        if (audioCallModals.length > 0) {
-          console.log(
-            "Forcibly removing audio call modals:",
-            audioCallModals.length
-          );
-          audioCallModals.forEach((modal) => {
-            modal.parentNode.removeChild(modal);
-          });
-        }
-      }, 200);
-    }
+    // Use setTimeout to ensure state updates are processed safely
+    setTimeout(() => {
+      setShowAudioCallModal(false);
+      setIncomingCall(null); // Clear any incoming call state
+
+      // Reset call state to ensure clean state
+      setCallState({
+        isInitiating: false,
+        isRinging: false,
+        isConnecting: false,
+        isConnected: false,
+        isEnding: false,
+        callDirection: null,
+        callPartner: null,
+        roomId: null,
+        callStartTime: null,
+        callDuration: 0,
+        callStatus: "",
+      });
+      stopCallTimer();
+    }, 0);
   };
 
   const handleVideoCallEnd = () => {
@@ -1154,6 +1186,7 @@ export default function Home() {
                 ...prev,
                 isInitiating: false,
                 isConnecting: true,
+                callStatus: "Call accepted! Connecting...",
               }));
               // Caller starts the actual call
               if (audioCallRef.current) {
@@ -1175,10 +1208,27 @@ export default function Home() {
                 roomId: null,
                 callStartTime: null,
                 callDuration: 0,
+                callStatus: "Call declined",
               });
+
+              // Show temporary message
+              setCallOutcomeMessage({
+                type: "declined",
+                message: `${data.from_username} declined your call`,
+                duration: 3000,
+              });
+
               // Close call modal
               if (audioCallRef.current) {
-                audioCallRef.current.forceClose();
+                try {
+                  audioCallRef.current.forceClose();
+                } catch (error) {
+                  console.error("Error calling forceClose:", error);
+                  // Fallback to direct state reset
+                  handleAudioCallEnd();
+                }
+              } else {
+                handleAudioCallEnd();
               }
             }
             // Also call the handler to ensure modal closes
@@ -1197,13 +1247,29 @@ export default function Home() {
               roomId: null,
               callStartTime: null,
               callDuration: 0,
+              callStatus: "Call ended by other party",
             });
+
+            // Show temporary message
+            setCallOutcomeMessage({
+              type: "ended",
+              message: `${data.from_username} ended the call`,
+              duration: 3000,
+            });
+
             stopCallTimer();
             // Close call modal
             if (audioCallRef.current) {
-              audioCallRef.current.forceClose();
+              try {
+                audioCallRef.current.forceClose();
+              } catch (error) {
+                console.error("Error calling forceClose:", error);
+                // Fallback to direct state reset
+                handleAudioCallEnd();
+              }
+            } else {
+              handleAudioCallEnd();
             }
-            handleAudioCallEnd();
           }
         } catch (error) {
           console.log(
@@ -1393,6 +1459,19 @@ export default function Home() {
       stopCallTimer();
     };
   }, []);
+
+  // Auto-clear temporary call outcome messages
+  useEffect(() => {
+    if (callOutcomeMessage) {
+      const timer = setTimeout(() => {
+        setCallOutcomeMessage(null);
+      }, callOutcomeMessage.duration);
+
+      return () => clearTimeout(timer);
+    }
+  }, [callOutcomeMessage]);
+
+  // Initialize mobile audio context for iOS Safari
 
   // Prevent hydration issues by only rendering after client-side initialization
   if (!isClient) {
@@ -2129,14 +2208,17 @@ export default function Home() {
                   "Audio call feature is loading... Please wait a moment and try again."
                 );
               }
-            }, 100);
+            }, 10);
           }}
         />
       )}
 
       {/* Incoming Call Modal */}
       {incomingCall && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div
+          key="incoming-call-modal"
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+        >
           <div className="bg-white rounded-lg p-6 max-w-sm w-full mx-4 shadow-xl animate-slideInUp">
             <div className="text-center mb-6">
               <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
@@ -2150,24 +2232,39 @@ export default function Home() {
                   {incomingCall.from_username}
                 </span>
               </p>
-              <p className="text-sm text-gray-500">is calling...</p>
+              <p className="text-sm text-gray-500 mb-4">
+                wants to talk with you
+              </p>
+
+              {/* Call type indicator */}
+              <div className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
+                <FaPhone className="w-3 h-3 mr-1" />
+                Audio Call
+              </div>
             </div>
 
             <div className="flex justify-around gap-4">
               <button
                 onClick={acceptCall}
-                className="flex-1 bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg font-semibold transition-colors duration-200 flex items-center justify-center gap-2"
+                className="flex-1 bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg font-semibold transition-colors duration-200 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95"
               >
                 <FaPhone className="w-4 h-4" />
                 Accept
               </button>
               <button
                 onClick={declineCall}
-                className="flex-1 bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-lg font-semibold transition-colors duration-200 flex items-center justify-center gap-2"
+                className="flex-1 bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-lg font-semibold transition-colors duration-200 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95"
               >
                 <FaPhoneSlash className="w-4 h-4" />
                 Decline
               </button>
+            </div>
+
+            {/* Additional info */}
+            <div className="mt-4 text-center">
+              <p className="text-xs text-gray-400">
+                Press Accept to join the call or Decline to reject
+              </p>
             </div>
           </div>
         </div>
@@ -2177,7 +2274,10 @@ export default function Home() {
       {(callState.isInitiating ||
         callState.isConnecting ||
         callState.isConnected) && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div
+          key="active-call-modal"
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+        >
           <div className="bg-white rounded-lg p-6 max-w-sm w-full mx-4 shadow-xl animate-slideInUp">
             <div className="text-center mb-6">
               <div
@@ -2197,7 +2297,11 @@ export default function Home() {
               </div>
 
               <h3 className="text-lg font-semibold text-gray-800 mb-2">
-                {callState.isConnected ? "Call in Progress" : "Connecting..."}
+                {callState.isConnected
+                  ? "Call in Progress"
+                  : callState.isConnecting
+                  ? "Connecting Call"
+                  : "Initiating Call"}
               </h3>
 
               <p className="text-gray-600 mb-1">
@@ -2206,27 +2310,81 @@ export default function Home() {
                 </span>
               </p>
 
+              {/* Status message */}
+              {callState.callStatus && (
+                <p className="text-sm text-gray-500 mb-2">
+                  {callState.callStatus}
+                </p>
+              )}
+
               {callState.isConnected && (
-                <p className="text-sm text-gray-500 font-mono">
+                <p className="text-sm text-gray-500 font-mono mb-2">
                   {formatCallDuration(callState.callDuration)}
                 </p>
               )}
 
-              <p className="text-xs text-gray-400 mt-2">
-                {callState.callDirection === "outgoing"
-                  ? "Outgoing call"
-                  : "Incoming call"}
-              </p>
+              {/* Call direction and type indicator */}
+              <div className="flex items-center justify-center gap-2 mt-2">
+                <div
+                  className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                    callState.callDirection === "outgoing"
+                      ? "bg-blue-100 text-blue-800"
+                      : "bg-green-100 text-green-800"
+                  }`}
+                >
+                  <FaPhone className="w-3 h-3 mr-1" />
+                  {callState.callDirection === "outgoing"
+                    ? "Outgoing"
+                    : "Incoming"}
+                </div>
+                <div className="inline-flex items-center px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-medium">
+                  Audio Call
+                </div>
+              </div>
             </div>
 
             <div className="flex justify-center">
               <button
                 onClick={endCall}
-                className="bg-red-500 hover:bg-red-600 text-white px-8 py-3 rounded-lg font-semibold transition-colors duration-200 flex items-center gap-2"
+                className="bg-red-500 hover:bg-red-600 text-white px-8 py-3 rounded-lg font-semibold transition-colors duration-200 flex items-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95"
               >
                 <FaPhoneSlash className="w-4 h-4" />
-                End Call
+                {callState.isConnected ? "End Call" : "Cancel Call"}
               </button>
+            </div>
+
+            {/* Additional info for active calls */}
+            {callState.isConnected && (
+              <div className="mt-4 text-center">
+                <p className="text-xs text-gray-400">
+                  Call is active • Press End Call to hang up
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Temporary Call Outcome Message */}
+      {callOutcomeMessage && (
+        <div
+          key="call-outcome-message"
+          className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50"
+        >
+          <div
+            className={`px-4 py-3 rounded-lg shadow-lg text-white font-medium animate-slideInDown ${
+              callOutcomeMessage.type === "declined"
+                ? "bg-red-500"
+                : "bg-gray-600"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              {callOutcomeMessage.type === "declined" ? (
+                <FaPhoneSlash className="w-4 h-4" />
+              ) : (
+                <FaPhone className="w-4 h-4" />
+              )}
+              <span>{callOutcomeMessage.message}</span>
             </div>
           </div>
         </div>

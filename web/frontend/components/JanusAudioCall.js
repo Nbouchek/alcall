@@ -1058,10 +1058,7 @@ const JanusAudioCall = forwardRef(
         audioRef.current.removeAttribute("src");
         audioRef.current.load();
 
-        // Remove from DOM if it was added
-        if (audioRef.current.parentNode) {
-          audioRef.current.parentNode.removeChild(audioRef.current);
-        }
+        // Don't manually remove from DOM - let React handle it
         audioRef.current = null;
       }
 
