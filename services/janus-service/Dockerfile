@@ -1,8 +1,8 @@
 # Use the official, pre-built Janus Gateway image
 FROM canyan/janus-gateway:latest
 
-# Install curl for health checks and create static content
-RUN apt-get update && apt-get install -y curl && \
+# Install curl and jq for health checks and plugin verification
+RUN apt-get update && apt-get install -y curl jq && \
     mkdir -p /usr/local/share/janus && \
     echo '<!DOCTYPE html><html><head><title>Janus WebRTC Server</title></head><body><h1>Janus WebRTC Server</h1><p>Status: Running</p><a href="/janus/info">API Info</a></body></html>' > /usr/local/share/janus/index.html && \
     echo 'OK' > /usr/local/share/janus/health && \
@@ -11,7 +11,11 @@ RUN apt-get update && apt-get install -y curl && \
 # Copy our custom configuration files into the container
 COPY config/ /usr/local/etc/janus/
 
-# Create a startup script that ensures Janus handles root requests
+# Copy the plugin verification script
+COPY verify-plugins.sh /usr/local/bin/verify-plugins.sh
+RUN chmod +x /usr/local/bin/verify-plugins.sh
+
+# Create a startup script that ensures Janus handles root requests and verifies plugins
 RUN echo '#!/bin/bash\n\
 echo "Starting Janus WebRTC Server..."\n\
 echo "Creating health check endpoints..."\n\
