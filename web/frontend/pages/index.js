@@ -20,6 +20,7 @@ import {
   FaUsers,
   FaVideo,
   FaCog,
+  FaVolumeUp,
 } from "react-icons/fa";
 
 const AUTH_API_BASE_URL =
@@ -87,6 +88,67 @@ export default function Home() {
     if (!messages || !Array.isArray(messages)) {
       setMessages([]);
     }
+
+    // Initialize mobile audio system
+    const initializeMobileAudio = () => {
+      try {
+        // Check if we're on a mobile device
+        const isMobile =
+          /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+            navigator.userAgent
+          );
+
+        if (isMobile) {
+          console.log("Mobile device detected, initializing audio system");
+
+          // Create and resume audio context on first user interaction
+          const unlockAudio = () => {
+            try {
+              if (window.AudioContext || window.webkitAudioContext) {
+                const audioContext = new (window.AudioContext ||
+                  window.webkitAudioContext)();
+                if (audioContext.state === "suspended") {
+                  audioContext
+                    .resume()
+                    .then(() => {
+                      console.log(
+                        "Mobile audio context initialized successfully"
+                      );
+                    })
+                    .catch((err) => {
+                      console.error(
+                        "Failed to initialize mobile audio context:",
+                        err
+                      );
+                    });
+                }
+              }
+            } catch (error) {
+              console.error("Mobile audio initialization failed:", error);
+            }
+          };
+
+          // Add listeners for user interaction to unlock audio
+          const unlockHandler = () => {
+            unlockAudio();
+            document.removeEventListener("click", unlockHandler);
+            document.removeEventListener("touchstart", unlockHandler);
+            document.removeEventListener("touchend", unlockHandler);
+          };
+
+          document.addEventListener("click", unlockHandler, { once: true });
+          document.addEventListener("touchstart", unlockHandler, {
+            once: true,
+          });
+          document.addEventListener("touchend", unlockHandler, { once: true });
+        }
+      } catch (error) {
+        console.error("Error initializing mobile audio:", error);
+      }
+    };
+
+    // Initialize mobile audio
+    initializeMobileAudio();
 
     // Check if we're on Render deployment
     const hostname = window.location.hostname;
@@ -513,15 +575,93 @@ export default function Home() {
 
   // Debug function to log user information
   const debugUserInfo = () => {
-    console.log("=== USER DEBUG INFO ===");
-    console.log("Current User:", user);
-    console.log("Selected Receiver:", selectedReceiver);
-    console.log("Online Users:", onlineUsers);
-    console.log("Connected Users:", Array.from(connectedUsers));
-    console.log(
-      "WebSocket State:",
-      wsRef.current ? wsRef.current.readyState : "no ref"
-    );
+    console.log("=== DEBUG USER INFO ===");
+    console.log("User:", user);
+    console.log("Is logged in:", isLoggedIn);
+    console.log("Selected receiver:", selectedReceiver);
+    console.log("Online users:", onlineUsers);
+    console.log("Connected users:", Array.from(connectedUsers));
+    console.log("Audio service status:", audioServiceStatus);
+    console.log("WebSocket ref:", wsRef.current);
+    console.log("Audio call ref:", audioCallRef.current);
+    console.log("Video call ref:", videoCallRef.current);
+    console.log("=== END DEBUG ===");
+  };
+
+  // Mobile audio test function
+  const testMobileAudio = () => {
+    try {
+      console.log("Testing mobile audio functionality...");
+
+      // Check if we're on a mobile device
+      const isMobile =
+        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+          navigator.userAgent
+        );
+      console.log("Mobile device detected:", isMobile);
+
+      // Test Web Audio API
+      if (window.AudioContext || window.webkitAudioContext) {
+        const audioContext = new (window.AudioContext ||
+          window.webkitAudioContext)();
+        console.log("Audio context state:", audioContext.state);
+
+        if (audioContext.state === "suspended") {
+          console.log("Audio context is suspended, attempting to resume...");
+          audioContext
+            .resume()
+            .then(() => {
+              console.log("Audio context resumed successfully");
+              playTestTone(audioContext);
+            })
+            .catch((err) => {
+              console.error("Failed to resume audio context:", err);
+              alert(
+                "Audio test failed: Could not resume audio context. Please interact with the page first."
+              );
+            });
+        } else {
+          console.log("Audio context is active, playing test tone...");
+          playTestTone(audioContext);
+        }
+      } else {
+        console.error("Web Audio API not supported");
+        alert(
+          "Audio test failed: Web Audio API not supported in this browser."
+        );
+      }
+    } catch (error) {
+      console.error("Mobile audio test failed:", error);
+      alert("Audio test failed: " + error.message);
+    }
+  };
+
+  const playTestTone = (audioContext) => {
+    try {
+      // Create a simple test tone
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      oscillator.frequency.setValueAtTime(440, audioContext.currentTime); // A4 note
+      oscillator.type = "sine";
+
+      const now = audioContext.currentTime;
+      gainNode.gain.setValueAtTime(0, now);
+      gainNode.gain.linearRampToValueAtTime(0.3, now + 0.05);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+
+      oscillator.start(now);
+      oscillator.stop(now + 0.5);
+
+      console.log("Test tone played successfully");
+      alert("Audio test successful! You should hear a short beep.");
+    } catch (error) {
+      console.error("Failed to play test tone:", error);
+      alert("Audio test failed: Could not play test tone.");
+    }
   };
 
   // Incoming call ringtone functions
@@ -529,56 +669,152 @@ export default function Home() {
     try {
       stopIncomingCallRingtone();
 
-      let ringCount = 0;
-      const interval = setInterval(() => {
+      // Mobile-friendly ringtone system
+      const playRingtoneTone = () => {
         try {
+          // Try Web Audio API first (better quality)
+          if (window.AudioContext || window.webkitAudioContext) {
+            const audioContext = new (window.AudioContext ||
+              window.webkitAudioContext)();
+
+            // Resume audio context if suspended (required for mobile)
+            if (audioContext.state === "suspended") {
+              audioContext
+                .resume()
+                .then(() => {
+                  console.log("Audio context resumed successfully");
+                })
+                .catch((err) => {
+                  console.error("Failed to resume audio context:", err);
+                  // Fallback to HTML5 audio
+                  playFallbackRingtone();
+                });
+              return;
+            }
+
+            // Create oscillators for alternating tones
+            const oscillator1 = audioContext.createOscillator();
+            const oscillator2 = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+
+            oscillator1.connect(gainNode);
+            oscillator2.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            // Alternating frequencies for realistic ringtone
+            const isEvenRing = (Date.now() / 1000) % 2 === 0;
+            oscillator1.frequency.setValueAtTime(
+              isEvenRing ? 480 : 620,
+              audioContext.currentTime
+            );
+            oscillator2.frequency.setValueAtTime(
+              isEvenRing ? 620 : 480,
+              audioContext.currentTime
+            );
+
+            oscillator1.type = "sine";
+            oscillator2.type = "sine";
+
+            // Mobile-friendly envelope (shorter, louder)
+            const now = audioContext.currentTime;
+            gainNode.gain.setValueAtTime(0, now);
+            gainNode.gain.linearRampToValueAtTime(0.4, now + 0.05);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
+
+            oscillator1.start(now);
+            oscillator2.start(now);
+            oscillator1.stop(now + 0.6);
+            oscillator2.stop(now + 0.6);
+          } else {
+            // Fallback for older browsers
+            playFallbackRingtone();
+          }
+        } catch (error) {
+          console.error("Web Audio API failed, using fallback:", error);
+          playFallbackRingtone();
+        }
+      };
+
+      // HTML5 Audio fallback for mobile devices
+      const playFallbackRingtone = () => {
+        try {
+          // Create a simple beep using HTML5 Audio
+          const audio = new Audio();
+          const sampleRate = 44100;
+          const duration = 0.6;
+          const frequency = 480;
+
+          // Generate a simple sine wave
           const audioContext = new (window.AudioContext ||
             window.webkitAudioContext)();
-
-          // Create two oscillators for a richer sound
-          const oscillator1 = audioContext.createOscillator();
-          const oscillator2 = audioContext.createOscillator();
-          const gainNode = audioContext.createGain();
-
-          // Connect oscillators to gain node
-          oscillator1.connect(gainNode);
-          oscillator2.connect(gainNode);
-          gainNode.connect(audioContext.destination);
-
-          // Set different frequencies for alternating tones (like a real phone)
-          const isEvenRing = ringCount % 2 === 0;
-          oscillator1.frequency.setValueAtTime(
-            isEvenRing ? 480 : 620,
-            audioContext.currentTime
+          const buffer = audioContext.createBuffer(
+            1,
+            sampleRate * duration,
+            sampleRate
           );
-          oscillator2.frequency.setValueAtTime(
-            isEvenRing ? 620 : 480,
-            audioContext.currentTime
-          );
+          const channelData = buffer.getChannelData(0);
 
-          // Set oscillator types for better sound
-          oscillator1.type = "sine";
-          oscillator2.type = "sine";
+          for (let i = 0; i < sampleRate * duration; i++) {
+            channelData[i] =
+              Math.sin((2 * Math.PI * frequency * i) / sampleRate) * 0.3;
+          }
 
-          // Create a nice envelope for the ringtone
-          const now = audioContext.currentTime;
-          gainNode.gain.setValueAtTime(0, now);
-          gainNode.gain.linearRampToValueAtTime(0.3, now + 0.05);
-          gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
-
-          // Start and stop the oscillators
-          oscillator1.start(now);
-          oscillator2.start(now);
-          oscillator1.stop(now + 0.8);
-          oscillator2.stop(now + 0.8);
-
-          ringCount++;
+          const source = audioContext.createBufferSource();
+          source.buffer = buffer;
+          source.connect(audioContext.destination);
+          source.start();
         } catch (error) {
-          console.error("Error playing ringtone tone:", error);
+          console.error("Fallback ringtone failed:", error);
+          // Last resort: try to play a silent audio to unlock audio
+          try {
+            const silentAudio = new Audio();
+            silentAudio.src =
+              "data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT";
+            silentAudio.play().catch(() => {});
+          } catch (e) {
+            console.error("Silent audio unlock failed:", e);
+          }
         }
-      }, 1000); // Ring every second
+      };
+
+      // Start ringing with mobile-friendly interval
+      let ringCount = 0;
+      const interval = setInterval(() => {
+        playRingtoneTone();
+        ringCount++;
+
+        // Stop after 30 seconds to prevent infinite ringing
+        if (ringCount >= 30) {
+          stopIncomingCallRingtone();
+        }
+      }, 1000);
 
       setIncomingCallRingtoneInterval(interval);
+
+      // Also try to unlock audio immediately on user interaction
+      const unlockAudio = () => {
+        try {
+          if (window.AudioContext || window.webkitAudioContext) {
+            const audioContext = new (window.AudioContext ||
+              window.webkitAudioContext)();
+            if (audioContext.state === "suspended") {
+              audioContext.resume();
+            }
+          }
+        } catch (error) {
+          console.error("Audio unlock failed:", error);
+        }
+      };
+
+      // Add one-time click listener to unlock audio
+      const unlockHandler = () => {
+        unlockAudio();
+        document.removeEventListener("click", unlockHandler);
+        document.removeEventListener("touchstart", unlockHandler);
+      };
+
+      document.addEventListener("click", unlockHandler, { once: true });
+      document.addEventListener("touchstart", unlockHandler, { once: true });
     } catch (error) {
       console.error("Error setting up incoming call ringtone:", error);
     }
@@ -1329,6 +1565,20 @@ export default function Home() {
                     <FaCog className="w-4 h-4 sm:w-5 sm:h-5 relative z-10 animate-pulse group-hover:animate-spin" />
                     <span className="relative z-10 hidden sm:inline">
                       Features
+                    </span>
+                  </button>
+
+                  {/* Mobile Audio Test Button */}
+                  <button
+                    onClick={testMobileAudio}
+                    className="group relative px-3 py-2 sm:px-4 sm:py-3 rounded-xl transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 flex items-center gap-2 font-bold shadow-lg bg-gradient-to-r from-orange-400 to-red-500 hover:from-orange-500 hover:to-red-600 text-white"
+                    title="Test audio functionality (especially for mobile devices)"
+                  >
+                    {/* Glowing effect */}
+                    <div className="absolute -inset-1 bg-gradient-to-r from-orange-400 to-red-500 rounded-xl blur opacity-30 group-hover:opacity-50 transition duration-300"></div>
+                    <FaVolumeUp className="w-4 h-4 sm:w-5 sm:h-5 relative z-10 animate-pulse group-hover:animate-bounce" />
+                    <span className="relative z-10 hidden sm:inline">
+                      Test Audio
                     </span>
                   </button>
                 </div>

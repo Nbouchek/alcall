@@ -1095,57 +1095,160 @@ const JanusAudioCall = forwardRef(
       try {
         stopRingtone();
 
-        // Create a more realistic phone ringtone with alternating tones
-        let ringCount = 0;
-        ringtoneIntervalRef.current = setInterval(() => {
+        // Mobile-friendly ringtone system
+        const playRingtoneTone = () => {
           try {
+            // Try Web Audio API first (better quality)
+            if (window.AudioContext || window.webkitAudioContext) {
+              const audioContext = new (window.AudioContext ||
+                window.webkitAudioContext)();
+
+              // Resume audio context if suspended (required for mobile)
+              if (audioContext.state === "suspended") {
+                audioContext
+                  .resume()
+                  .then(() => {
+                    console.log(
+                      "JanusAudioCall: Audio context resumed successfully"
+                    );
+                  })
+                  .catch((err) => {
+                    console.error(
+                      "JanusAudioCall: Failed to resume audio context:",
+                      err
+                    );
+                    // Fallback to HTML5 audio
+                    playFallbackRingtone();
+                  });
+                return;
+              }
+
+              // Create oscillators for alternating tones
+              const oscillator1 = audioContext.createOscillator();
+              const oscillator2 = audioContext.createOscillator();
+              const gainNode = audioContext.createGain();
+
+              oscillator1.connect(gainNode);
+              oscillator2.connect(gainNode);
+              gainNode.connect(audioContext.destination);
+
+              // Alternating frequencies for realistic ringtone
+              const isEvenRing = (Date.now() / 1000) % 2 === 0;
+              oscillator1.frequency.setValueAtTime(
+                isEvenRing ? 480 : 620,
+                audioContext.currentTime
+              );
+              oscillator2.frequency.setValueAtTime(
+                isEvenRing ? 620 : 480,
+                audioContext.currentTime
+              );
+
+              oscillator1.type = "sine";
+              oscillator2.type = "sine";
+
+              // Mobile-friendly envelope (shorter, louder)
+              const now = audioContext.currentTime;
+              gainNode.gain.setValueAtTime(0, now);
+              gainNode.gain.linearRampToValueAtTime(0.4, now + 0.05);
+              gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
+
+              oscillator1.start(now);
+              oscillator2.start(now);
+              oscillator1.stop(now + 0.6);
+              oscillator2.stop(now + 0.6);
+            } else {
+              // Fallback for older browsers
+              playFallbackRingtone();
+            }
+          } catch (error) {
+            console.error(
+              "JanusAudioCall: Web Audio API failed, using fallback:",
+              error
+            );
+            playFallbackRingtone();
+          }
+        };
+
+        // HTML5 Audio fallback for mobile devices
+        const playFallbackRingtone = () => {
+          try {
+            // Create a simple beep using HTML5 Audio
+            const audio = new Audio();
+            const sampleRate = 44100;
+            const duration = 0.6;
+            const frequency = 480;
+
+            // Generate a simple sine wave
             const audioContext = new (window.AudioContext ||
               window.webkitAudioContext)();
-
-            // Create two oscillators for a richer sound
-            const oscillator1 = audioContext.createOscillator();
-            const oscillator2 = audioContext.createOscillator();
-            const gainNode = audioContext.createGain();
-
-            // Connect oscillators to gain node
-            oscillator1.connect(gainNode);
-            oscillator2.connect(gainNode);
-            gainNode.connect(audioContext.destination);
-
-            // Set different frequencies for alternating tones (like a real phone)
-            const isEvenRing = ringCount % 2 === 0;
-            oscillator1.frequency.setValueAtTime(
-              isEvenRing ? 480 : 620,
-              audioContext.currentTime
+            const buffer = audioContext.createBuffer(
+              1,
+              sampleRate * duration,
+              sampleRate
             );
-            oscillator2.frequency.setValueAtTime(
-              isEvenRing ? 620 : 480,
-              audioContext.currentTime
-            );
+            const channelData = buffer.getChannelData(0);
 
-            // Set oscillator types for better sound
-            oscillator1.type = "sine";
-            oscillator2.type = "sine";
+            for (let i = 0; i < sampleRate * duration; i++) {
+              channelData[i] =
+                Math.sin((2 * Math.PI * frequency * i) / sampleRate) * 0.3;
+            }
 
-            // Create a nice envelope for the ringtone
-            const now = audioContext.currentTime;
-            gainNode.gain.setValueAtTime(0, now);
-            gainNode.gain.linearRampToValueAtTime(0.3, now + 0.05);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
-
-            // Start and stop the oscillators
-            oscillator1.start(now);
-            oscillator2.start(now);
-            oscillator1.stop(now + 0.8);
-            oscillator2.stop(now + 0.8);
-
-            ringCount++;
+            const source = audioContext.createBufferSource();
+            source.buffer = buffer;
+            source.connect(audioContext.destination);
+            source.start();
           } catch (error) {
-            console.error("Error playing ringtone tone:", error);
+            console.error("JanusAudioCall: Fallback ringtone failed:", error);
+            // Last resort: try to play a silent audio to unlock audio
+            try {
+              const silentAudio = new Audio();
+              silentAudio.src =
+                "data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT";
+              silentAudio.play().catch(() => {});
+            } catch (e) {
+              console.error("JanusAudioCall: Silent audio unlock failed:", e);
+            }
           }
-        }, 1000); // Ring every second
+        };
+
+        // Start ringing with mobile-friendly interval
+        let ringCount = 0;
+        ringtoneIntervalRef.current = setInterval(() => {
+          playRingtoneTone();
+          ringCount++;
+
+          // Stop after 30 seconds to prevent infinite ringing
+          if (ringCount >= 30) {
+            stopRingtone();
+          }
+        }, 1000);
+
+        // Also try to unlock audio immediately on user interaction
+        const unlockAudio = () => {
+          try {
+            if (window.AudioContext || window.webkitAudioContext) {
+              const audioContext = new (window.AudioContext ||
+                window.webkitAudioContext)();
+              if (audioContext.state === "suspended") {
+                audioContext.resume();
+              }
+            }
+          } catch (error) {
+            console.error("JanusAudioCall: Audio unlock failed:", error);
+          }
+        };
+
+        // Add one-time click listener to unlock audio
+        const unlockHandler = () => {
+          unlockAudio();
+          document.removeEventListener("click", unlockHandler);
+          document.removeEventListener("touchstart", unlockHandler);
+        };
+
+        document.addEventListener("click", unlockHandler, { once: true });
+        document.addEventListener("touchstart", unlockHandler, { once: true });
       } catch (error) {
-        console.error("Error setting up ringtone:", error);
+        console.error("JanusAudioCall: Error setting up ringtone:", error);
       }
     };
 
