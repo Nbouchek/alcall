@@ -15,62 +15,102 @@ echo -e "${BLUE}Step 1: Creating Render configuration${NC}"
 # Create render.yaml configuration
 cat > render.yaml << 'EOF'
 services:
+  # Frontend Service
   - type: web
     name: unifiedchat-frontend
-    env: docker
-    dockerfilePath: ./web/frontend/Dockerfile
-    dockerContext: .
+    runtime: node
+    region: oregon
+    plan: starter
+    buildCommand: cd web/frontend && npm install && npm run build
+    startCommand: cd web/frontend && npm start
     envVars:
-      - key: NODE_ENV
-        value: production
-      - key: NEXT_PUBLIC_API_URL
-        value: https://unifiedchat-auth.onrender.com
-    routes:
-      - type: rewrite
-        source: /
-        destination: /index.html
+      - key: PORT
+        value: 3000
+      - key: NEXT_PUBLIC_AUTH_API_URL
+        value: "https://unifiedchat-auth-service.onrender.com/api/v1"
+      - key: NEXT_PUBLIC_MESSAGE_API_URL
+        value: "https://unifiedchat-message-service.onrender.com"
+      - key: NEXT_PUBLIC_REALTIME_API_URL
+        value: "https://unifiedchat-realtime-service.onrender.com"
+      - key: NEXT_PUBLIC_JANUS_URL
+        value: "wss://unifiedchat-janus-service.onrender.com/janus"
+      - key: NEXT_PUBLIC_JANUS_HTTP_URL
+        value: "https://unifiedchat-janus-service.onrender.com"
+      - key: NEXT_PUBLIC_FORCE_NORMAL_MODE
+        value: "true"
+    healthCheckPath: /
+    autoDeploy: true
+    numInstances: 1
 
+  # Auth Service
   - type: web
-    name: unifiedchat-auth
-    env: docker
-    dockerfilePath: ./services/auth-service/Dockerfile
-    dockerContext: .
+    name: unifiedchat-auth-service
+    runtime: docker
+    region: oregon
+    plan: starter
+    dockerfilePath: services/auth-service/Dockerfile
+    dockerContext: services/auth-service
     envVars:
-      - key: JWT_SECRET
-        generateValue: true
       - key: PORT
         value: 8082
+      - key: JWT_SECRET
+        value: "your-super-secret-jwt-key-change-in-production"
+    healthCheckPath: /health
+    autoDeploy: true
+    numInstances: 1
 
+  # Gateway Service
   - type: web
-    name: unifiedchat-message
-    env: docker
-    dockerfilePath: ./services/message-service/Dockerfile
-    dockerContext: .
+    name: unifiedchat-gateway-service
+    runtime: docker
+    region: oregon
+    plan: starter
+    dockerfilePath: services/gateway-service/Dockerfile
+    dockerContext: services/gateway-service
     envVars:
-      - key: DB_HOST
-        value: unifiedchat-postgres
-      - key: DB_PORT
-        value: 5432
-      - key: DB_NAME
-        value: unifiedchat
-      - key: DB_USER
-        value: unifiedchat
-      - key: DB_PASSWORD
-        generateValue: true
+      - key: PORT
+        value: 8080
+      - key: AUTH_SERVICE_URL
+        value: "https://unifiedchat-auth-service.onrender.com"
+      - key: USER_SERVICE_URL
+        value: "https://unifiedchat-user-service.onrender.com"
+      - key: MESSAGE_SERVICE_URL
+        value: "https://unifiedchat-message-service.onrender.com"
+    healthCheckPath: /health
+    autoDeploy: true
+    numInstances: 1
+
+  # Message Service
+  - type: web
+    name: unifiedchat-message-service
+    runtime: docker
+    region: oregon
+    plan: starter
+    dockerfilePath: services/message-service/Dockerfile
+    dockerContext: services/message-service
+    envVars:
       - key: PORT
         value: 8083
+    healthCheckPath: /health
+    autoDeploy: true
+    numInstances: 1
 
-  - type: pserv
-    name: unifiedchat-postgres
-    env: docker
-    image: postgres:15
+  # Realtime Service
+  - type: web
+    name: unifiedchat-realtime-service
+    runtime: docker
+    region: oregon
+    plan: starter
+    dockerfilePath: services/realtime-service/Dockerfile
+    dockerContext: services/realtime-service
     envVars:
-      - key: POSTGRES_DB
-        value: unifiedchat
-      - key: POSTGRES_USER
-        value: unifiedchat
-      - key: POSTGRES_PASSWORD
-        generateValue: true
+      - key: PORT
+        value: 8084
+      - key: MESSAGE_SERVICE_URL
+        value: "https://unifiedchat-message-service.onrender.com"
+    healthCheckPath: /health
+    autoDeploy: true
+    numInstances: 1
 EOF
 
 echo -e "${GREEN}✓ Render configuration created${NC}"
@@ -86,46 +126,52 @@ cat > RENDER_DEPLOYMENT.md << 'EOF'
 1. Visit [render.com](https://render.com)
 2. Sign up or sign in with GitHub
 
-### Step 2: Create New Web Service
+### Step 2: Deploy Services
 1. Click "New +"
-2. Select "Web Service"
-3. Connect your GitHub repository (alcall)
+2. Select "Blueprint"
+3. Connect your GitHub repository
+4. Select the repository and branch
+5. Click "Apply"
 
-### Step 3: Configure Service
-- **Name**: unifiedchat-frontend
-- **Environment**: Docker
-- **Branch**: main
-- **Root Directory**: web/frontend
-- **Build Command**: (leave empty, uses Dockerfile)
-- **Start Command**: (leave empty, uses Dockerfile)
+This will deploy all services defined in render.yaml:
+- Frontend (Next.js)
+- Auth Service (Go)
+- Gateway Service (Go)
+- Message Service (Go)
+- Realtime Service (Go)
 
-### Step 4: Set Environment Variables
-Add these environment variables:
-```
-NODE_ENV=production
-NEXT_PUBLIC_API_URL=https://unifiedchat-auth.onrender.com
-```
+### Step 3: Verify Deployment
+1. Wait for all services to deploy (5-10 minutes)
+2. Check the health endpoints:
+   - Frontend: https://unifiedchat-frontend.onrender.com
+   - Auth: https://unifiedchat-auth-service.onrender.com/health
+   - Gateway: https://unifiedchat-gateway-service.onrender.com/health
+   - Message: https://unifiedchat-message-service.onrender.com/health
+   - Realtime: https://unifiedchat-realtime-service.onrender.com/health
 
-### Step 5: Deploy
-1. Click "Create Web Service"
-2. Wait for build to complete (5-10 minutes)
-3. Get your public URL
+## Test Accounts
+- Username: admin, Password: password123
+- Username: Linda, Password: Linda
+- Username: Hana, Password: Hana
+- Username: Adam, Password: Adam
+- Username: Ahmed, Password: Ahmed
+- Username: Hamid, Password: Hamid
+- Username: Mueen, Password: Mueen
+- Username: Nacer, Password: Nacer
 
-### Step 6: Deploy Backend Services
-Repeat the process for:
-- unifiedchat-auth (auth service)
-- unifiedchat-message (message service)
-- unifiedchat-postgres (database)
+## API Endpoints
+Auth Service (/api/v1/auth/):
+- POST /login - Login
+- POST /register - Register
+- GET /verify - Verify token
+- GET /users - List users
 
-## Your URLs will be:
-- Frontend: https://unifiedchat-frontend.onrender.com
-- Auth Service: https://unifiedchat-auth.onrender.com
-- Message Service: https://unifiedchat-message.onrender.com
+Message Service:
+- POST /messages - Send message
+- GET /messages - Get messages
 
-## Test Accounts:
-- admin / password123
-- user2 / password123
-- user3 / password123
+Realtime Service:
+- WebSocket /ws - Real-time updates
 EOF
 
 echo -e "${GREEN}✓ Deployment instructions created${NC}"

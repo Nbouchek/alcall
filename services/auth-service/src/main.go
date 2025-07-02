@@ -4,6 +4,7 @@ import (
     "log"
     "os"
     "time"
+    "net/http"
     "github.com/gin-gonic/gin"
     "github.com/golang-jwt/jwt/v5"
     "github.com/gin-contrib/cors"
@@ -75,31 +76,48 @@ var users = map[string]map[string]interface{}{
 func main() {
     r := gin.Default()
 
-    // CORS configuration - Allow external access
+    // CORS configuration
     config := cors.DefaultConfig()
-    config.AllowAllOrigins = true  // Allow all origins for external testing
+    config.AllowAllOrigins = true
     config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
-    config.AllowHeaders = []string{"Origin", "Content-Type", "Authorization"}
+    config.AllowHeaders = []string{"Origin", "Content-Type", "Authorization", "Accept", "X-Requested-With"}
+    config.ExposeHeaders = []string{"Content-Length"}
+    config.AllowCredentials = true
     r.Use(cors.New(config))
 
     // Health check
     r.GET("/health", func(c *gin.Context) {
-        c.JSON(200, gin.H{"status": "healthy"})
+        c.JSON(http.StatusOK, gin.H{"status": "healthy"})
     })
 
-    r.POST("/login", login)
-    r.POST("/register", register)
-    r.GET("/verify", verifyToken)
-    r.GET("/users", getUsers)
+    // API v1 routes
+    api := r.Group("/api/v1")
+    {
+        // Auth routes
+        auth := api.Group("/auth")
+        {
+            auth.POST("/login", login)
+            auth.POST("/register", register)
+            auth.GET("/verify", verifyToken)
+        }
 
-    log.Println("Auth service starting on port 8082")
-    port := os.Getenv("PORT"); if port == "" { port = "8082" }; r.Run(":" + port)
+        // User routes
+        api.GET("/users", getUsers)
+    }
+
+    port := os.Getenv("PORT")
+    if port == "" {
+        port = "8082"
+    }
+    log.Printf("Auth service starting on port %s", port)
+    r.Run(":" + port)
 }
 
 func login(c *gin.Context) {
     var req LoginRequest
     if err := c.ShouldBindJSON(&req); err != nil {
-        c.JSON(400, gin.H{"error": err.Error()})
+        log.Printf("Error binding login request: %v", err)
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
         return
     }
 
@@ -124,16 +142,23 @@ func login(c *gin.Context) {
 
             tokenString, err := token.SignedString([]byte(jwtSecret))
             if err != nil {
-                c.JSON(500, gin.H{"error": "Failed to generate token"})
+                log.Printf("Error generating token: %v", err)
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
                 return
             }
 
-            c.JSON(200, gin.H{"token": tokenString, "user": gin.H{"id": userData["id"], "username": req.Username}})
+            c.JSON(http.StatusOK, gin.H{
+                "token": tokenString,
+                "user": gin.H{
+                    "id": userData["id"],
+                    "username": req.Username,
+                },
+            })
             return
         }
     }
 
-    c.JSON(401, gin.H{"error": "Invalid credentials"})
+    c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 }
 
 func register(c *gin.Context) {
