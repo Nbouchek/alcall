@@ -1,22 +1,34 @@
 package main
 
 import (
-    "encoding/json"
-    "log"
+	"bytes"
+	"encoding/json"
+	"log"
 	"math/rand"
-    "net/http"
-    "os"
+	"net/http"
+	"os"
 	"sync"
 	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-    "github.com/gorilla/websocket"
+	"github.com/gorilla/websocket"
 )
 
 var upgrader = websocket.Upgrader{
     CheckOrigin: func(r *http.Request) bool {
-		return true // Allow all origins
+		// Allow all origins for WebSocket connections
+		return true
+    },
+    ReadBufferSize:  1024,
+    WriteBufferSize: 1024,
+    Error: func(w http.ResponseWriter, r *http.Request, status int, reason error) {
+        log.Printf("WebSocket upgrade error: %v", reason)
+        // Add CORS headers to error response
+        w.Header().Set("Access-Control-Allow-Origin", "*")
+        w.Header().Set("Access-Control-Allow-Credentials", "true")
+        w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
+        http.Error(w, reason.Error(), status)
     },
 }
 
@@ -32,6 +44,7 @@ type Client struct {
 // Message represents messages sent over WebSocket.
 type Message struct {
 	Type         string      `json:"type"`
+	Content      string      `json:"content,omitempty"`
 	Username     string      `json:"username,omitempty"`
 	UserID       interface{} `json:"user_id,omitempty"`
 	FromUserID   interface{} `json:"from_user_id,omitempty"`
@@ -177,7 +190,9 @@ func main() {
 	config := cors.DefaultConfig()
 	config.AllowAllOrigins = true
 	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
-	config.AllowHeaders = []string{"Origin", "Content-Type", "Authorization"}
+	config.AllowHeaders = []string{"Origin", "Content-Type", "Authorization", "Accept", "X-Requested-With"}
+	config.ExposeHeaders = []string{"Content-Length", "Content-Type", "Authorization"}
+	config.AllowCredentials = true
 	r.Use(cors.New(config))
 
     r.GET("/", func(c *gin.Context) {
@@ -210,23 +225,38 @@ func main() {
 }
 
 func handleWebSocket(c *gin.Context) {
-    conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
-    if err != nil {
-        log.Println("WebSocket upgrade failed:", err)
-        return
-    }
+	log.Printf("Received WebSocket connection request from %s", c.Request.RemoteAddr)
+
+	// Dynamically set CORS headers based on request origin
+	origin := c.Request.Header.Get("Origin")
+	if origin != "" {
+		// A more secure approach would be to check the origin against a whitelist
+		c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+	} else {
+		// Fallback for clients that don't send an origin header
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+	}
+
+	c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+	c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
+
+	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		log.Println("WebSocket upgrade failed:", err)
+		return
+	}
 	log.Println("New WebSocket connection established")
 
-    client := &Client{
+	client := &Client{
 		ID:   generateID(),
 		Conn: conn,
 		Send: make(chan []byte, 256),
-    }
+	}
 
 	hub.registerClient(client)
 
 	go client.writePump()
-    go client.readPump()
+	go client.readPump()
 }
 
 func (c *Client) readPump() {
@@ -245,9 +275,10 @@ func (c *Client) readPump() {
             break
         }
 
+		log.Printf("Received raw message: %s", string(messageBytes))
 		var msg Message
 		if err := json.Unmarshal(messageBytes, &msg); err != nil {
-			log.Printf("Could not unmarshal JSON: %v", err)
+			log.Printf("Could not unmarshal JSON: %v. Raw message: %s", err, string(messageBytes))
 			continue
 		}
 
@@ -265,6 +296,9 @@ func (c *Client) readPump() {
 			log.Printf("Registered client: %s, User: %s, UserID: %v", c.ID, c.Username, c.UserID)
 			hub.mu.Unlock()
 			hub.broadcastPresenceUpdate()
+
+		case "private_message":
+			handlePrivateMessage(c, msg, messageBytes)
 
 		case "logout":
 			hub.mu.Lock()
@@ -288,6 +322,59 @@ func (c *Client) readPump() {
 			log.Printf("Unknown message type: %s", msg.Type)
 		}
     }
+}
+
+func handlePrivateMessage(c *Client, msg Message, messageBytes []byte) {
+	log.Printf("Handling private message from %v to %v", msg.FromUserID, msg.ToUserID)
+
+	// Forward the message via WebSocket
+	if !hub.sendToUser(msg.ToUserID, messageBytes) {
+		log.Printf("Failed to forward private message - user %v not found", msg.ToUserID)
+		// Optionally, send an error message back to the sender
+		return
+	}
+
+	// Persist the message by calling the message-service
+	go persistMessage(msg)
+}
+
+func persistMessage(msg Message) {
+	messageServiceURL := os.Getenv("MESSAGE_SERVICE_URL")
+	if messageServiceURL == "" {
+		messageServiceURL = "http://localhost:8083" // Fallback for local development
+	}
+
+	// The gateway proxies /api/v1/messages, so we need to target that path.
+	// However, the realtime service should communicate directly with the message service.
+	// The message service now listens on /api/v1/messages.
+	fullURL := messageServiceURL + "/api/v1/messages"
+
+	// Create the message payload for the message-service
+	payload := map[string]interface{}{
+		"sender_id":   msg.FromUserID,
+		"receiver_id": msg.ToUserID,
+		"content":     msg.Content,
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("Error marshaling message for persistence: %v", err)
+		return
+	}
+
+	// Make the HTTP POST request
+	resp, err := http.Post(fullURL, "application/json", bytes.NewBuffer(payloadBytes))
+	if err != nil {
+		log.Printf("Error persisting message to %s: %v", fullURL, err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		log.Printf("Message service at %s returned non-201 status: %d", fullURL, resp.StatusCode)
+	} else {
+		log.Printf("Message from %v to %v persisted successfully via %s", msg.FromUserID, msg.ToUserID, fullURL)
+	}
 }
 
 func (c *Client) writePump() {
