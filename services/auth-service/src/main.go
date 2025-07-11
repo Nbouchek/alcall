@@ -55,31 +55,31 @@ func main() {
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
 		log.Println("DATABASE_URL not found, falling back to individual environment variables.")
-		// Use Render's environment variables if available, otherwise fall back to generic ones
 		dbHost := os.Getenv("PGHOST")
-		if dbHost == "" {
-			dbHost = os.Getenv("DB_HOST")
-		}
 		dbPort := os.Getenv("PGPORT")
-		if dbPort == "" {
-			dbPort = os.Getenv("DB_PORT")
-		}
 		dbUser := os.Getenv("PGUSER")
-		if dbUser == "" {
-			dbUser = os.Getenv("DB_USER")
-		}
 		dbPassword := os.Getenv("PGPASSWORD")
-		if dbPassword == "" {
-			dbPassword = os.Getenv("DB_PASSWORD")
-		}
 		dbName := os.Getenv("PGDATABASE")
-		if dbName == "" {
-			dbName = os.Getenv("DB_NAME")
-		}
 
-		if dbHost != "" && dbPort != "" && dbUser != "" && dbName != "" {
-			// For Render, it's good practice to require SSL
-			dsn = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=require", dbHost, dbPort, dbUser, dbPassword, dbName)
+		if dbHost != "" && dbUser != "" && dbName != "" {
+			dsn = fmt.Sprintf("host=%s user=%s password=%s dbname=%s sslmode=require", dbHost, dbUser, dbPassword, dbName)
+			if dbPort != "" {
+				dsn += " port=" + dbPort
+			}
+		} else {
+			log.Println("Render-specific environment variables not found, trying generic DB variables.")
+			dbHost = os.Getenv("DB_HOST")
+			dbPort = os.Getenv("DB_PORT")
+			dbUser = os.Getenv("DB_USER")
+			dbPassword = os.Getenv("DB_PASSWORD")
+			dbName = os.Getenv("DB_NAME")
+
+			if dbHost != "" && dbUser != "" && dbName != "" {
+				dsn = fmt.Sprintf("host=%s user=%s password=%s dbname=%s sslmode=require", dbHost, dbUser, dbPassword, dbName)
+				if dbPort != "" {
+					dsn += " port=" + dbPort
+				}
+			}
 		}
 	}
 
