@@ -143,7 +143,7 @@ This will deploy all services defined in render.yaml:
 ### Step 3: Verify Deployment
 1. Wait for all services to deploy (5-10 minutes)
 2. Check the health endpoints:
-   - Frontend: https://unifiedchat-frontend.onrender.com
+- Frontend: https://unifiedchat-frontend.onrender.com
    - Auth: https://unifiedchat-auth-service.onrender.com/health
    - Gateway: https://unifiedchat-gateway-service.onrender.com/health
    - Message: https://unifiedchat-message-service.onrender.com/health

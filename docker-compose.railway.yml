@@ -63,6 +63,8 @@ services:
       DB_USER: unifiedchat
       DB_PASSWORD: ${DB_PASSWORD}
       PORT: 8083
+      POSTGRES_DSN: "host=postgres user=unifiedchat password=${DB_PASSWORD} dbname=unifiedchat port=5432 sslmode=disable"
+      REALTIME_SERVICE_URL: http://realtime-service:8084
     depends_on:
       postgres:
         condition: service_healthy
@@ -76,6 +78,7 @@ services:
     build: ./services/realtime-service
     environment:
       PORT: 8084
+      MESSAGE_SERVICE_URL: http://message-service:8083
     depends_on:
       message-service:
         condition: service_healthy

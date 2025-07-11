@@ -8,7 +8,7 @@ COPY . .
 RUN go build -o main ./src
 
 FROM alpine:latest
-RUN apk --no-cache add ca-certificates
+RUN apk --no-cache add ca-certificates wget
 WORKDIR /root/
 COPY --from=builder /app/main .
 EXPOSE 8081

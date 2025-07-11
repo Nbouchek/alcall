@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from "react";
 import Head from "next/head";
-import JanusAudioCall from "../components/JanusAudioCall";
 import JanusVideoCall from "../components/JanusVideoCall";
 import JanusEchoTest from "../components/JanusEchoTest";
 import JanusStreaming from "../components/JanusStreaming";
@@ -8,6 +7,8 @@ import JanusVideoCallP2P from "../components/JanusVideoCallP2P";
 import JanusTextRoom from "../components/JanusTextRoom";
 import JanusScreenShare from "../components/JanusScreenShare";
 import JanusDeviceTest from "../components/JanusDeviceTest";
+import AudioCallHandler from "../components/AudioCallHandler";
+import VideoCallInterface from "../components/VideoCallInterface";
 import {
   FaPhone,
   FaVideo,
@@ -37,6 +38,7 @@ export default function TestCalls() {
 
   const audioCallRef = useRef(null);
   const videoCallRef = useRef(null);
+  const videoCallInterfaceRef = useRef(null);
   const echoTestRef = useRef(null);
   const streamingRef = useRef(null);
   const videoCallP2PRef = useRef(null);
@@ -60,6 +62,15 @@ export default function TestCalls() {
       icon: <FaVideo className="w-8 h-8" />,
       color: "from-blue-400 to-indigo-500",
       component: "video",
+    },
+    {
+      id: "video-interface",
+      title: "Modern Video Call",
+      description:
+        "Test modern unified video calling interface with advanced features",
+      icon: <FaVideo className="w-8 h-8" />,
+      color: "from-purple-400 to-violet-500",
+      component: "video-interface",
     },
     {
       id: "echo",
@@ -128,6 +139,9 @@ export default function TestCalls() {
     if (videoCallRef.current) {
       videoCallRef.current.endCall?.();
     }
+    if (videoCallInterfaceRef.current) {
+      videoCallInterfaceRef.current.endCall?.();
+    }
     if (echoTestRef.current) {
       echoTestRef.current.stopTest?.();
     }
@@ -154,7 +168,7 @@ export default function TestCalls() {
       case "audio":
         return (
           <div className="max-w-4xl mx-auto">
-            <JanusAudioCall
+            <AudioCallHandler
               ref={audioCallRef}
               user={user}
               selectedReceiver={selectedReceiver}
@@ -172,6 +186,26 @@ export default function TestCalls() {
               selectedReceiver={selectedReceiver}
               onCallEnd={handleBackToTests}
               getUserName={(id) => (id === 1 ? "TestUser" : "TestReceiver")}
+            />
+          </div>
+        );
+      case "video-interface":
+        return (
+          <div className="max-w-6xl mx-auto">
+            <VideoCallInterface
+              ref={videoCallInterfaceRef}
+              user={user}
+              selectedReceiver={selectedReceiver}
+              onCallEnd={handleBackToTests}
+              sendCallNotification={(type, message) =>
+                console.log(`Notification (${type}):`, message)
+              }
+              onError={(error) =>
+                console.error("VideoCallInterface error:", error)
+              }
+              callState="calling"
+              roomId="test_room_123"
+              isIncoming={false}
             />
           </div>
         );

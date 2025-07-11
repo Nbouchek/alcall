@@ -1,128 +1,17 @@
 services:
-  # Janus WebRTC Service
   - type: web
     name: unifiedchat-janus-service
     runtime: docker
     region: oregon
-    plan: starter
-    dockerfilePath: services/janus-service/Dockerfile
-    dockerContext: services/janus-service
+    plan: standard  # Upgrade from starter for better resources
     envVars:
       - key: JANUS_LOG_LEVEL
         value: "4"
       - key: JANUS_LOG_TIMESTAMPS
         value: "true"
+      - key: JANUS_HTTP_PORT
+        value: "8088"
       - key: PORT
         value: "8088"
-    autoDeploy: true
-    numInstances: 1
-
-  # Auth Service
-  - type: web
-    name: unifiedchat-auth-service
-    runtime: docker
-    region: oregon
-    plan: starter
-    dockerfilePath: services/auth-service/Dockerfile
-    dockerContext: services/auth-service
-    envVars:
-      - key: PORT
-        value: 8082
-      - key: JWT_SECRET
-        value: "your-super-secret-jwt-key-change-in-production"
-    healthCheckPath: /health
-    autoDeploy: true
-    numInstances: 1
-
-  # Gateway Service
-  - type: web
-    name: unifiedchat-gateway-service
-    runtime: docker
-    region: oregon
-    plan: starter
-    dockerfilePath: services/gateway-service/Dockerfile
-    dockerContext: services/gateway-service
-    envVars:
-      - key: PORT
-        value: 8080
-      - key: AUTH_SERVICE_URL
-        value: "https://unifiedchat-auth-service.onrender.com"
-      - key: USER_SERVICE_URL
-        value: "https://unifiedchat-user-service.onrender.com"
-      - key: MESSAGE_SERVICE_URL
-        value: "https://unifiedchat-message-service.onrender.com"
-    healthCheckPath: /health
-    autoDeploy: true
-    numInstances: 1
-
-  # User Service
-  - type: web
-    name: unifiedchat-user-service
-    runtime: docker
-    region: oregon
-    plan: starter
-    dockerfilePath: services/user-service/Dockerfile
-    dockerContext: services/user-service
-    envVars:
-      - key: PORT
-        value: 8081
-    healthCheckPath: /health
-    autoDeploy: true
-    numInstances: 1
-
-  # Message Service
-  - type: web
-    name: unifiedchat-message-service
-    runtime: docker
-    region: oregon
-    plan: starter
-    dockerfilePath: services/message-service/Dockerfile
-    dockerContext: services/message-service
-    envVars:
-      - key: PORT
-        value: 8083
-    healthCheckPath: /health
-    autoDeploy: true
-    numInstances: 1
-
-  # Realtime Service
-  - type: web
-    name: unifiedchat-realtime-service
-    runtime: docker
-    region: oregon
-    plan: starter
-    dockerfilePath: services/realtime-service/Dockerfile
-    dockerContext: services/realtime-service
-    envVars:
-      - key: PORT
-        value: 8084
-      - key: MESSAGE_SERVICE_URL
-        value: "https://unifiedchat-message-service.onrender.com"
-    healthCheckPath: /health
-    autoDeploy: true
-    numInstances: 1
-
-  # Frontend
-  - type: web
-    name: unifiedchat-frontend
-    runtime: node
-    region: oregon
-    plan: starter
-    buildCommand: cd web/frontend && npm install && npm run build
-    startCommand: cd web/frontend && npm start
-    envVars:
-      - key: PORT
-        value: 3000
-      - key: NEXT_PUBLIC_AUTH_API_URL
-        value: "https://unifiedchat-auth-service.onrender.com"
-      - key: NEXT_PUBLIC_MESSAGE_API_URL
-        value: "https://unifiedchat-message-service.onrender.com"
-      - key: NEXT_PUBLIC_REALTIME_API_URL
-        value: "https://unifiedchat-realtime-service.onrender.com"
-      - key: NEXT_PUBLIC_JANUS_URL
-        value: "wss://unifiedchat-janus-service.onrender.com/janus"
-      - key: NEXT_PUBLIC_JANUS_HTTP_URL
-        value: "https://unifiedchat-janus-service.onrender.com"
-    healthCheckPath: /
     autoDeploy: true
     numInstances: 1

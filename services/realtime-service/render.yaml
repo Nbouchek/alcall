@@ -5,11 +5,7 @@ services:
     region: oregon
     plan: starter
     buildCommand: docker build -t realtime-service .
-    envVars:
-      - key: PORT
-        value: 8084
-      - key: MESSAGE_SERVICE_URL
-        value: "https://unifiedchat-message-service.onrender.com"
+    
     healthCheckPath: /health
     autoDeploy: true
     numInstances: 1

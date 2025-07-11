@@ -1,0 +1,59 @@
+general: {
+    enabled = true
+    events = true        # Enable event handlers
+    # Audio settings
+    sampling_rate = 48000
+    audio_level_average = 25
+    audio_active_packets = 100
+
+    # Video settings
+    video_codecs = "vp8,vp9,h264"
+    video_bitrate = 1024000
+    video_fps = 30
+    video_width = 1280
+    video_height = 720
+    video_keyframe_interval = 15    # More frequent keyframes
+
+    # RTCP feedback mechanisms
+    video_rtcp_fb = true
+    video_rtcp_remb = true
+    video_rtcp_nack = true
+    video_rtcp_pli = true
+    video_rtcp_fir = true
+    video_rtcp_tmmbr = true
+    video_rtcp_transport_cc = true
+    video_rtcp_xr = true
+    video_rtcp_rpsi = true
+    video_rtcp_app = true
+    video_rtcp_sdes = true
+    video_rtcp_sdes_mid = true
+    video_rtcp_sdes_rtp_stream_id = true
+    video_rtcp_sdes_repaired_rtp_stream_id = true
+    video_rtcp_sdes_cname = true
+    video_rtcp_sdes_msid = true
+    video_rtcp_sdes_label = true
+    video_rtcp_sdes_group = true
+    video_rtcp_sdes_ssrc = true
+    video_rtcp_sdes_csrc = true
+}
+
+room-1234: {
+    room = 1234
+    description = "Default Video Room"
+    secret = "unifiedchat"
+    publishers = 12            # Allow more concurrent publishers
+    bitrate = 512000          # Adjusted bitrate
+    fir_freq = 10
+    audiocodec = "opus"
+    videocodec = "vp8"
+    record = false
+    notify_joining = true     # Notify when users join/leave
+    require_pvtid = true      # Require private IDs
+    notify_media = true       # Notify about media changes
+    audio_level_extmap = 1    # Enable audio levels
+    video_orientation_extmap = 2  # Enable video orientation
+    audio_active_packets = 100
+    audio_level_average = 25
+    max_message_size = 512000
+}
+

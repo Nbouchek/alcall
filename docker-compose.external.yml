@@ -90,6 +90,8 @@ services:
       DB_NAME: unifiedchat
       DB_USER: unifiedchat
       DB_PASSWORD: password123
+      POSTGRES_DSN: "host=postgres user=unifiedchat password=password123 dbname=unifiedchat port=5432 sslmode=disable"
+      REALTIME_SERVICE_URL: http://realtime-service:8084
     healthcheck:
       test:
         [
@@ -111,6 +113,8 @@ services:
     depends_on:
       message-service:
         condition: service_healthy
+    environment:
+      MESSAGE_SERVICE_URL: http://message-service:8083
     healthcheck:
       test:
         [
@@ -155,16 +159,23 @@ services:
       retries: 3
 
   frontend:
-    build: ./web/frontend
+    build:
+      context: ./web/frontend
+      args:
+        NEXT_PUBLIC_AUTH_API_URL: ${NEXT_PUBLIC_AUTH_API_URL}
+        NEXT_PUBLIC_MESSAGE_API_URL: ${NEXT_PUBLIC_MESSAGE_API_URL}
+        NEXT_PUBLIC_REALTIME_API_URL: ${NEXT_PUBLIC_REALTIME_API_URL}
+        NEXT_PUBLIC_REALTIME_HTTP_API_URL: ${NEXT_PUBLIC_REALTIME_HTTP_API_URL}
+        NEXT_PUBLIC_JANUS_URL: ${NEXT_PUBLIC_JANUS_URL}
+        NEXT_PUBLIC_JANUS_HTTP_URL: ${NEXT_PUBLIC_JANUS_HTTP_URL}
     ports:
       - "3000:3000"
     depends_on:
       gateway-service:
         condition: service_healthy
-    environment:
-      NEXT_PUBLIC_API_URL: http://192.168.1.249:8080/api/v1
-      NEXT_PUBLIC_WS_URL: ws://192.168.1.249:8084
-      # Note: Audio calling now uses Janus WebRTC Server instead of audio-service
+    env_file:
+      - .env.frontend
+    command: npm run dev
 
 volumes:
   postgres_data:

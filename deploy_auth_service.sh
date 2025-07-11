@@ -1,10 +1,10 @@
 #!/bin/bash
 
-# Deploy updated auth service with /users endpoint
-echo "🚀 Deploying updated auth service with /users endpoint..."
+# Deploy updated auth service to Render
+echo "🚀 Deploying updated auth service to Render..."
 
-# Build the auth service
-echo "📦 Building auth service..."
+# Build and test the auth service locally first
+echo "📦 Building auth service locally..."
 cd services/auth-service
 docker build -t unifiedchat-auth-service .
 
@@ -16,15 +16,27 @@ fi
 
 echo "✅ Auth service built successfully"
 
-# For now, we'll use the existing deployment
-# In a real scenario, you would push to your container registry and deploy
-echo "📋 Auth service updated with /users endpoint"
-echo "🔗 The /users endpoint will return all available users"
-echo "🌐 Current auth service URL: https://unifiedchat-auth.onrender.com"
+# Deploy to Render using their deploy API
+echo "🚀 Triggering Render deployment..."
+RENDER_DEPLOY_KEY="YOUR_RENDER_DEPLOY_KEY"  # This should be set as an environment variable
+RENDER_SERVICE_ID="YOUR_RENDER_SERVICE_ID"  # This should be set as an environment variable
 
-echo ""
-echo "📝 To test the new endpoint:"
-echo "curl https://unifiedchat-auth.onrender.com/users"
-echo ""
+if [ -z "$RENDER_DEPLOY_KEY" ] || [ -z "$RENDER_SERVICE_ID" ]; then
+    echo "❌ Missing Render deployment credentials. Please set RENDER_DEPLOY_KEY and RENDER_SERVICE_ID"
+    exit 1
+fi
 
-echo "✅ Auth service deployment script completed"
+curl -X POST "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys" \
+  -H "accept: application/json" \
+  -H "authorization: Bearer $RENDER_DEPLOY_KEY"
+
+echo "✅ Deployment triggered on Render"
+echo "🌐 Auth service URL: https://unifiedchat-auth-service.onrender.com"
+echo ""
+echo "📝 Available endpoints:"
+echo "- POST /api/v1/auth/login"
+echo "- POST /api/v1/auth/register"
+echo "- GET /api/v1/auth/verify"
+echo "- GET /api/v1/users"
+echo ""
+echo "✅ Auth service deployment completed"

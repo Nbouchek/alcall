@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WebSocket and Janus Connection Stability Test</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+        background-color: #f5f5f5;
+      }
+      .container {
+        max-width: 1000px;
+        margin: 0 auto;
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
+      .section {
+        margin-bottom: 20px;
+        padding: 15px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+      }
+      .success {
+        background-color: #d4edda;
+        color: #155724;
+      }
+      .error {
+        background-color: #f8d7da;
+        color: #721c24;
+      }
+      .warning {
+        background-color: #fff3cd;
+        color: #856404;
+      }
+      .info {
+        background-color: #d1ecf1;
+        color: #0c5460;
+      }
+      button {
+        padding: 8px 16px;
+        background-color: #4caf50;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        margin-right: 10px;
+        margin-bottom: 5px;
+      }
+      button:hover {
+        background-color: #45a049;
+      }
+      button.disconnect {
+        background-color: #f44336;
+      }
+      button.disconnect:hover {
+        background-color: #d32f2f;
+      }
+      button:disabled {
+        background-color: #cccccc;
+        cursor: not-allowed;
+      }
+      pre {
+        background-color: #f8f9fa;
+        padding: 10px;
+        border-radius: 4px;
+        overflow-x: auto;
+      }
+      #logContainer {
+        max-height: 300px;
+        overflow-y: auto;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+      }
+      input[type="text"] {
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        margin-bottom: 10px;
+      }
+      label {
+        display: inline-block;
+        margin-bottom: 5px;
+      }
+      .status-indicator {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        margin-right: 5px;
+      }
+      .status-connected {
+        background-color: #4caf50;
+      }
+      .status-disconnected {
+        background-color: #f44336;
+      }
+      .status-connecting {
+        background-color: #ff9800;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>WebSocket and Janus Connection Stability Test</h1>
+
+      <div class="grid">
+        <!-- WebSocket Section -->
+        <div>
+          <div class="section">
+            <h2>WebSocket Connection</h2>
+            <div>
+              <label for="wsUrl">WebSocket URL:</label>
+              <input
+                type="text"
+                id="wsUrl"
+                value="ws://localhost:8084/ws"
+                style="width: 300px"
+              />
+            </div>
+            <div style="margin-top: 10px">
+              <label for="userId">User ID:</label>
+              <input type="text" id="userId" value="3" />
+              <label for="username">Username:</label>
+              <input type="text" id="username" value="admin" />
+            </div>
+            <div style="margin-top: 10px">
+              <button id="wsConnectBtn">Connect WebSocket</button>
+              <button id="wsDisconnectBtn" class="disconnect" disabled>
+                Disconnect WebSocket
+              </button>
+            </div>
+            <div style="margin-top: 10px">
+              <span>Status: </span>
+              <span id="wsStatus" class="info">Not connected</span>
+              <span
+                class="status-indicator status-disconnected"
+                id="wsStatusIndicator"
+              ></span>
+            </div>
+          </div>
+
+          <div class="section">
+            <h2>Send WebSocket Message</h2>
+            <div>
+              <label for="receiverId">Receiver ID:</label>
+              <input type="text" id="receiverId" value="4" />
+              <label for="receiverUsername">Receiver Username:</label>
+              <input type="text" id="receiverUsername" value="Nacer" />
+            </div>
+            <div style="margin-top: 10px">
+              <label for="messageContent">Message:</label>
+              <input
+                type="text"
+                id="messageContent"
+                value="Hello, this is a test message!"
+                style="width: 300px"
+              />
+              <button id="wsSendBtn" disabled>Send Message</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Janus Section -->
+        <div>
+          <div class="section">
+            <h2>Janus Connection</h2>
+            <div>
+              <label for="janusUrl">Janus WebSocket URL:</label>
+              <input
+                type="text"
+                id="janusUrl"
+                value="ws://localhost:8188"
+                style="width: 300px"
+              />
+            </div>
+            <div style="margin-top: 10px">
+              <label for="janusHttpUrl">Janus HTTP URL:</label>
+              <input
+                type="text"
+                id="janusHttpUrl"
+                value="http://localhost:8088/janus"
+                style="width: 300px"
+              />
+            </div>
+            <div style="margin-top: 10px">
+              <button id="janusLoadBtn">Load Janus Library</button>
+              <button id="janusConnectBtn" disabled>Connect Janus</button>
+              <button id="janusDisconnectBtn" class="disconnect" disabled>
+                Disconnect Janus
+              </button>
+            </div>
+            <div style="margin-top: 10px">
+              <span>Status: </span>
+              <span id="janusStatus" class="info">Not loaded</span>
+              <span
+                class="status-indicator status-disconnected"
+                id="janusStatusIndicator"
+              ></span>
+            </div>
+          </div>
+
+          <div class="section">
+            <h2>Janus Audio Test</h2>
+            <div>
+              <button id="janusEchoTestBtn" disabled>Start Echo Test</button>
+              <button id="janusEndEchoTestBtn" class="disconnect" disabled>
+                End Echo Test
+              </button>
+            </div>
+            <div style="margin-top: 10px">
+              <button id="janusMuteBtn" disabled>Mute</button>
+              <button id="janusUnmuteBtn" disabled>Unmute</button>
+            </div>
+            <div style="margin-top: 10px">
+              <span>Echo Test Status: </span>
+              <span id="janusEchoStatus" class="info">Not started</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Environment Information</h2>
+        <div id="envInfo">
+          <p>Hostname: <span id="hostname">-</span></p>
+          <p>Protocol: <span id="protocol">-</span></p>
+          <p>User Agent: <span id="userAgent">-</span></p>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Logs</h2>
+        <button id="clearLogsBtn">Clear Logs</button>
+        <div id="logContainer">
+          <pre id="logs"></pre>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // DOM elements
+      const wsConnectBtn = document.getElementById("wsConnectBtn");
+      const wsDisconnectBtn = document.getElementById("wsDisconnectBtn");
+      const wsSendBtn = document.getElementById("wsSendBtn");
+      const wsStatusDiv = document.getElementById("wsStatus");
+      const wsStatusIndicator = document.getElementById("wsStatusIndicator");
+
+      const janusLoadBtn = document.getElementById("janusLoadBtn");
+      const janusConnectBtn = document.getElementById("janusConnectBtn");
+      const janusDisconnectBtn = document.getElementById("janusDisconnectBtn");
+      const janusStatusDiv = document.getElementById("janusStatus");
+      const janusStatusIndicator = document.getElementById(
+        "janusStatusIndicator"
+      );
+      const janusEchoTestBtn = document.getElementById("janusEchoTestBtn");
+      const janusEndEchoTestBtn = document.getElementById(
+        "janusEndEchoTestBtn"
+      );
+      const janusMuteBtn = document.getElementById("janusMuteBtn");
+      const janusUnmuteBtn = document.getElementById("janusUnmuteBtn");
+      const janusEchoStatusDiv = document.getElementById("janusEchoStatus");
+
+      const clearLogsBtn = document.getElementById("clearLogsBtn");
+      const logsDiv = document.getElementById("logs");
+
+      // Input elements
+      const wsUrlInput = document.getElementById("wsUrl");
+      const userIdInput = document.getElementById("userId");
+      const usernameInput = document.getElementById("username");
+      const receiverIdInput = document.getElementById("receiverId");
+      const receiverUsernameInput = document.getElementById("receiverUsername");
+      const messageContentInput = document.getElementById("messageContent");
+      const janusUrlInput = document.getElementById("janusUrl");
+      const janusHttpUrlInput = document.getElementById("janusHttpUrl");
+
+      // Environment info
+      document.getElementById("hostname").textContent =
+        window.location.hostname;
+      document.getElementById("protocol").textContent =
+        window.location.protocol;
+      document.getElementById("userAgent").textContent = navigator.userAgent;
+
+      // WebSocket instance
+      let ws = null;
+      let wsReconnectAttempts = 0;
+      const WS_MAX_RECONNECT_ATTEMPTS = 5;
+      let wsReconnectTimeout = null;
+
+      // Janus instances
+      let janus = null;
+      let echotest = null;
+      let opaqueId = "echotest-" + Janus.randomString(12);
+      let localStream = null;
+      let janusReconnectAttempts = 0;
+      const JANUS_MAX_RECONNECT_ATTEMPTS = 3;
+      let janusReconnectTimeout = null;
+
+      // Log function
+      function log(message, type = "info") {
+        const timestamp = new Date().toLocaleTimeString();
+        const logEntry = `[${timestamp}] [${type.toUpperCase()}] ${message}`;
+        logsDiv.textContent = logsDiv.textContent + logEntry + "\n";
+        logsDiv.scrollTop = logsDiv.scrollHeight;
+      }
+
+      // Update WebSocket status
+      function updateWsStatus(message, type) {
+        wsStatusDiv.textContent = message;
+        wsStatusDiv.className = type;
+
+        // Update indicator
+        if (type === "success") {
+          wsStatusIndicator.className = "status-indicator status-connected";
+        } else if (type === "warning") {
+          wsStatusIndicator.className = "status-indicator status-connecting";
+        } else {
+          wsStatusIndicator.className = "status-indicator status-disconnected";
+        }
+      }
+
+      // Update Janus status
+      function updateJanusStatus(message, type) {
+        janusStatusDiv.textContent = message;
+        janusStatusDiv.className = type;
+
+        // Update indicator
+        if (type === "success") {
+          janusStatusIndicator.className = "status-indicator status-connected";
+        } else if (type === "warning") {
+          janusStatusIndicator.className = "status-indicator status-connecting";
+        } else {
+          janusStatusIndicator.className =
+            "status-indicator status-disconnected";
+        }
+      }
+
+      // Update Janus Echo Test status
+      function updateJanusEchoStatus(message, type) {
+        janusEchoStatusDiv.textContent = message;
+        janusEchoStatusDiv.className = type;
+      }
+
+      // Connect to WebSocket
+      function connectWebSocket() {
+        const wsUrl = wsUrlInput.value;
+        const userId = userIdInput.value;
+        const username = usernameInput.value;
+
+        try {
+          ws = new WebSocket(wsUrl);
+
+          updateWsStatus("Connecting...", "warning");
+          log(`Connecting to WebSocket at ${wsUrl}...`);
+
+          ws.onopen = () => {
+            log("WebSocket connection established", "success");
+            updateWsStatus("Connected", "success");
+
+            // Enable/disable buttons
+            wsConnectBtn.disabled = true;
+            wsDisconnectBtn.disabled = false;
+            wsSendBtn.disabled = false;
+
+            // Reset reconnect attempts
+            wsReconnectAttempts = 0;
+
+            // Register user
+            const registerMsg = {
+              type: "register",
+              user_id: parseInt(userId) || userId,
+              username: username,
+            };
+
+            log(`Registering user: ${JSON.stringify(registerMsg)}`);
+            ws.send(JSON.stringify(registerMsg));
+          };
+
+          ws.onmessage = (event) => {
+            try {
+              const data = JSON.parse(event.data);
+              log(
+                `Received WebSocket message: ${JSON.stringify(data)}`,
+                "info"
+              );
+            } catch (error) {
+              log(`Error parsing WebSocket message: ${error.message}`, "error");
+              log(`Raw message: ${event.data}`, "info");
+            }
+          };
+
+          ws.onerror = (error) => {
+            log(`WebSocket error: ${error}`, "error");
+            updateWsStatus("Connection error", "error");
+          };
+
+          ws.onclose = (event) => {
+            log(
+              `WebSocket connection closed: ${event.code} - ${event.reason}`,
+              "warning"
+            );
+            updateWsStatus("Disconnected", "error");
+
+            // Enable/disable buttons
+            wsConnectBtn.disabled = false;
+            wsDisconnectBtn.disabled = true;
+            wsSendBtn.disabled = true;
+
+            // Attempt to reconnect if not closed cleanly
+            if (event.code !== 1000 && event.code !== 1001) {
+              if (wsReconnectAttempts < WS_MAX_RECONNECT_ATTEMPTS) {
+                wsReconnectAttempts++;
+                const delay = Math.min(
+                  1000 * Math.pow(2, wsReconnectAttempts),
+                  30000
+                );
+                log(
+                  `Attempting to reconnect WebSocket in ${
+                    delay / 1000
+                  } seconds (Attempt ${wsReconnectAttempts}/${WS_MAX_RECONNECT_ATTEMPTS})...`,
+                  "warning"
+                );
+
+                if (wsReconnectTimeout) {
+                  clearTimeout(wsReconnectTimeout);
+                }
+
+                wsReconnectTimeout = setTimeout(() => {
+                  connectWebSocket();
+                }, delay);
+              } else {
+                log(
+                  "Maximum WebSocket reconnection attempts reached. Please reconnect manually.",
+                  "error"
+                );
+              }
+            }
+          };
+        } catch (error) {
+          log(`Failed to create WebSocket: ${error.message}`, "error");
+          updateWsStatus("Connection failed", "error");
+        }
+      }
+
+      // Disconnect from WebSocket
+      function disconnectWebSocket() {
+        if (ws) {
+          log("Disconnecting from WebSocket...");
+          ws.close(1000, "User requested disconnect");
+
+          // Clear any pending reconnect attempts
+          if (wsReconnectTimeout) {
+            clearTimeout(wsReconnectTimeout);
+            wsReconnectTimeout = null;
+          }
+        }
+      }
+
+      // Send WebSocket message
+      function sendWebSocketMessage() {
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+          log("WebSocket not connected", "error");
+          return;
+        }
+
+        const receiverId = receiverIdInput.value;
+        const receiverUsername = receiverUsernameInput.value;
+        const messageContent = messageContentInput.value;
+
+        const message = {
+          type: "private_message",
+          from_user_id: parseInt(userIdInput.value) || userIdInput.value,
+          to_user_id: parseInt(receiverId) || receiverId,
+          content: messageContent,
+          timestamp: Date.now(),
+          from_username: usernameInput.value,
+        };
+
+        try {
+          log(`Sending WebSocket message: ${JSON.stringify(message)}`);
+          ws.send(JSON.stringify(message));
+        } catch (error) {
+          log(`Error sending WebSocket message: ${error.message}`, "error");
+        }
+      }
+
+      // Load Janus library
+      function loadJanusLibrary() {
+        log("Loading Janus library...");
+        updateJanusStatus("Loading...", "warning");
+
+        // Create script element
+        const script = document.createElement("script");
+        script.src = "/janus.js";
+        script.async = true;
+
+        script.onload = () => {
+          log("Janus library loaded successfully", "success");
+          updateJanusStatus("Library loaded", "success");
+          janusConnectBtn.disabled = false;
+          janusLoadBtn.disabled = true;
+        };
+
+        script.onerror = () => {
+          log("Failed to load Janus library", "error");
+          updateJanusStatus("Library load failed", "error");
+        };
+
+        document.head.appendChild(script);
+      }
+
+      // Initialize Janus
+      function initJanus() {
+        if (typeof Janus === "undefined") {
+          log("Janus library not loaded", "error");
+          updateJanusStatus("Library not loaded", "error");
+          return;
+        }
+
+        const janusUrl = janusUrlInput.value;
+        log(`Initializing Janus with server: ${janusUrl}`);
+        updateJanusStatus("Initializing...", "warning");
+
+        Janus.init({
+          debug: "all",
+          callback: function () {
+            log("Janus library initialized", "success");
+
+            // Create Janus session
+            janus = new Janus({
+              server: janusUrl,
+              success: function () {
+                log("Janus connected successfully", "success");
+                updateJanusStatus("Connected", "success");
+
+                // Enable buttons
+                janusConnectBtn.disabled = true;
+                janusDisconnectBtn.disabled = false;
+                janusEchoTestBtn.disabled = false;
+
+                // Reset reconnect attempts
+                janusReconnectAttempts = 0;
+              },
+              error: function (error) {
+                log(`Janus connection error: ${error}`, "error");
+                updateJanusStatus("Connection failed", "error");
+                janusConnectBtn.disabled = false;
+
+                // Try to reconnect
+                if (janusReconnectAttempts < JANUS_MAX_RECONNECT_ATTEMPTS) {
+                  janusReconnectAttempts++;
+                  const delay = 2000 * janusReconnectAttempts;
+                  log(
+                    `Attempting to reconnect Janus in ${
+                      delay / 1000
+                    } seconds (Attempt ${janusReconnectAttempts}/${JANUS_MAX_RECONNECT_ATTEMPTS})...`,
+                    "warning"
+                  );
+
+                  if (janusReconnectTimeout) {
+                    clearTimeout(janusReconnectTimeout);
+                  }
+
+                  janusReconnectTimeout = setTimeout(() => {
+                    initJanus();
+                  }, delay);
+                }
+              },
+              destroyed: function () {
+                log("Janus session destroyed", "warning");
+                updateJanusStatus("Disconnected", "error");
+
+                // Reset buttons
+                janusConnectBtn.disabled = false;
+                janusDisconnectBtn.disabled = true;
+                janusEchoTestBtn.disabled = true;
+                janusEndEchoTestBtn.disabled = true;
+                janusMuteBtn.disabled = true;
+                janusUnmuteBtn.disabled = true;
+
+                updateJanusEchoStatus("Not started", "info");
+              },
+            });
+          },
+        });
+      }
+
+      // Disconnect Janus
+      function disconnectJanus() {
+        if (janus) {
+          log("Disconnecting from Janus...");
+
+          // End echo test if active
+          if (echotest) {
+            endEchoTest();
+          }
+
+          // Destroy Janus session
+          janus.destroy({
+            success: function () {
+              log("Janus session destroyed successfully", "success");
+            },
+            error: function (error) {
+              log(`Error destroying Janus session: ${error}`, "error");
+            },
+          });
+
+          janus = null;
+
+          // Clear any pending reconnect attempts
+          if (janusReconnectTimeout) {
+            clearTimeout(janusReconnectTimeout);
+            janusReconnectTimeout = null;
+          }
+        }
+      }
+
+      // Start Echo Test
+      function startEchoTest() {
+        if (!janus) {
+          log("Janus not connected", "error");
+          return;
+        }
+
+        log("Starting Janus echo test...");
+        updateJanusEchoStatus("Starting...", "warning");
+
+        janus.attach({
+          plugin: "janus.plugin.echotest",
+          opaqueId: opaqueId,
+          success: function (pluginHandle) {
+            echotest = pluginHandle;
+            log("Echo test plugin attached", "success");
+
+            // Try to get audio
+            navigator.mediaDevices
+              .getUserMedia({
+                audio: true,
+                video: false,
+              })
+              .then(function (stream) {
+                log("Got user media (audio)", "success");
+                localStream = stream;
+
+                // Create offer
+                echotest.createOffer({
+                  media: {
+                    audioRecv: true,
+                    videoRecv: false,
+                    audioSend: true,
+                    videoSend: false,
+                  },
+                  success: function (jsep) {
+                    log("Got SDP offer", "success");
+
+                    echotest.send({
+                      message: { audio: true, video: false },
+                      jsep: jsep,
+                      success: function () {
+                        log("Echo test started", "success");
+                        updateJanusEchoStatus("Active", "success");
+
+                        // Enable buttons
+                        janusEchoTestBtn.disabled = true;
+                        janusEndEchoTestBtn.disabled = false;
+                        janusMuteBtn.disabled = false;
+                        janusUnmuteBtn.disabled = true;
+                      },
+                    });
+                  },
+                  error: function (error) {
+                    log(`Error creating offer: ${error}`, "error");
+                    updateJanusEchoStatus("Failed to start", "error");
+                  },
+                });
+              })
+              .catch(function (error) {
+                log(`Error getting user media: ${error.message}`, "error");
+                updateJanusEchoStatus("Microphone error", "error");
+              });
+          },
+          error: function (error) {
+            log(`Error attaching to echo test plugin: ${error}`, "error");
+            updateJanusEchoStatus("Plugin error", "error");
+          },
+          onmessage: function (msg, jsep) {
+            log(`Echo test message: ${JSON.stringify(msg)}`, "info");
+
+            if (jsep) {
+              log("Got SDP answer", "success");
+              echotest.handleRemoteJsep({ jsep: jsep });
+            }
+          },
+          onremotestream: function (stream) {
+            log("Got remote stream", "success");
+
+            // Create audio element to play the echo
+            const audioElement = document.createElement("audio");
+            audioElement.autoplay = true;
+            audioElement.muted = false;
+            audioElement.controls = false;
+            audioElement.style.display = "none";
+
+            try {
+              audioElement.srcObject = stream;
+            } catch (e) {
+              try {
+                audioElement.src = URL.createObjectURL(stream);
+              } catch (e) {
+                log(`Error setting remote stream: ${e}`, "error");
+              }
+            }
+
+            document.body.appendChild(audioElement);
+          },
+          oncleanup: function () {
+            log("Echo test cleaned up", "warning");
+            updateJanusEchoStatus("Ended", "info");
+
+            if (localStream) {
+              try {
+                // Stop all tracks
+                localStream.getTracks().forEach((track) => track.stop());
+                localStream = null;
+              } catch (e) {
+                log(`Error stopping local stream: ${e}`, "error");
+              }
+            }
+          },
+        });
+      }
+
+      // End Echo Test
+      function endEchoTest() {
+        if (echotest) {
+          log("Ending echo test...");
+
+          echotest.send({
+            message: { audio: false },
+            success: function () {
+              echotest.hangup();
+              echotest = null;
+              log("Echo test ended", "success");
+              updateJanusEchoStatus("Ended", "info");
+
+              // Reset buttons
+              janusEchoTestBtn.disabled = false;
+              janusEndEchoTestBtn.disabled = true;
+              janusMuteBtn.disabled = true;
+              janusUnmuteBtn.disabled = true;
+            },
+          });
+        }
+      }
+
+      // Mute audio
+      function muteAudio() {
+        if (echotest && localStream) {
+          log("Muting audio...");
+
+          // Mute all audio tracks
+          localStream.getAudioTracks().forEach((track) => {
+            track.enabled = false;
+          });
+
+          // Update buttons
+          janusMuteBtn.disabled = true;
+          janusUnmuteBtn.disabled = false;
+        }
+      }
+
+      // Unmute audio
+      function unmuteAudio() {
+        if (echotest && localStream) {
+          log("Unmuting audio...");
+
+          // Unmute all audio tracks
+          localStream.getAudioTracks().forEach((track) => {
+            track.enabled = true;
+          });
+
+          // Update buttons
+          janusMuteBtn.disabled = false;
+          janusUnmuteBtn.disabled = true;
+        }
+      }
+
+      // Event listeners
+      wsConnectBtn.addEventListener("click", connectWebSocket);
+      wsDisconnectBtn.addEventListener("click", disconnectWebSocket);
+      wsSendBtn.addEventListener("click", sendWebSocketMessage);
+
+      janusLoadBtn.addEventListener("click", loadJanusLibrary);
+      janusConnectBtn.addEventListener("click", initJanus);
+      janusDisconnectBtn.addEventListener("click", disconnectJanus);
+      janusEchoTestBtn.addEventListener("click", startEchoTest);
+      janusEndEchoTestBtn.addEventListener("click", endEchoTest);
+      janusMuteBtn.addEventListener("click", muteAudio);
+      janusUnmuteBtn.addEventListener("click", unmuteAudio);
+
+      clearLogsBtn.addEventListener("click", () => {
+        logsDiv.textContent = "";
+      });
+
+      // Initialize
+      log("WebSocket and Janus Connection Stability Test initialized");
+      log(
+        `Running on ${window.location.hostname} using ${window.location.protocol}`
+      );
+    </script>
+  </body>
+</html>

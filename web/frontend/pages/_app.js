@@ -40,6 +40,18 @@ export default function App({ Component, pageProps }) {
         }}
       />
 
+      {/* Load ringtone functions */}
+      <Script
+        src="/sounds/ringtone.js"
+        strategy="beforeInteractive"
+        onLoad={() => {
+          console.log("Ringtone script loaded successfully");
+        }}
+        onError={(e) => {
+          console.error("Failed to load ringtone script:", e);
+        }}
+      />
+
       <Component {...pageProps} />
     </>
   );

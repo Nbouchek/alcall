@@ -52,9 +52,15 @@ const JanusVideoCall = forwardRef(
 
     // Janus configuration
     const JANUS_URL =
-      process.env.NEXT_PUBLIC_JANUS_URL || "ws://localhost:8188";
+      process.env.NEXT_PUBLIC_JANUS_URL ||
+      (typeof window !== "undefined" && window.location.hostname === "localhost"
+        ? "ws://localhost:8188"
+        : "wss://unifiedchat-janus-service.onrender.com/janus");
     const JANUS_HTTP_URL =
-      process.env.NEXT_PUBLIC_JANUS_HTTP_URL || "http://localhost:8088";
+      process.env.NEXT_PUBLIC_JANUS_HTTP_URL ||
+      (typeof window !== "undefined" && window.location.hostname === "localhost"
+        ? "http://localhost:8088"
+        : "https://unifiedchat-janus-service.onrender.com");
 
     // VideoRoom plugin name
     const VIDEOROOM_PLUGIN = "janus.plugin.videoroom";
@@ -281,47 +287,141 @@ const JanusVideoCall = forwardRef(
       });
     };
 
+    const getUserMedia = async (constraints) => {
+      try {
+        const defaultConstraints = {
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            sampleRate: 48000,
+          },
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            frameRate: { ideal: 30, max: 30 },
+            facingMode: "user",
+            aspectRatio: { ideal: 16 / 9 },
+          },
+        };
+
+        // Merge with provided constraints
+        const finalConstraints = {
+          audio: constraints.audio
+            ? {
+                ...defaultConstraints.audio,
+                ...(typeof constraints.audio === "object"
+                  ? constraints.audio
+                  : {}),
+              }
+            : false,
+          video: constraints.video
+            ? {
+                ...defaultConstraints.video,
+                ...(typeof constraints.video === "object"
+                  ? constraints.video
+                  : {}),
+              }
+            : false,
+        };
+
+        console.log("Getting user media with constraints:", finalConstraints);
+        const stream = await navigator.mediaDevices.getUserMedia(
+          finalConstraints
+        );
+
+        // Apply bandwidth constraints
+        if (stream.getVideoTracks().length > 0) {
+          const videoTrack = stream.getVideoTracks()[0];
+          try {
+            const sender = publisherRef.current?.rtcPeer
+              ?.getSenders()
+              .find((s) => s.track?.kind === "video");
+            if (sender) {
+              const params = sender.getParameters();
+              if (!params.encodings) {
+                params.encodings = [{}];
+              }
+              params.encodings[0].maxBitrate = 1024000; // 1mbps
+              params.encodings[0].maxFramerate = 30;
+              await sender.setParameters(params);
+              console.log("Applied bandwidth constraints to video track");
+            }
+          } catch (e) {
+            console.warn("Failed to set sender parameters:", e);
+          }
+        }
+
+        return stream;
+      } catch (error) {
+        console.error("Failed to get user media:", error);
+        throw new Error(`Failed to access camera/microphone: ${error.message}`);
+      }
+    };
+
     const configurePublisher = (stream) => {
-      return new Promise((resolve, reject) => {
-        publisherRef.current.createOffer({
-          media: {
-            audioRecv: false,
-            videoRecv: false,
-            audioSend: isAudioEnabled,
-            videoSend: isVideoEnabled,
-          },
-          stream: stream,
-          success: (jsep) => {
-            console.log("JanusVideoCall: Publisher offer created");
+      const videoTrack = stream.getVideoTracks()[0];
+      const audioTrack = stream.getAudioTracks()[0];
 
-            const publishRequest = {
-              request: "configure",
-              audio: isAudioEnabled,
-              video: isVideoEnabled,
-            };
+      const publisherConfig = {
+        audioSend: true,
+        videoSend: true,
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+        video: {
+          width: 1280,
+          height: 720,
+          frameRate: 30,
+        },
+        data: true,
+        simulcast: false,
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" },
+          {
+            urls: "turn:your-turn-server",
+            username: "unifiedchat",
+            credential: "changeme",
+          },
+        ],
+        trickle: true,
+        success: (jsep) => {
+          console.log("Publisher SDP created:", jsep);
+          publisherRef.current.send({
+            message: {
+              request: "publish",
+              audio: true,
+              video: true,
+              data: true,
+            },
+            jsep: jsep,
+          });
+        },
+        error: (error) => {
+          console.error("Failed to publish:", error);
+          setConnectionError("Failed to establish media connection");
+        },
+      };
 
-            publisherRef.current.send({
-              message: publishRequest,
-              jsep: jsep,
-              success: (result) => {
-                console.log("JanusVideoCall: Publisher configured:", result);
-                resolve();
-              },
-              error: (error) => {
-                console.error(
-                  "JanusVideoCall: Failed to configure publisher:",
-                  error
-                );
-                reject(error);
-              },
-            });
-          },
-          error: (error) => {
-            console.error("JanusVideoCall: Failed to create offer:", error);
-            reject(error);
-          },
-        });
-      });
+      if (videoTrack) {
+        publisherConfig.videoSend = true;
+        publisherConfig.video = {
+          ...publisherConfig.video,
+          deviceId: videoTrack.getSettings().deviceId,
+        };
+      }
+
+      if (audioTrack) {
+        publisherConfig.audioSend = true;
+        publisherConfig.audio = {
+          ...publisherConfig.audio,
+          deviceId: audioTrack.getSettings().deviceId,
+        };
+      }
+
+      return publisherConfig;
     };
 
     const handlePublisherMessage = (msg, jsep) => {
@@ -451,10 +551,6 @@ const JanusVideoCall = forwardRef(
       }
 
       setParticipants((prev) => prev.filter((p) => p.id !== publisherId));
-    };
-
-    const getUserMedia = (constraints) => {
-      return navigator.mediaDevices.getUserMedia(constraints);
     };
 
     const toggleVideo = () => {

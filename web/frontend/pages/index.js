@@ -3,10 +3,11 @@ import Head from "next/head";
 import Script from "next/script";
 import axios from "axios";
 import UserPopover from "../components/UserPopover";
-import JanusAudioCall from "../components/JanusAudioCall";
-import JanusVideoCall from "../components/JanusVideoCall";
+import AudioCallHandler from "../components/AudioCallHandler";
+import VideoCallInterface from "../components/VideoCallInterface";
 import {
   FaPhone,
+  FaPhoneSlash,
   FaPaperPlane,
   FaUser,
   FaSignOutAlt,
@@ -18,3052 +19,2735 @@ import {
   FaBars,
   FaTimes,
   FaSearch,
-  FaUsers,
   FaVideo,
   FaCog,
-  FaVolumeUp,
-  FaPhoneSlash,
 } from "react-icons/fa";
 
+// --- Configuration ---
 const AUTH_API_BASE_URL =
-  process.env.NEXT_PUBLIC_AUTH_API_URL ||
-  (typeof window !== "undefined" && window.location.hostname === "localhost"
-    ? "http://localhost:8080/api/v1"
-    : "https://unifiedchat-auth-service.onrender.com/api/v1");
+  process.env.NEXT_PUBLIC_AUTH_API_URL || "http://localhost:8080/api/v1";
 const MESSAGE_API_BASE_URL =
   process.env.NEXT_PUBLIC_MESSAGE_API_URL ||
-  (typeof window !== "undefined" && window.location.hostname === "localhost"
-    ? "http://localhost:8080/api/v1"
-    : "https://unifiedchat-gateway-service.onrender.com/api/v1");
-const REALTIME_API_BASE_URL =
-  process.env.NEXT_PUBLIC_REALTIME_API_URL ||
-  (typeof window !== "undefined" && window.location.hostname === "localhost"
-    ? "http://localhost:8084"
-    : window.location.hostname.includes("onrender.com")
-    ? "https://unifiedchat-realtime-service.onrender.com"
-    : `${window.location.protocol}//${window.location.hostname}:8084`);
-const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
-
-// IS_RENDER_DEPLOYMENT is now handled as state to avoid hydration issues
-
-// Force normal mode for now - backend services are working
-const FORCE_NORMAL_MODE = process.env.NEXT_PUBLIC_FORCE_NORMAL_MODE === "true";
-
-// Debug: Log the detection will happen in useEffect after component mounts
+  "http://localhost:8080/api/v1/messages";
+const WEBSOCKET_URL =
+  process.env.NEXT_PUBLIC_REALTIME_API_URL || "ws://localhost:8084/ws";
 
 export default function Home() {
+  console.log(
+    "🔥 FRONTEND CACHE BUSTER v2.4.0 - DIRECT HANGUP CLEANUP FIX LOADED 🔥"
+  );
+  // --- State ---
   const [user, setUser] = useState(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [users, setUsers] = useState([]);
+  const [onlineUsers, setOnlineUsers] = useState([]);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [selectedReceiver, setSelectedReceiver] = useState(null);
+  const [selectedRecipient, setSelectedRecipient] = useState(null);
+  const [loginForm, setLoginForm] = useState({ username: "", password: "" });
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [users, setUsers] = useState([]);
-  const [loadingUsers, setLoadingUsers] = useState(false);
-  const [onlineUsers, setOnlineUsers] = useState([]);
-  const [audioServiceStatus, setAudioServiceStatus] = useState("checking");
-  const [isClient, setIsClient] = useState(false);
-  const [isRenderDeployment, setIsRenderDeployment] = useState(false);
+  const [searchResults, setSearchResults] = useState([]);
+  const [highlightedUser, setHighlightedUser] = useState(null);
+  const [activeCallRecipient, setActiveCallRecipient] = useState(null);
   const [incomingCall, setIncomingCall] = useState(null);
-  const [connectedUsers, setConnectedUsers] = useState(new Set()); // Track actually connected users
-  const [showAudioCallModal, setShowAudioCallModal] = useState(false);
-  const [showVideoCallModal, setShowVideoCallModal] = useState(false);
-  const [incomingCallRingtone, setIncomingCallRingtone] = useState(null);
-  const [incomingCallRingtoneInterval, setIncomingCallRingtoneInterval] =
+  const [callState, setCallState] = useState("idle"); // "idle" | "calling" | "ringing" | "active"
+  const [callRoomId, setCallRoomId] = useState(null);
+  const [userMap, setUserMap] = useState(new Map());
+  const audioContextRef = useRef(null);
+  // Add state for call notifications
+  const [callNotification, setCallNotification] = useState(null);
+  const [janusInitialized, setJanusInitialized] = useState(false);
+  const [callEndedModal, setCallEndedModal] = useState(null);
+
+  // Video call state
+  const [videoCallState, setVideoCallState] = useState("idle"); // "idle" | "calling" | "ringing" | "active"
+  const [activeVideoCallRecipient, setActiveVideoCallRecipient] =
     useState(null);
+  const [incomingVideoCall, setIncomingVideoCall] = useState(null);
+  const [videoCallRoomId, setVideoCallRoomId] = useState(null);
+  const [callType, setCallType] = useState("audio"); // "audio" | "video"
 
-  const [loginForm, setLoginForm] = useState({
-    username: "",
-    password: "",
-  });
+  // Add state for audio call controls
+  const [audioCallMuted, setAudioCallMuted] = useState(false);
+  const [audioCallVolume, setAudioCallVolume] = useState(1.0);
+  const [audioCallStatus, setAudioCallStatus] = useState("Connecting...");
+  const [forceHideModal, setForceHideModal] = useState(false);
 
-  const chatEndRef = useRef(null);
-  const [popoverUser, setPopoverUser] = useState(null);
-  const [popoverAnchor, setPopoverAnchor] = useState(null);
-  const audioCallRef = useRef(null);
-  const videoCallRef = useRef(null);
-  const wsRef = useRef(null);
-
-  // Call state management
-  const [callState, setCallState] = useState({
-    isInitiating: false, // Caller: starting the call
-    isRinging: false, // Receiver: incoming call ringing
-    isConnecting: false, // Both: call accepted, connecting
-    isConnected: false, // Both: call is active
-    isEnding: false, // Both: call is ending
-    callDirection: null, // 'outgoing' or 'incoming'
-    callPartner: null, // The other person in the call
-    roomId: null, // Room ID for the call
-    callStartTime: null, // When the call started
-    callDuration: 0, // Call duration in seconds
-    callStatus: "", // Add status for better UX
-  });
-
-  const [callOutcomeMessage, setCallOutcomeMessage] = useState(null); // Add for temporary status messages
-
-  // Call controls state
-  const [isMuted, setIsMuted] = useState(false);
-  const [isSpeakerOn, setIsSpeakerOn] = useState(false);
-
-  // Call history state
-  const [callHistory, setCallHistory] = useState([]);
-
-  // Audio management state
-  const [audioContext, setAudioContext] = useState(null);
-  const [currentRingback, setCurrentRingback] = useState(null);
-  const [currentConnectionTone, setCurrentConnectionTone] = useState(null);
-  const audioGainNode = useRef(null);
-  const ringbackInterval = useRef(null);
-
-  // Call duration timer
-  const callDurationInterval = useRef(null);
-
-  // Start call duration timer
-  const startCallTimer = () => {
-    if (callDurationInterval.current) {
-      clearInterval(callDurationInterval.current);
-    }
-    callDurationInterval.current = setInterval(() => {
-      setCallState((prev) => ({
-        ...prev,
-        callDuration: prev.callDuration + 1,
-      }));
-    }, 1000);
-  };
-
-  // Stop call duration timer
-  const stopCallTimer = () => {
-    if (callDurationInterval.current) {
-      clearInterval(callDurationInterval.current);
-      callDurationInterval.current = null;
-    }
-  };
-
-  // Format call duration
-  const formatCallDuration = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, "0")}:${secs
-      .toString()
-      .padStart(2, "0")}`;
-  };
-
-  // Toggle mute functionality
-  const toggleMute = () => {
-    const newMuteState = !isMuted;
-    setIsMuted(newMuteState);
-
-    // If JanusAudioCall component has toggleMute, call it
-    if (audioCallRef.current && audioCallRef.current.toggleMute) {
-      audioCallRef.current.toggleMute();
-    }
-
-    // Play audio feedback
-    playAudioFeedback(newMuteState ? "mute_on" : "mute_off");
-
-    // Update call status with mute indicator
-    if (callState.isConnected) {
-      setCallState((prev) => ({
-        ...prev,
-        callStatus: newMuteState ? "Connected • Muted" : "Connected • HD Voice",
-      }));
-    }
-
-    console.log(`Call ${newMuteState ? "muted" : "unmuted"}`);
-  };
-
-  // Toggle speaker functionality
-  const toggleSpeaker = () => {
-    setIsSpeakerOn(!isSpeakerOn);
-    console.log(`Speaker ${isSpeakerOn ? "off" : "on"}`);
-    playAudioFeedback("speaker_" + (isSpeakerOn ? "off" : "on"));
-  };
-
-  // ========== MODERN AUDIO SYSTEM ==========
-
-  // Initialize audio context for high-quality audio
-  const initializeAudioContext = () => {
-    if (!audioContext) {
-      try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const gainNode = ctx.createGain();
-        gainNode.connect(ctx.destination);
-
-        setAudioContext(ctx);
-        audioGainNode.current = gainNode;
-
-        console.log("🎵 Audio system initialized");
-        return ctx;
-      } catch (error) {
-        console.error("Failed to initialize audio context:", error);
-        return null;
-      }
-    }
-    return audioContext;
-  };
-
-  // Create audio tone generator
-  const createTone = (frequency, duration, type = "sine", volume = 0.1) => {
-    const ctx = audioContext || initializeAudioContext();
-    if (!ctx) return null;
-
-    const oscillator = ctx.createOscillator();
-    const gainNode = ctx.createGain();
-
-    oscillator.connect(gainNode);
-    gainNode.connect(audioGainNode.current || ctx.destination);
-
-    oscillator.frequency.setValueAtTime(frequency, ctx.currentTime);
-    oscillator.type = type;
-
-    // Audio envelope for smooth transitions
-    gainNode.gain.setValueAtTime(0, ctx.currentTime);
-    gainNode.gain.linearRampToValueAtTime(volume, ctx.currentTime + 0.05);
-    gainNode.gain.exponentialRampToValueAtTime(
-      0.01,
-      ctx.currentTime + duration - 0.05
-    );
-
-    oscillator.start(ctx.currentTime);
-    oscillator.stop(ctx.currentTime + duration);
-
-    return { oscillator, gainNode };
-  };
-
-  // Play ringback tone for caller (what caller hears while calling)
-  const playRingbackTone = (region = "US") => {
-    if (ringbackInterval.current) {
-      clearInterval(ringbackInterval.current);
-    }
-
-    const patterns = {
-      US: {
-        ringDuration: 2.0,
-        pauseDuration: 4.0,
-        frequency1: 440,
-        frequency2: 480,
-        pattern: "double_beep",
-      },
-      UK: {
-        ringDuration: 0.4,
-        pauseDuration: 0.2,
-        frequency1: 400,
-        frequency2: 450,
-        pattern: "double_burst",
-      },
-      EU: {
-        ringDuration: 1.0,
-        pauseDuration: 3.0,
-        frequency1: 425,
-        frequency2: 425,
-        pattern: "single_long",
-      },
-    };
-
-    const config = patterns[region] || patterns.US;
-
-    const playRingbackCycle = () => {
-      if (config.pattern === "double_beep") {
-        // US Style: beep-beep, pause
-        createTone(config.frequency1, 0.2, "sine", 0.15);
-        setTimeout(() => {
-          createTone(config.frequency2, 0.2, "sine", 0.15);
-        }, 300);
-      } else if (config.pattern === "double_burst") {
-        // UK Style: ring-ring, brief pause, ring-ring, long pause
-        createTone(config.frequency1, config.ringDuration, "sine", 0.12);
-        setTimeout(() => {
-          createTone(config.frequency1, config.ringDuration, "sine", 0.12);
-        }, 600);
-      } else {
-        // EU Style: single long tone
-        createTone(config.frequency1, config.ringDuration, "sine", 0.12);
-      }
-    };
-
-    // Start immediately and then repeat
-    playRingbackCycle();
-    ringbackInterval.current = setInterval(
-      playRingbackCycle,
-      (config.ringDuration + config.pauseDuration) * 1000
-    );
-
-    console.log(`🎵 Playing ${region} ringback tone`);
-  };
-
-  // Stop ringback tone
-  const stopRingbackTone = () => {
-    if (ringbackInterval.current) {
-      clearInterval(ringbackInterval.current);
-      ringbackInterval.current = null;
-      console.log("🔇 Ringback tone stopped");
-    }
-  };
-
-  // Play connection audio cue
-  const playConnectionTone = (type = "connected") => {
-    const tones = {
-      connecting: { frequency: 800, duration: 0.3, volume: 0.08 },
-      connected: { frequency: 1000, duration: 0.15, volume: 0.1 },
-      disconnected: { frequency: 400, duration: 0.4, volume: 0.08 },
-      call_ended: { frequency: 600, duration: 0.5, volume: 0.06 },
-      call_failed: { frequency: 300, duration: 0.8, volume: 0.08 },
-    };
-
-    const config = tones[type];
-    if (config) {
-      createTone(config.frequency, config.duration, "sine", config.volume);
-      console.log(`🎵 Playing ${type} tone`);
-    }
-  };
-
-  // Play audio feedback for UI interactions
-  const playAudioFeedback = (action) => {
-    const feedbacks = {
-      mute_on: { frequency: 800, duration: 0.1, volume: 0.05 },
-      mute_off: { frequency: 1200, duration: 0.1, volume: 0.05 },
-      speaker_on: { frequency: 1000, duration: 0.1, volume: 0.05 },
-      speaker_off: { frequency: 800, duration: 0.1, volume: 0.05 },
-      button_press: { frequency: 600, duration: 0.05, volume: 0.03 },
-      call_declined: { frequency: 400, duration: 0.3, volume: 0.08 },
-      message_received: { frequency: 1000, duration: 0.1, volume: 0.05 },
-      message_sent: { frequency: 1200, duration: 0.1, volume: 0.05 },
-    };
-
-    const config = feedbacks[action];
-    if (config && !isMuted) {
-      // Don't play UI sounds when muted
-      createTone(config.frequency, config.duration, "sine", config.volume);
-    }
-  };
-
-  // Advanced HD audio processing with noise cancellation and enhancement
-  const applyAudioFilters = () => {
-    if (!audioContext || !audioGainNode.current) return;
-
-    try {
-      // Create sophisticated audio processing chain
-      const highpass = audioContext.createBiquadFilter();
-      const lowpass = audioContext.createBiquadFilter();
-      const notchFilter = audioContext.createBiquadFilter();
-      const compressor = audioContext.createDynamicsCompressor();
-      const limiter = audioContext.createDynamicsCompressor();
-
-      // High-pass filter to remove low-frequency noise (AC hum, traffic rumble)
-      highpass.type = "highpass";
-      highpass.frequency.setValueAtTime(85, audioContext.currentTime);
-      highpass.Q.setValueAtTime(0.7, audioContext.currentTime);
-
-      // Low-pass filter for wideband audio (HD Voice range: 50Hz-7kHz)
-      lowpass.type = "lowpass";
-      lowpass.frequency.setValueAtTime(7000, audioContext.currentTime);
-      lowpass.Q.setValueAtTime(0.7, audioContext.currentTime);
-
-      // Notch filter to remove 60Hz electrical hum
-      notchFilter.type = "notch";
-      notchFilter.frequency.setValueAtTime(60, audioContext.currentTime);
-      notchFilter.Q.setValueAtTime(10, audioContext.currentTime);
-
-      // Main compressor for automatic gain control and voice enhancement
-      compressor.threshold.setValueAtTime(-18, audioContext.currentTime);
-      compressor.knee.setValueAtTime(25, audioContext.currentTime);
-      compressor.ratio.setValueAtTime(8, audioContext.currentTime);
-      compressor.attack.setValueAtTime(0.002, audioContext.currentTime);
-      compressor.release.setValueAtTime(0.2, audioContext.currentTime);
-
-      // Limiter to prevent clipping and distortion
-      limiter.threshold.setValueAtTime(-3, audioContext.currentTime);
-      limiter.knee.setValueAtTime(5, audioContext.currentTime);
-      limiter.ratio.setValueAtTime(20, audioContext.currentTime);
-      limiter.attack.setValueAtTime(0.001, audioContext.currentTime);
-      limiter.release.setValueAtTime(0.05, audioContext.currentTime);
-
-      // Connect the sophisticated audio processing chain
-      audioGainNode.current.disconnect();
-      audioGainNode.current.connect(highpass);
-      highpass.connect(notchFilter);
-      notchFilter.connect(lowpass);
-      lowpass.connect(compressor);
-      compressor.connect(limiter);
-      limiter.connect(audioContext.destination);
-
-      console.log("🎛️ Advanced HD audio processing enabled:");
-      console.log("  • Noise cancellation (50Hz-7kHz wideband)");
-      console.log("  • Echo suppression");
-      console.log("  • Automatic gain control");
-      console.log("  • Voice enhancement");
-      console.log("  • Anti-clipping limiter");
-    } catch (error) {
-      console.error("Failed to apply audio filters:", error);
-      // Fallback to basic connection
-      audioGainNode.current.connect(audioContext.destination);
-    }
-  };
-
-  // Advanced call quality monitoring with realistic simulation
-  const getCallQuality = () => {
-    // In a real app, this would measure actual network conditions
-    // Simulate realistic network quality distribution
-    const qualityDistribution = [
-      { quality: "HD Voice", probability: 0.6, icon: "🟢" },
-      { quality: "Good", probability: 0.25, icon: "🟡" },
-      { quality: "Fair", probability: 0.1, icon: "🟠" },
-      { quality: "Poor", probability: 0.05, icon: "🔴" },
-    ];
-
-    let randomValue = Math.random();
-    let selectedQuality = qualityDistribution[0];
-
-    for (const quality of qualityDistribution) {
-      if (randomValue < quality.probability) {
-        selectedQuality = quality;
-        break;
-      }
-      randomValue -= quality.probability;
-    }
-
-    if (callState.isConnected) {
-      // Update call status with quality and visual indicator
-      setCallState((prev) => ({
-        ...prev,
-        callStatus: `Connected • ${selectedQuality.icon} ${selectedQuality.quality}`,
-      }));
-
-      // Simulate quality-based audio adjustments
-      if (selectedQuality.quality === "Poor") {
-        console.log(
-          "🔇 Poor quality detected - applying aggressive noise reduction"
-        );
-      } else if (selectedQuality.quality === "HD Voice") {
-        console.log("🎵 HD Voice quality - enabling enhanced audio features");
-      }
-    }
-
-    return selectedQuality.quality;
-  };
-
-  // Handle ambient audio during calls
-  const manageAmbientAudio = (callActive) => {
-    if (callActive) {
-      // Lower system volumes (simulated)
-      console.log("🔇 Ducking ambient audio for call");
-
-      // In a real app, you'd integrate with system audio controls
-      // This is a placeholder for demonstration
-      document.body.style.setProperty("--call-audio-ducking", "0.3");
-    } else {
-      // Restore normal audio levels
-      console.log("🔊 Restoring ambient audio levels");
-      document.body.style.setProperty("--call-audio-ducking", "1.0");
-    }
-  };
-
-  // Initialize call (caller)
-  const initiateCall = () => {
-    if (!selectedReceiver) {
-      alert("Please select a user to call");
+  // New function to handle audio call ending from AudioCallHandler
+  const handleAudioCallEnd = () => {
+    // Prevent infinite loops - if already idle, don't process again
+    if (callState === "idle") {
+      console.log(
+        "🔥 INDEX - handleAudioCallEnd called but already idle, skipping"
+      );
       return;
     }
 
-    // Prevent calling yourself
-    if (selectedReceiver === user.id) {
-      alert("You cannot call yourself");
+    // Prevent multiple concurrent calls
+    if (isEndingCallRef.current) {
+      console.log(
+        "🔥 INDEX - handleAudioCallEnd already in progress, skipping"
+      );
       return;
     }
 
-    const roomId = Date.now(); // Simple room ID generation
-    const receiver = users.find((u) => u.id === selectedReceiver);
+    isEndingCallRef.current = true;
 
-    if (!receiver) {
-      alert("Selected user not found. Please try selecting a different user.");
-      return;
-    }
-
-    console.log(
-      `Initiating call from ${user.username} to ${receiver.username}`
-    );
-
-    // Initialize audio system
-    initializeAudioContext();
-
-    // Start ringback tone for caller (detect region or default to US)
-    const userRegion = navigator.language?.startsWith("en-GB")
-      ? "UK"
-      : navigator.language?.startsWith("de") ||
-        navigator.language?.startsWith("fr") ||
-        navigator.language?.startsWith("it")
-      ? "EU"
-      : "US";
-    playRingbackTone(userRegion);
-
-    // Manage ambient audio
-    manageAmbientAudio(true);
-
-    setCallState({
-      isInitiating: true,
-      isRinging: false,
-      isConnecting: false,
-      isConnected: false,
-      isEnding: false,
-      callDirection: "outgoing",
-      callPartner: receiver,
-      roomId: roomId,
-      callStartTime: null,
-      callDuration: 0,
-      callStatus: `Calling ${receiver.username}...`, // Better status message
+    console.log("🔥 INDEX - IMMEDIATE AGGRESSIVE CLEANUP STARTING");
+    console.log("🔥 INDEX - Current state before cleanup:", {
+      callState,
+      activeCallRecipient: activeCallRecipient?.username,
+      callRoomId,
+      incomingCall: incomingCall?.caller_username,
     });
 
-    // Send call notification
-    sendCallNotification(selectedReceiver, roomId);
+    // IMMEDIATE AND SYNCHRONOUS MICROPHONE CLEANUP
+    console.log("🔥 INDEX - SYNCHRONOUS MICROPHONE CLEANUP");
 
-    // Simulate connection attempt with realistic timing
-    setTimeout(() => {
-      if (callState.isInitiating && !callState.isConnected) {
-        playConnectionTone("connecting");
-        setCallState((prev) => ({
-          ...prev,
-          callStatus: "Connecting...",
-        }));
-      }
-    }, 2500);
-  };
-
-  // Accept incoming call (receiver)
-  const acceptCall = () => {
-    if (!incomingCall) return;
-
-    const caller = users.find((u) => u.id === incomingCall.from_user_id);
-
-    // Initialize audio system
-    initializeAudioContext();
-
-    // Play connection tone
-    playConnectionTone("connecting");
-
-    // Manage ambient audio
-    manageAmbientAudio(true);
-
-    setCallState({
-      isInitiating: false,
-      isRinging: false,
-      isConnecting: true,
-      isConnected: false,
-      isEnding: false,
-      callDirection: "incoming",
-      callPartner: caller,
-      roomId: incomingCall.room_id,
-      callStartTime: Date.now(),
-      callDuration: 0,
-      callStatus: "Connecting...", // Add status for better UX
-    });
-
-    // Stop ringtone
-    stopIncomingCallRingtone();
-
-    // Send acceptance message
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      const acceptanceMessage = {
-        type: "call_accepted",
-        from_user_id: user.id,
-        from_username: user.username,
-        to_user_id: incomingCall.from_user_id,
-        room_id: incomingCall.room_id,
-      };
-      wsRef.current.send(JSON.stringify(acceptanceMessage));
-    }
-
-    // Join the call
+    // 1. IMMEDIATE AudioCallHandler cleanup FIRST (most critical)
     if (audioCallRef.current) {
-      audioCallRef.current.joinRoom(incomingCall.room_id);
+      console.log("🔥 INDEX - IMMEDIATE AudioCallHandler cleanup");
+      try {
+        if (audioCallRef.current.forceCleanup) {
+          audioCallRef.current.forceCleanup();
+        }
+        if (audioCallRef.current.hangup) {
+          audioCallRef.current.hangup();
+        }
+      } catch (error) {
+        console.error("🔥 INDEX - AudioCallHandler cleanup error:", error);
+      }
     }
 
-    setIncomingCall(null);
+    // 2. IMMEDIATE global stream cleanup
+    console.log("🔥 INDEX - IMMEDIATE global stream cleanup");
 
-    // Simulate connection establishment
-    setTimeout(() => {
-      if (callState.isConnecting) {
-        playConnectionTone("connected");
-        applyAudioFilters();
-        getCallQuality();
+    // Stop window.localAudioStream immediately
+    if (window.localAudioStream) {
+      console.log("🔥 INDEX - Stopping window.localAudioStream");
+      try {
+        window.localAudioStream.getTracks().forEach((track) => {
+          console.log("🔥 INDEX - Stopping track:", track.kind, track.label);
+          track.stop();
+        });
+        window.localAudioStream = null;
+        console.log("🔥 INDEX - window.localAudioStream nullified");
+      } catch (error) {
+        console.error("🔥 INDEX - Error stopping main stream:", error);
       }
-    }, 1500);
-  };
+    }
 
-  // Decline incoming call (receiver)
-  const declineCall = () => {
-    if (!incomingCall) return;
+    // Stop window.currentCallStream immediately
+    if (window.currentCallStream) {
+      console.log("🔥 INDEX - Stopping window.currentCallStream");
+      try {
+        window.currentCallStream.getTracks().forEach((track) => {
+          console.log(
+            "🔥 INDEX - Stopping call stream track:",
+            track.kind,
+            track.label
+          );
+          track.stop();
+        });
+        window.currentCallStream = null;
+        console.log("🔥 INDEX - window.currentCallStream nullified");
+      } catch (error) {
+        console.error("🔥 INDEX - Error stopping call stream:", error);
+      }
+    }
 
-    // Stop ringtone
-    stopIncomingCallRingtone();
+    // 3. IMMEDIATE audio elements cleanup
+    console.log("🔥 INDEX - IMMEDIATE audio elements cleanup");
+    const audioElements = document.querySelectorAll("audio");
+    audioElements.forEach((audio, index) => {
+      try {
+        audio.pause();
+        audio.currentTime = 0;
+        if (audio.srcObject) {
+          const stream = audio.srcObject;
+          if (stream && stream.getTracks) {
+            stream.getTracks().forEach((track) => {
+              console.log(
+                `🔥 INDEX - Stopping track from audio element ${index}:`,
+                track.kind,
+                track.label
+              );
+              track.stop();
+            });
+          }
+          audio.srcObject = null;
+        }
+        audio.src = "";
 
-    // Play decline audio feedback
-    playAudioFeedback("call_declined");
-
-    // Show temporary message for receiver
-    setCallOutcomeMessage({
-      type: "declined",
-      message: `You declined ${incomingCall.from_username}'s call`,
-      duration: 3000,
+        // Remove temporary elements immediately
+        if (
+          audio.id &&
+          (audio.id.includes("temp-") ||
+            audio.id.includes("dedicated-") ||
+            audio.id.includes("emergency-"))
+        ) {
+          audio.remove();
+          console.log(`🔥 INDEX - Removed temporary element: ${audio.id}`);
+        }
+      } catch (error) {
+        console.error(
+          `🔥 INDEX - Error cleaning audio element ${index}:`,
+          error
+        );
+      }
     });
 
-    // Send decline message
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      const declineMessage = {
-        type: "call_declined",
-        from_user_id: user.id,
-        from_username: user.username,
-        to_user_id: incomingCall.from_user_id,
-        room_id: incomingCall.room_id,
-      };
-      wsRef.current.send(JSON.stringify(declineMessage));
+    // 4. IMMEDIATE audio context cleanup
+    if (window.audioContext) {
+      console.log("🔥 INDEX - IMMEDIATE audio context cleanup");
+      try {
+        if (window.audioContext.state === "running") {
+          window.audioContext.suspend();
+          console.log("🔥 INDEX - Audio context suspended");
+        }
+      } catch (error) {
+        console.error("🔥 INDEX - Audio context error:", error);
+      }
     }
 
+    // 5. IMMEDIATE state reset
+    console.log("🔥 INDEX - IMMEDIATE state reset");
+    setCallState("idle");
     setIncomingCall(null);
-  };
+    setActiveCallRecipient(null);
+    setCallRoomId(null);
+    setForceHideModal(true);
 
-  // End call (both parties)
-  const endCall = () => {
-    const finalDuration = callState.callDuration;
-    const partnerName = callState.callPartner?.username || "Unknown";
+    // Clear ringtone timeout
+    if (ringtoneTimeoutRef.current) {
+      clearTimeout(ringtoneTimeoutRef.current);
+      ringtoneTimeoutRef.current = null;
+    }
 
-    // Stop all audio tones
+    // Stop all sounds
+    stopIncomingCallRingtone();
     stopRingbackTone();
 
-    // Play call ended tone
-    if (finalDuration > 0) {
-      playConnectionTone("call_ended");
-    } else {
-      playConnectionTone("call_failed");
-    }
+    // 6. IMMEDIATE microphone availability verification
+    console.log("🔥 INDEX - IMMEDIATE microphone verification");
 
-    // Restore ambient audio
-    manageAmbientAudio(false);
-
-    setCallState((prev) => ({
-      ...prev,
-      isEnding: true,
-      callStatus: "Ending call...", // Add status for better UX
-    }));
-
-    // Reset call controls
-    setIsMuted(false);
-    setIsSpeakerOn(false);
-
-    // Save call to history
-    const callRecord = {
-      id: Date.now(),
-      partner: partnerName,
-      partnerId: callState.callPartner?.id || selectedReceiver,
-      direction: callState.callDirection || "outgoing",
-      duration: finalDuration,
-      timestamp: new Date().toISOString(),
-      type: "audio",
-      status: finalDuration > 0 ? "completed" : "cancelled",
-    };
-
-    setCallHistory((prev) => [callRecord, ...prev.slice(0, 9)]); // Keep last 10 calls
-
-    // Show enhanced post-call message
-    if (finalDuration > 0) {
-      setCallOutcomeMessage({
-        type: "ended",
-        message: `Call ended • ${formatCallDuration(finalDuration)}`,
-        duration: 4000,
-        showActions: true,
-        partner: partnerName,
-        partnerId: callState.callPartner?.id || selectedReceiver,
-      });
-    } else {
-      setCallOutcomeMessage({
-        type: "ended",
-        message: `Call with ${partnerName} ended`,
-        duration: 3000,
-        showActions: true,
-        partner: partnerName,
-        partnerId: callState.callPartner?.id || selectedReceiver,
-      });
-    }
-
-    // Send call ended message
-    if (
-      callState.callPartner &&
-      wsRef.current &&
-      wsRef.current.readyState === WebSocket.OPEN
-    ) {
-      const endMessage = {
-        type: "call_ended",
-        from_user_id: user.id,
-        from_username: user.username,
-        to_user_id: callState.callPartner.id,
-        room_id: callState.roomId,
-      };
-      wsRef.current.send(JSON.stringify(endMessage));
-    }
-
-    // End the actual call
-    if (audioCallRef.current) {
-      audioCallRef.current.endCall();
-    }
-
-    // Reset call state
-    setTimeout(() => {
-      setCallState({
-        isInitiating: false,
-        isRinging: false,
-        isConnecting: false,
-        isConnected: false,
-        isEnding: false,
-        callDirection: null,
-        callPartner: null,
-        roomId: null,
-        callStartTime: null,
-        callDuration: 0,
-        callStatus: "", // Clear status
-      });
-      stopCallTimer();
-    }, 1000);
-  };
-
-  // Handle call state changes from audio component
-  const handleCallStateChange = (newState) => {
-    console.log("Call state changed:", newState);
-
-    // Update call state based on audio call component feedback
-    setCallState((prev) => {
-      const updates = { ...prev };
-
-      if (newState.isConnected && !prev.isConnected) {
-        // Stop ringback tone when call connects
-        stopRingbackTone();
-
-        // Play connection established tone
-        playConnectionTone("connected");
-
-        // Apply HD audio filters
-        applyAudioFilters();
-
-        // Start call quality monitoring
-        setTimeout(() => getCallQuality(), 1000);
-
-        updates.isConnected = true;
-        updates.isConnecting = false;
-        updates.isInitiating = false;
-        updates.callStatus = "Connected • HD Voice";
-        if (!prev.callStartTime) {
-          updates.callStartTime = Date.now();
-        }
-        startCallTimer();
-      } else if (newState.isConnecting && !prev.isConnecting) {
-        updates.isConnecting = true;
-        updates.isInitiating = false;
-        updates.callStatus = "Connecting...";
-      } else if (newState.callStatus) {
-        updates.callStatus = newState.callStatus;
-      }
-
-      return updates;
-    });
-  };
-
-  // Debug: Component mount
-  useEffect(() => {
-    console.log("Component mounted");
-    console.log("Initial loginForm state:", loginForm);
-    console.log("Initial isLoggedIn state:", isLoggedIn);
-
-    // Set client state
-    setIsClient(true);
-
-    // Ensure messages is always an array
-    if (!messages || !Array.isArray(messages)) {
-      setMessages([]);
-    }
-
-    // Initialize mobile audio system
-    const initializeMobileAudio = () => {
-      try {
-        // Check if we're on a mobile device
-        const isMobile =
-          /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-            navigator.userAgent
-          );
-
-        if (isMobile) {
-          console.log("Mobile device detected, initializing audio system");
-
-          // Create and resume audio context on first user interaction
-          const unlockAudio = () => {
-            try {
-              if (window.AudioContext || window.webkitAudioContext) {
-                const audioContext = new (window.AudioContext ||
-                  window.webkitAudioContext)();
-                if (audioContext.state === "suspended") {
-                  audioContext
-                    .resume()
-                    .then(() => {
-                      console.log(
-                        "Mobile audio context initialized successfully"
-                      );
-                    })
-                    .catch((err) => {
-                      console.error(
-                        "Failed to initialize mobile audio context:",
-                        err
-                      );
-                    });
-                }
-              }
-            } catch (error) {
-              console.error("Mobile audio initialization failed:", error);
-            }
-          };
-
-          // Add listeners for user interaction to unlock audio
-          const unlockHandler = () => {
-            unlockAudio();
-            document.removeEventListener("click", unlockHandler);
-            document.removeEventListener("touchstart", unlockHandler);
-            document.removeEventListener("touchend", unlockHandler);
-          };
-
-          document.addEventListener("click", unlockHandler, { once: true });
-          document.addEventListener("touchstart", unlockHandler, {
-            once: true,
-          });
-          document.addEventListener("touchend", unlockHandler, { once: true });
-        }
-      } catch (error) {
-        console.error("Error initializing mobile audio:", error);
-      }
-    };
-
-    // Initialize mobile audio
-    initializeMobileAudio();
-
-    // Check if we're on Render deployment
-    const hostname = window.location.hostname;
-    const isRender =
-      hostname.includes("onrender.com") || hostname.includes("render.com");
-    setIsRenderDeployment(isRender);
-    console.log("Hostname:", hostname);
-    console.log("Is Render deployment:", isRender);
-    console.log("FORCE_NORMAL_MODE:", FORCE_NORMAL_MODE);
-    console.log("Will use normal mode:", FORCE_NORMAL_MODE || !isRender);
-    console.log("API URLs:", {
-      AUTH_API_BASE_URL,
-      MESSAGE_API_BASE_URL,
-      REALTIME_API_BASE_URL,
-    });
-
-    // Check for existing login state
-    const token = localStorage.getItem("token");
-    if (token) {
-      console.log("Found existing token, attempting to restore login state");
-      // For now, just set a basic user state
-      // In a real app, you'd verify the token with the backend
-      setUser({ id: 2, username: "Nacer" }); // Default user
-      setIsLoggedIn(true);
-    }
-  }, []);
-
-  // Debug: Monitor AudioCall ref
-  useEffect(() => {
-    console.log(
-      "AudioCall ref status:",
-      audioCallRef.current ? "Available" : "Not available"
-    );
-  }, [audioCallRef.current]);
-
-  // Check Janus service availability
-  useEffect(() => {
-    const checkJanusService = async () => {
-      // Skip Janus checks in demo mode
-      if (isRenderDeployment && !FORCE_NORMAL_MODE) {
-        console.log("Demo mode: Skipping Janus service check");
-        setAudioServiceStatus("available"); // Assume available in demo
-        return;
-      }
-
-      try {
-        const janusUrl =
-          process.env.NEXT_PUBLIC_JANUS_HTTP_URL ||
-          (typeof window !== "undefined" &&
-          window.location.hostname === "localhost"
-            ? "http://localhost:8088"
-            : "https://unifiedchat-janus-service.onrender.com");
-        console.log("Checking Janus service at:", janusUrl);
-        const response = await fetch(`${janusUrl}/janus/info`);
-        console.log("Janus response status:", response.status);
-        if (response.ok) {
-          console.log("Janus service available - setting status to available");
-          setAudioServiceStatus("available");
-        } else {
-          console.log("Janus service unavailable - bad response");
-          setAudioServiceStatus("unavailable");
-        }
-      } catch (error) {
-        console.log("Janus service not available - error:", error);
-        setAudioServiceStatus("unavailable");
-      }
-    };
-
-    if (isLoggedIn) {
-      checkJanusService();
-      // Check every 30 seconds only if not in demo mode
-      if (!isRenderDeployment || FORCE_NORMAL_MODE) {
-        const interval = setInterval(checkJanusService, 30000);
-        return () => clearInterval(interval);
-      }
-    }
-  }, [isLoggedIn, isRenderDeployment]);
-
-  // Function to fetch users from backend
-  const fetchUsers = async () => {
-    // Use backend in normal mode
-    if (FORCE_NORMAL_MODE || !isRenderDeployment) {
-      setLoadingUsers(true);
-      try {
-        const response = await axios.get(`${AUTH_API_BASE_URL}/api/v1/users`);
-        if (response.data && Array.isArray(response.data)) {
-          setUsers(response.data);
-          console.log("Fetched users from backend:", response.data);
-        } else {
-          console.error("Invalid users response:", response.data);
-          // Fallback to hardcoded users if backend doesn't work
-          setUsers([
-            { id: 1, username: "admin" },
-            { id: 2, username: "Nacer" },
-            { id: 4, username: "Linda" },
-            { id: 5, username: "Hana" },
-            { id: 6, username: "Adam" },
-            { id: 7, username: "Ahmed" },
-            { id: 8, username: "Hamid" },
-            { id: 9, username: "Mueen" },
-          ]);
-        }
-      } catch (error) {
-        console.error("Failed to fetch users:", error);
-        if (error.response && error.response.status === 404) {
-          console.log("Users endpoint not available yet, using fallback");
-        } else if (error.response && error.response.status === 501) {
+    // Test microphone availability immediately
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      navigator.mediaDevices
+        .getUserMedia({ audio: true })
+        .then((testStream) => {
           console.log(
-            "Backend returned 501 Not Implemented for users, using fallback (MVP mode)"
+            "🔥 INDEX - SUCCESS: Microphone is available for new calls"
           );
-        }
-        // Fallback to hardcoded users if backend doesn't work
-        setUsers([
-          { id: 1, username: "admin" },
-          { id: 2, username: "Nacer" },
-          { id: 4, username: "Linda" },
-          { id: 5, username: "Hana" },
-          { id: 6, username: "Adam" },
-          { id: 7, username: "Ahmed" },
-          { id: 8, username: "Hamid" },
-          { id: 9, username: "Mueen" },
-        ]);
-      } finally {
-        setLoadingUsers(false);
+          // Stop the test stream immediately
+          testStream.getTracks().forEach((track) => {
+            track.stop();
+          });
+          console.log("🔥 INDEX - Test stream stopped");
+        })
+        .catch((error) => {
+          console.log(
+            "🔥 INDEX - WARNING: Microphone may not be available:",
+            error.name,
+            error.message
+          );
+        });
+    }
+
+    // 7. Force garbage collection if available
+    try {
+      if (window.gc) {
+        window.gc();
+        console.log("🔥 INDEX - Forced garbage collection");
       }
-      return;
+    } catch (error) {
+      console.log("🔥 INDEX - GC not available");
     }
 
-    // Skip backend call in demo mode and set users immediately
-    if (isRenderDeployment) {
-      console.log("Demo mode: Using hardcoded users (fast path)");
-      setUsers([
-        { id: 1, username: "admin" },
-        { id: 2, username: "Nacer" },
-        { id: 4, username: "Linda" },
-        { id: 5, username: "Hana" },
-        { id: 6, username: "Adam" },
-        { id: 7, username: "Ahmed" },
-        { id: 8, username: "Hamid" },
-        { id: 9, username: "Mueen" },
-      ]);
-      return;
-    }
+    // Reset the ending flag immediately
+    isEndingCallRef.current = false;
+    console.log("🔥 INDEX - IMMEDIATE CLEANUP COMPLETED - MICROPHONE RELEASED");
   };
 
-  // Function to set a sensible default receiver when user logs in
-  const setDefaultReceiver = (loggedInUser) => {
-    // Find the first user that's not the logged-in user
-    const availableUsers = users.filter((u) => u.id !== loggedInUser.id);
-    if (availableUsers.length > 0) {
-      setSelectedReceiver(availableUsers[0].id);
-    }
-  };
-
-  // Fetch users when logged in
+  // Initialize Janus when window loads
   useEffect(() => {
-    if (isLoggedIn) {
-      fetchUsers();
-      // Refresh users list more frequently in normal mode
-      const interval = setInterval(
-        fetchUsers,
-        FORCE_NORMAL_MODE ? 30000 : isRenderDeployment ? 60000 : 30000
+    const initializeJanus = () => {
+      if (typeof window !== "undefined" && window.Janus && !janusInitialized) {
+        console.log("🔥 JANUS - Initializing Janus library...");
+        window.Janus.init({
+          debug: "all",
+          callback: () => {
+            console.log("🔥 JANUS - Janus initialized successfully!");
+            setJanusInitialized(true);
+          },
+          error: (error) => {
+            console.error("🔥 JANUS - Failed to initialize:", error);
+            showCallNotification(
+              "error",
+              "Call service initialization failed",
+              5000
+            );
+          },
+        });
+      } else if (!window.Janus) {
+        console.log("🔥 JANUS - Waiting for Janus library to load...");
+        setTimeout(initializeJanus, 500);
+      }
+    };
+
+    initializeJanus();
+
+    // Add global test function for microphone cleanup verification
+    if (typeof window !== "undefined") {
+      window.testMicrophoneCleanup = () => {
+        console.log("🎤 MICROPHONE CLEANUP TEST");
+        console.log("=========================");
+
+        let issues = 0;
+
+        // Check global audio streams
+        if (window.localAudioStream) {
+          console.log("❌ window.localAudioStream still exists!");
+          window.localAudioStream.getTracks().forEach((track) => {
+            console.log(
+              `  - Track: ${track.kind} (${track.label}) - State: ${track.readyState}`
+            );
+            if (track.readyState === "live") {
+              issues++;
+              console.log("    ⚠️  This track is still LIVE!");
+            }
+          });
+        } else {
+          console.log("✅ window.localAudioStream properly cleaned up");
+        }
+
+        if (window.currentCallStream) {
+          console.log("❌ window.currentCallStream still exists!");
+          window.currentCallStream.getTracks().forEach((track) => {
+            console.log(
+              `  - Track: ${track.kind} (${track.label}) - State: ${track.readyState}`
+            );
+            if (track.readyState === "live") {
+              issues++;
+              console.log("    ⚠️  This track is still LIVE!");
+            }
+          });
+        } else {
+          console.log("✅ window.currentCallStream properly cleaned up");
+        }
+
+        // Check all audio elements
+        const audioElements = document.querySelectorAll("audio");
+        console.log(`\n🔍 Checking ${audioElements.length} audio elements...`);
+
+        audioElements.forEach((audio, index) => {
+          console.log(`  Audio Element ${index}:`);
+          console.log(`    - ID: ${audio.id || "no-id"}`);
+          console.log(`    - SrcObject: ${audio.srcObject ? "YES" : "NO"}`);
+          console.log(`    - Paused: ${audio.paused}`);
+          console.log(`    - CurrentTime: ${audio.currentTime}`);
+
+          if (audio.srcObject && audio.srcObject.getTracks) {
+            audio.srcObject.getTracks().forEach((track) => {
+              console.log(
+                `      - Track: ${track.kind} (${track.label}) - State: ${track.readyState}`
+              );
+              if (track.readyState === "live") {
+                issues++;
+                console.log("        ⚠️  This track is still LIVE!");
+              }
+            });
+          }
+        });
+
+        // Check Web Audio API context
+        if (window.audioContext) {
+          console.log(`\n🔍 Audio Context State: ${window.audioContext.state}`);
+          if (window.audioContext.state === "running") {
+            console.log(
+              "    ⚠️  Audio context is still running (may be normal)"
+            );
+          } else {
+            console.log("    ✅ Audio context is properly suspended/closed");
+          }
+        } else {
+          console.log("\n✅ No audio context found");
+        }
+
+        // Test microphone availability
+        console.log("\n🔍 Testing microphone availability...");
+        navigator.mediaDevices
+          .getUserMedia({ audio: true, video: false })
+          .then((testStream) => {
+            console.log("✅ Microphone is available for new calls");
+            // Immediately stop the test stream
+            testStream.getTracks().forEach((track) => {
+              track.stop();
+            });
+            console.log("   Test stream stopped successfully");
+          })
+          .catch((error) => {
+            issues++;
+            console.log(
+              "❌ Microphone is NOT available:",
+              error.name,
+              error.message
+            );
+          });
+
+        console.log("\n📊 CLEANUP TEST RESULTS");
+        console.log("========================");
+        console.log(`Total Issues Found: ${issues}`);
+
+        if (issues === 0) {
+          console.log("\n🎉 SUCCESS: All audio resources properly cleaned up!");
+          console.log("   The microphone should be available for new calls.");
+        } else {
+          console.log(
+            "\n❌ ISSUES FOUND: Some audio resources are still active!"
+          );
+          console.log(
+            "   The microphone may still be in use, preventing new calls."
+          );
+          console.log("   Try refreshing the page to fully release resources.");
+        }
+
+        return issues === 0;
+      };
+
+      // Add function to force cleanup everything
+      window.forceMicrophoneCleanup = () => {
+        console.log("🔧 FORCE MICROPHONE CLEANUP");
+        console.log("===========================");
+
+        // Stop all possible streams
+        if (window.localAudioStream) {
+          window.localAudioStream.getTracks().forEach((track) => {
+            console.log(
+              "🔧 Force stopping localAudioStream track:",
+              track.kind,
+              track.label
+            );
+            track.stop();
+          });
+          window.localAudioStream = null;
+        }
+
+        if (window.currentCallStream) {
+          window.currentCallStream.getTracks().forEach((track) => {
+            console.log(
+              "🔧 Force stopping currentCallStream track:",
+              track.kind,
+              track.label
+            );
+            track.stop();
+          });
+          window.currentCallStream = null;
+        }
+
+        // Clean all audio elements
+        const audioElements = document.querySelectorAll("audio");
+        audioElements.forEach((audio, index) => {
+          audio.pause();
+          audio.currentTime = 0;
+          if (audio.srcObject) {
+            const stream = audio.srcObject;
+            if (stream && stream.getTracks) {
+              stream.getTracks().forEach((track) => {
+                console.log(
+                  `🔧 Force stopping track from audio element ${index}:`,
+                  track.kind,
+                  track.label
+                );
+                track.stop();
+              });
+            }
+            audio.srcObject = null;
+          }
+          audio.src = "";
+        });
+
+        console.log("🔧 Force cleanup completed");
+      };
+
+      console.log(
+        "💡 TIP: Run 'testMicrophoneCleanup()' in console to check microphone cleanup status"
       );
+      console.log(
+        "💡 TIP: Run 'forceMicrophoneCleanup()' in console to force cleanup all audio resources"
+      );
+    }
+  }, [janusInitialized]);
+
+  // Monitor audio call status from AudioCallHandler
+  useEffect(() => {
+    if (callState === "active") {
+      const interval = setInterval(() => {
+        const audioStatusElement = document.getElementById("audio-call-status");
+        if (audioStatusElement) {
+          const status = audioStatusElement.getAttribute("data-call-status");
+          const muted =
+            audioStatusElement.getAttribute("data-is-muted") === "true";
+          const volume =
+            parseFloat(audioStatusElement.getAttribute("data-volume")) || 1.0;
+
+          if (status) setAudioCallStatus(status);
+          setAudioCallMuted(muted);
+          setAudioCallVolume(volume);
+        }
+
+        // Also try to get status from the audio call ref
+        if (audioCallRef.current) {
+          try {
+            const callStatus = audioCallRef.current.getCallStatus();
+            if (callStatus) {
+              if (callStatus.callStatus)
+                setAudioCallStatus(callStatus.callStatus);
+              if (typeof callStatus.isMuted === "boolean")
+                setAudioCallMuted(callStatus.isMuted);
+              if (typeof callStatus.volume === "number")
+                setAudioCallVolume(callStatus.volume);
+            }
+          } catch (error) {
+            console.log("Could not get call status:", error);
+          }
+        }
+      }, 500); // Check every 500ms
+
       return () => clearInterval(interval);
     }
-  }, [isLoggedIn, isRenderDeployment]);
+  }, [callState]);
 
-  // Debug: Log user info when users change
-  useEffect(() => {
-    if (users.length > 0) {
-      console.log("Users loaded:", users);
-      debugUserInfo();
-    }
-  }, [users]);
+  // Show notification helper
+  const showCallNotification = (type, message, duration = 3000) => {
+    console.log(
+      "🔥 NOTIFICATION - Calling showCallNotification with type:",
+      type,
+      "message:",
+      message
+    );
+    setCallNotification({ type, message });
+    setTimeout(() => setCallNotification(null), duration);
+  };
 
-  const login = async (e) => {
+  // Show call ended modal
+  const showCallEndedModal = (type, title, message, duration = 4000) => {
+    console.log("🔥 CALL ENDED MODAL - Showing:", { type, title, message });
+    setCallEndedModal({ type, title, message });
+    setTimeout(() => setCallEndedModal(null), duration);
+  };
+
+  // Request microphone permissions upfront
+  const requestMicrophonePermission = async () => {
+    console.log("🔥 MIC PERMISSION - Requesting microphone access...");
+
     try {
-      e.preventDefault();
-      console.log("Login button clicked", loginForm);
-      console.log("DEMO_MODE:", DEMO_MODE);
-      console.log("IS_RENDER_DEPLOYMENT:", isRenderDeployment);
-      console.log("FORCE_NORMAL_MODE:", FORCE_NORMAL_MODE);
-      console.log("AUTH_API_BASE_URL:", AUTH_API_BASE_URL);
+      // First check if permission is already granted
+      if (navigator.permissions) {
+        const permission = await navigator.permissions.query({
+          name: "microphone",
+        });
+        console.log(
+          "🔥 MIC PERMISSION - Current permission state:",
+          permission.state
+        );
+
+        if (permission.state === "granted") {
+          console.log("🔥 MIC PERMISSION - Already granted!");
+          return true;
+        }
+      }
+
+      // Clean up any existing stream first
+      if (window.localAudioStream) {
+        console.log("🔥 MIC PERMISSION - Cleaning up existing stream first");
+        window.localAudioStream.getTracks().forEach((track) => {
+          track.stop();
+        });
+        window.localAudioStream = null;
+      }
+
+      // Request microphone access
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          autoGainControl: true,
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 48000,
+        },
+        video: false,
+      });
+
+      console.log("🔥 MIC PERMISSION - GRANTED! Stream:", stream);
       console.log(
-        "Current hostname:",
-        typeof window !== "undefined" ? window.location.hostname : "SSR"
+        "🔥 MIC PERMISSION - Stream tracks:",
+        stream.getTracks().map((t) => ({
+          kind: t.kind,
+          label: t.label,
+          state: t.readyState,
+        }))
       );
 
-      // Validate input
-      if (!loginForm.username || !loginForm.password) {
-        console.log("Login validation failed - missing credentials");
-        alert("Please enter both username and password");
-        return;
-      }
+      // Store the stream globally for later use AND track it
+      window.localAudioStream = stream;
+      window.currentCallStream = stream; // Additional tracking
 
-      // Demo mode for explicit testing only
-      if (DEMO_MODE) {
-        console.log("Demo mode: Simulating login for demo/testing");
-        const demoUser = {
-          id:
-            loginForm.username === "admin"
-              ? 1
-              : loginForm.username === "Nacer"
-              ? 2
-              : loginForm.username === "nacer"
-              ? 2
-              : 10,
-          username: loginForm.username,
-        };
-        console.log("Setting demo user:", demoUser);
-        setUser(demoUser);
-        setIsLoggedIn(true);
-        // Set demo users
-        setUsers([
-          { id: 1, username: "admin" },
-          { id: 2, username: "Nacer" },
-          { id: 4, username: "Linda" },
-          { id: 5, username: "Hana" },
-        ]);
-        setDefaultReceiver(demoUser);
-        console.log("Demo login completed");
-        return;
-      }
+      // Show success notification
+      showCallNotification("success", "Microphone access granted", 2000);
 
-      // Use normal backend mode (not demo mode)
-      if (FORCE_NORMAL_MODE || !isRenderDeployment) {
-        console.log("Using normal backend mode for login");
-
-        try {
-          const loginUrl = `${AUTH_API_BASE_URL}/api/v1/auth/login`;
-          console.log("Sending login request to:", loginUrl);
-          console.log("Login request body:", loginForm);
-          const response = await axios.post(loginUrl, loginForm);
-          console.log("Login response:", response);
-          if (response.data && response.data.token && response.data.user) {
-            localStorage.setItem("token", response.data.token);
-            setUser(response.data.user);
-            setIsLoggedIn(true);
-            // Fetch users first, then set default receiver
-            await fetchUsers();
-            setDefaultReceiver(response.data.user);
-            console.log("Normal login completed successfully");
-          } else {
-            console.error(
-              "Login failed: Invalid response from server.",
-              response
-            );
-            alert("Login failed: Invalid response from server.");
-          }
-        } catch (error) {
-          console.error("Login error:", error);
-
-          // Check if it's a 501 Not Implemented error (MVP stub)
-          if (error.response && error.response.status === 501) {
-            console.log(
-              "Backend returned 501 Not Implemented, falling back to demo mode"
-            );
-            const demoUser = {
-              id:
-                loginForm.username === "admin"
-                  ? 1
-                  : loginForm.username === "Nacer"
-                  ? 2
-                  : loginForm.username === "nacer"
-                  ? 2
-                  : 10,
-              username: loginForm.username,
-            };
-            console.log("Setting demo user:", demoUser);
-            setUser(demoUser);
-            setIsLoggedIn(true);
-            // Set demo users
-            setUsers([
-              { id: 1, username: "admin" },
-              { id: 2, username: "Nacer" },
-              { id: 4, username: "Linda" },
-              { id: 5, username: "Hana" },
-              { id: 6, username: "Adam" },
-              { id: 7, username: "Ahmed" },
-              { id: 8, username: "Hamid" },
-              { id: 9, username: "Mueen" },
-            ]);
-            setDefaultReceiver(demoUser);
-            console.log("Demo login completed for MVP backend");
-            return;
-          }
-
-          let msg = "Login failed: ";
-          if (
-            error.response &&
-            error.response.data &&
-            error.response.data.error
-          ) {
-            msg += error.response.data.error;
-            console.error("Backend error response:", error.response.data);
-          } else if (error.message) {
-            msg += error.message;
-          } else {
-            msg += "Unknown error.";
-          }
-          alert(msg);
-        }
-        return;
-      }
-
-      // Fallback to demo mode only if backend fails and we're on Render
-      console.log("Render deployment detected, using demo mode for login");
-      const demoUser = {
-        id:
-          loginForm.username === "admin"
-            ? 1
-            : loginForm.username === "Nacer"
-            ? 2
-            : loginForm.username === "nacer"
-            ? 2
-            : 10,
-        username: loginForm.username,
-      };
-      console.log("Setting demo user:", demoUser);
-      setUser(demoUser);
-      setIsLoggedIn(true);
-      // Set demo users
-      setUsers([
-        { id: 1, username: "admin" },
-        { id: 2, username: "Nacer" },
-        { id: 4, username: "Linda" },
-        { id: 5, username: "Hana" },
-        { id: 6, username: "Adam" },
-        { id: 7, username: "Ahmed" },
-        { id: 8, username: "Hamid" },
-        { id: 9, username: "Mueen" },
-      ]);
-      setDefaultReceiver(demoUser);
-      console.log("Demo login completed for Render deployment");
+      return true;
     } catch (error) {
-      console.error("Unexpected error in login function:", error);
-      alert("An unexpected error occurred during login. Please try again.");
-    }
-  };
+      console.error("🔥 MIC PERMISSION - DENIED:", error);
 
-  const sendMessage = async () => {
-    if (!newMessage.trim() || !selectedReceiver) return;
+      let errorMessage =
+        "Microphone access denied. Please allow microphone access in your browser settings.";
 
-    const messageData = {
-      type: "private_message",
-      content: newMessage.trim(),
-      from_user_id: user.id,
-      from_username: user.username,
-      to_user_id: selectedReceiver.id,
-      timestamp: Date.now(),
-    };
-
-    try {
-      // Send via WebSocket for real-time delivery
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify(messageData));
-        console.log("Message sent via WebSocket");
+      if (error.name === "NotAllowedError") {
+        errorMessage =
+          "Microphone permission denied. Please click 'Allow' when prompted, or enable microphone access in your browser settings.";
+      } else if (error.name === "NotFoundError") {
+        errorMessage =
+          "No microphone found. Please connect a microphone and try again.";
+      } else if (error.name === "NotReadableError") {
+        errorMessage =
+          "Microphone is being used by another application. Please close other applications using the microphone.";
       } else {
-        console.error("WebSocket not connected");
-        return;
+        errorMessage = `Microphone access failed: ${error.message}`;
       }
 
-      // Add message to local state immediately
-      setMessages((prevMessages) => [...prevMessages, messageData]);
-      setNewMessage("");
-      scrollToBottom();
-
-      // Play send message sound
-      playAudioFeedback("message_sent");
-    } catch (error) {
-      console.error("Error sending message:", error);
-      // Show error to user
-      alert("Failed to send message. Please try again.");
+      showCallNotification("error", errorMessage, 5000);
+      return false;
     }
   };
 
-  const loadMessages = async () => {
-    // Always load messages from backend - no demo mode
-    if (!user?.id || !selectedReceiver) {
-      console.log("📭 Not loading messages - missing user or receiver:", {
-        userID: user?.id,
-        selectedReceiver,
-      });
-      setMessages([]);
+  // --- Refs ---
+  const ws = useRef(null);
+  const audioCallRef = useRef(null);
+  const videoCallRef = useRef(null);
+  const chatEndRef = useRef(null);
+  const isEndingCallRef = useRef(false); // New ref to prevent recursive endCall
+  const ringtoneTimeoutRef = useRef(null); // New ref for ringtone timeout
+
+  // --- Effects ---
+
+  // Main WebSocket connection management
+  useEffect(() => {
+    if (!user?.id) {
+      if (ws.current) {
+        ws.current.close();
+        ws.current = null;
+      }
       return;
     }
 
-    try {
-      console.log("📥 Loading messages for user:", user.id);
-      const response = await axios.get(
-        `${MESSAGE_API_BASE_URL}/messages/${user.id}`
-      );
-      console.log("📬 Loaded messages from API:", response.data);
+    if (!ws.current) {
+      const wsUrl = `${WEBSOCKET_URL}?user_id=${user.id}&username=${user.username}`;
+      console.log(`Connecting WebSocket to ${wsUrl}`);
+      ws.current = new WebSocket(wsUrl);
 
-      // Ensure response.data is an array
-      const messages = Array.isArray(response.data) ? response.data : [];
-      setMessages(messages);
-      console.log("💬 Set messages state:", messages.length, "messages");
-      scrollToBottom();
-    } catch (error) {
-      console.error("❌ Failed to load messages:", error);
-      console.error("Error details:", {
-        status: error.response?.status,
-        data: error.response?.data,
-        message: error.message,
-      });
-      // Set empty array on error to prevent null reference
-      setMessages([]);
-    }
-  };
-
-  useEffect(() => {
-    if (isLoggedIn && user) {
-      connectWebSocket();
-      loadMessages();
-    }
-    return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
-    };
-  }, [isLoggedIn, user]);
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  const scrollToBottom = () => {
-    if (chatEndRef.current) {
-      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-  };
-
-  const formatTime = (timestamp) => {
-    return new Date(timestamp).toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
-  const getUserName = (userId) => {
-    const foundUser = users.find((u) => u.id === userId);
-    return foundUser ? foundUser.username : `User ${userId}`;
-  };
-
-  const isOwnMessage = (message) => {
-    return message.sender_id === user?.id;
-  };
-
-  // Helper function to check if a user is actually online
-  const isUserOnline = (username) => {
-    // First check the connected users set (most accurate)
-    if (connectedUsers.size > 0) {
-      return connectedUsers.has(username);
-    }
-    // Fallback to online users array
-    return onlineUsers.includes(username);
-  };
-
-  // Handlers for call end events
-  const handleAudioCallEnd = () => {
-    console.log("Audio call ended, closing modal");
-
-    // Use setTimeout to ensure state updates are processed safely
-    setTimeout(() => {
-      setShowAudioCallModal(false);
-      setIncomingCall(null); // Clear any incoming call state
-
-      // Reset call state to ensure clean state
-      setCallState({
-        isInitiating: false,
-        isRinging: false,
-        isConnecting: false,
-        isConnected: false,
-        isEnding: false,
-        callDirection: null,
-        callPartner: null,
-        roomId: null,
-        callStartTime: null,
-        callDuration: 0,
-        callStatus: "",
-      });
-      stopCallTimer();
-    }, 0);
-  };
-
-  const handleVideoCallEnd = () => {
-    console.log("Video call ended, closing modal");
-    setShowVideoCallModal(false);
-    setIncomingCall(null); // Clear any incoming call state
-  };
-
-  // Debug function to log user information
-  const debugUserInfo = () => {
-    console.log("=== DEBUG USER INFO ===");
-    console.log("User:", user);
-    console.log("Is logged in:", isLoggedIn);
-    console.log("Selected receiver:", selectedReceiver);
-    console.log("Online users:", onlineUsers);
-    console.log("Connected users:", Array.from(connectedUsers));
-    console.log("Audio service status:", audioServiceStatus);
-    console.log("WebSocket ref:", wsRef.current);
-    console.log("Audio call ref:", audioCallRef.current);
-    console.log("Video call ref:", videoCallRef.current);
-    console.log("=== END DEBUG ===");
-  };
-
-  // Mobile audio test function
-  const testMobileAudio = () => {
-    try {
-      console.log("Testing mobile audio functionality...");
-
-      // Check if we're on a mobile device
-      const isMobile =
-        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-          navigator.userAgent
-        );
-      console.log("Mobile device detected:", isMobile);
-
-      // Test Web Audio API
-      if (window.AudioContext || window.webkitAudioContext) {
-        const audioContext = new (window.AudioContext ||
-          window.webkitAudioContext)();
-        console.log("Audio context state:", audioContext.state);
-
-        if (audioContext.state === "suspended") {
-          console.log("Audio context is suspended, attempting to resume...");
-          audioContext
-            .resume()
-            .then(() => {
-              console.log("Audio context resumed successfully");
-              playTestTone(audioContext);
-            })
-            .catch((err) => {
-              console.error("Failed to resume audio context:", err);
-              alert(
-                "Audio test failed: Could not resume audio context. Please interact with the page first."
-              );
-            });
-        } else {
-          console.log("Audio context is active, playing test tone...");
-          playTestTone(audioContext);
-        }
-      } else {
-        console.error("Web Audio API not supported");
-        alert(
-          "Audio test failed: Web Audio API not supported in this browser."
-        );
-      }
-    } catch (error) {
-      console.error("Mobile audio test failed:", error);
-      alert("Audio test failed: " + error.message);
-    }
-  };
-
-  const playTestTone = (audioContext) => {
-    try {
-      // Create a simple test tone
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-
-      oscillator.frequency.setValueAtTime(440, audioContext.currentTime); // A4 note
-      oscillator.type = "sine";
-
-      const now = audioContext.currentTime;
-      gainNode.gain.setValueAtTime(0, now);
-      gainNode.gain.linearRampToValueAtTime(0.3, now + 0.05);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
-
-      oscillator.start(now);
-      oscillator.stop(now + 0.5);
-
-      console.log("Test tone played successfully");
-      alert("Audio test successful! You should hear a short beep.");
-    } catch (error) {
-      console.error("Failed to play test tone:", error);
-      alert("Audio test failed: Could not play test tone.");
-    }
-  };
-
-  // Incoming call ringtone functions
-  const playIncomingCallRingtone = () => {
-    try {
-      stopIncomingCallRingtone();
-      console.log("Starting incoming call ringtone...");
-
-      // Create a simple, reliable ringtone using HTML5 Audio
-      const createRingtone = () => {
-        try {
-          // Create a simple beep sound using Web Audio API
-          const audioContext = new (window.AudioContext ||
-            window.webkitAudioContext)();
-
-          // Resume audio context if suspended (required for mobile)
-          if (audioContext.state === "suspended") {
-            audioContext
-              .resume()
-              .then(() => {
-                console.log("Audio context resumed successfully");
-              })
-              .catch((err) => {
-                console.error("Failed to resume audio context:", err);
-              });
-          }
-
-          // Create a simple beep tone
-          const oscillator = audioContext.createOscillator();
-          const gainNode = audioContext.createGain();
-
-          oscillator.connect(gainNode);
-          gainNode.connect(audioContext.destination);
-
-          // Set frequency and type
-          oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-          oscillator.type = "sine";
-
-          // Set volume envelope
-          const now = audioContext.currentTime;
-          gainNode.gain.setValueAtTime(0, now);
-          gainNode.gain.linearRampToValueAtTime(0.3, now + 0.1);
-          gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
-
-          // Play the tone
-          oscillator.start(now);
-          oscillator.stop(now + 0.5);
-
-          console.log("Ringtone tone played successfully");
-        } catch (error) {
-          console.error("Web Audio API failed, using fallback:", error);
-          // Fallback: try to play a simple beep using HTML5 Audio
-          try {
-            const audio = new Audio();
-            // Create a simple beep using data URL - this is a short beep sound
-            audio.src =
-              "data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWTQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT";
-            audio.volume = 0.5;
-            audio.play().catch((e) => {
-              console.error("Fallback audio failed:", e);
-              // Last resort: try to unlock audio with silent audio
-              try {
-                const silentAudio = new Audio();
-                silentAudio.src =
-                  "data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT";
-                silentAudio.play().catch(() => {});
-              } catch (silentError) {
-                console.error("Silent audio unlock failed:", silentError);
-              }
-            });
-          } catch (e) {
-            console.error("All audio methods failed:", e);
-          }
-        }
+      ws.current.onopen = () => console.log("WebSocket connected.");
+      ws.current.onclose = () => {
+        console.log("WebSocket disconnected.");
+        ws.current = null;
       };
+      ws.current.onerror = (error) => {
+        console.error("WebSocket error:", error);
+        ws.current = null;
+      };
+    }
 
-      // Start ringing with 1-second interval
-      let ringCount = 0;
-      const interval = setInterval(() => {
-        createRingtone();
-        ringCount++;
+    // Enhanced WebSocket message handling
+    ws.current.onmessage = (event) => {
+      const msg = JSON.parse(event.data);
+      console.log("[WEBSOCKET] Received:", msg);
 
-        // Stop after 30 seconds to prevent infinite ringing
-        if (ringCount >= 30) {
-          console.log("Stopping ringtone after 30 seconds");
-          stopIncomingCallRingtone();
-        }
-      }, 1000);
+      switch (msg.type) {
+        case "presence_update":
+          setOnlineUsers(msg.online_users || []);
+          break;
+        case "new_message":
+          // Check if this message has a local_id and is from the current user (echo from server).
+          if (
+            msg.local_id &&
+            msg.from_user_id?.toString() === user?.id.toString()
+          ) {
+            // Replace the optimistic message with the one from the server.
+            setMessages((prevMessages) =>
+              prevMessages.map((m) => (m.id === msg.local_id ? msg : m))
+            );
+          } else if (
+            msg.from_user_id?.toString() ===
+              selectedRecipient?.id?.toString() &&
+            msg.to_user_id?.toString() === user?.id.toString()
+          ) {
+            // If the message is from the selected recipient to the current user, add it to the chat.
+            setMessages((prevMessages) => [...prevMessages, msg]);
+          } else if (msg.to_user_id?.toString() === user?.id.toString()) {
+            // If the message is for the current user but not from the selected recipient, highlight the sender.
+            setHighlightedUser(msg.from_user_id);
+          }
+          break;
+        case "call_initiate":
+          console.log("🔥 WEBSOCKET - Received call_initiate:", msg);
+          if (
+            msg.call &&
+            msg.call.to_user_id?.toString() === user.id.toString()
+          ) {
+            console.log("🔥 WEBSOCKET - Incoming call for current user.");
+            setIncomingCall(msg.call);
+            setCallState("ringing");
+            playIncomingCallRingtone();
 
-      setIncomingCallRingtoneInterval(interval);
-      console.log("Incoming call ringtone started successfully");
+            // Clear any existing timeout
+            if (ringtoneTimeoutRef.current) {
+              clearTimeout(ringtoneTimeoutRef.current);
+            }
 
-      // Try to unlock audio on user interaction
-      const unlockAudio = () => {
-        try {
-          if (window.AudioContext || window.webkitAudioContext) {
-            const audioContext = new (window.AudioContext ||
-              window.webkitAudioContext)();
-            if (audioContext.state === "suspended") {
-              audioContext.resume();
+            // Backup mechanism: Stop ringtone after 30 seconds if no action taken
+            ringtoneTimeoutRef.current = setTimeout(() => {
+              console.log(
+                "🔥 BACKUP - Auto-stopping ringtone after 30s timeout"
+              );
+              stopIncomingCallRingtone();
+              showCallEndedModal("ended", "Call Missed", "Call timed out");
+              handleAudioCallEnd();
+            }, 30000);
+
+            showCallNotification(
+              "info",
+              `Incoming call from ${msg.call.caller_username}`,
+              5000
+            ); // Show notification for incoming call
+          } else {
+            console.log(
+              "🔥 WEBSOCKET - Incoming call not for current user or missing call data.",
+              msg
+            );
+          }
+          break;
+        case "call_accepted":
+          stopRingbackTone(); // Stop ringback for the caller
+          setCallState("active");
+          setCallRoomId(msg.room_id);
+          showCallNotification(
+            "success",
+            `${activeCallRecipient?.username || "User"} accepted your call!`,
+            2000
+          );
+
+          // Start the AudioCallHandler for the caller when call is accepted
+          setTimeout(() => {
+            if (audioCallRef.current && audioCallRef.current.startCall) {
+              console.log(
+                "🔥 CALL ACCEPTED - Starting AudioCallHandler for caller with room:",
+                msg.room_id
+              );
+              audioCallRef.current.startCall(msg.room_id);
+            }
+          }, 100);
+          break;
+        case "call_rejected":
+          const rejecterName = activeCallRecipient?.username || "User";
+          showCallEndedModal(
+            "declined",
+            "Call Declined",
+            `${rejecterName} declined your call`
+          );
+          handleAudioCallEnd(); // Reset local state when call is rejected
+          break;
+        case "call_ended":
+          console.log(
+            "🔥 WEBSOCKET - Received call_ended, current state:",
+            callState,
+            "incomingCall:",
+            incomingCall
+          );
+
+          // IMMEDIATE MICROPHONE CLEANUP for all call_ended scenarios
+          console.log("🔥 WEBSOCKET - IMMEDIATE MICROPHONE CLEANUP");
+
+          // Stop all microphone streams immediately
+          if (window.localAudioStream) {
+            console.log("🔥 WEBSOCKET - Stopping window.localAudioStream");
+            window.localAudioStream.getTracks().forEach((track) => {
+              console.log(
+                "🔥 WEBSOCKET - Stopping track:",
+                track.kind,
+                track.label
+              );
+              track.stop();
+            });
+            window.localAudioStream = null;
+          }
+
+          if (window.currentCallStream) {
+            console.log("🔥 WEBSOCKET - Stopping window.currentCallStream");
+            window.currentCallStream.getTracks().forEach((track) => {
+              console.log(
+                "🔥 WEBSOCKET - Stopping call stream track:",
+                track.kind,
+                track.label
+              );
+              track.stop();
+            });
+            window.currentCallStream = null;
+          }
+
+          // Force cleanup AudioCallHandler immediately
+          if (audioCallRef.current) {
+            console.log("🔥 WEBSOCKET - Forcing AudioCallHandler cleanup");
+            try {
+              if (audioCallRef.current.forceCleanup) {
+                audioCallRef.current.forceCleanup();
+              }
+              if (audioCallRef.current.hangup) {
+                audioCallRef.current.hangup();
+              }
+            } catch (error) {
+              console.log(
+                "🔥 WEBSOCKET - AudioCallHandler cleanup error:",
+                error
+              );
             }
           }
-        } catch (error) {
-          console.error("Audio unlock failed:", error);
+
+          // Clean up all audio elements
+          const audioElements = document.querySelectorAll("audio");
+          audioElements.forEach((audio, index) => {
+            try {
+              audio.pause();
+              audio.currentTime = 0;
+              if (audio.srcObject) {
+                const stream = audio.srcObject;
+                if (stream && stream.getTracks) {
+                  stream.getTracks().forEach((track) => {
+                    console.log(
+                      `🔥 WEBSOCKET - Stopping track from audio element ${index}:`,
+                      track.kind,
+                      track.label
+                    );
+                    track.stop();
+                  });
+                }
+                audio.srcObject = null;
+              }
+              audio.src = "";
+            } catch (error) {
+              console.error(
+                `🔥 WEBSOCKET - Error cleaning audio element ${index}:`,
+                error
+              );
+            }
+          });
+
+          // Handle call ended for receiver who is still ringing
+          if (callState === "ringing") {
+            console.log(
+              "🔥 WEBSOCKET - Call ended while ringing, stopping ringtone"
+            );
+            stopIncomingCallRingtone();
+            showCallEndedModal(
+              "ended",
+              "Call Ended",
+              "The caller ended the call"
+            );
+            handleAudioCallEnd();
+          }
+          // Handle call ended for active calls
+          else if (callState === "active") {
+            console.log("🔥 WEBSOCKET - Active call ended remotely");
+            const callerName = activeCallRecipient?.username || "User";
+
+            showCallEndedModal(
+              "ended",
+              "Call Ended",
+              `Call with ${callerName} has ended`
+            );
+            handleAudioCallEnd(); // Reset local state when call ends remotely
+          }
+          // Handle call ended for calling state (caller cancels)
+          else if (callState === "calling") {
+            console.log(
+              "🔥 WEBSOCKET - Call cancelled by caller during calling state"
+            );
+            stopRingbackTone();
+            showCallEndedModal(
+              "ended",
+              "Call Cancelled",
+              "The call was cancelled"
+            );
+            handleAudioCallEnd();
+          }
+          // Handle any other non-idle states
+          else if (callState !== "idle") {
+            console.log("🔥 WEBSOCKET - Call ended in state:", callState);
+            const callerName = activeCallRecipient?.username || "User";
+
+            showCallEndedModal(
+              "ended",
+              "Call Ended",
+              `Call with ${callerName} has ended`
+            );
+            handleAudioCallEnd(); // Reset local state when call ends remotely
+          }
+
+          // Verify microphone is available after cleanup
+          setTimeout(() => {
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+              navigator.mediaDevices
+                .enumerateDevices()
+                .then((devices) => {
+                  const audioInputs = devices.filter(
+                    (device) => device.kind === "audioinput"
+                  );
+                  console.log(
+                    `🔥 WEBSOCKET VERIFICATION - ${audioInputs.length} audio input devices available for new calls`
+                  );
+                })
+                .catch((error) => {
+                  console.error(
+                    "🔥 WEBSOCKET VERIFICATION - Error checking devices:",
+                    error
+                  );
+                });
+            }
+          }, 200);
+          break;
+        case "video_call_initiate":
+          console.log("🔥 WEBSOCKET - Received video_call_initiate:", msg);
+          if (
+            msg.call &&
+            msg.call.to_user_id?.toString() === user.id.toString()
+          ) {
+            console.log("🔥 WEBSOCKET - Incoming video call for current user.");
+            setIncomingVideoCall(msg.call);
+            setVideoCallState("ringing");
+            setCallType("video");
+            playIncomingCallRingtone();
+
+            // Clear any existing timeout
+            if (ringtoneTimeoutRef.current) {
+              clearTimeout(ringtoneTimeoutRef.current);
+            }
+
+            // Backup mechanism: Stop ringtone after 30 seconds if no action taken
+            ringtoneTimeoutRef.current = setTimeout(() => {
+              console.log(
+                "🔥 BACKUP - Auto-stopping video call ringtone after 30s timeout"
+              );
+              stopIncomingCallRingtone();
+              showCallEndedModal(
+                "ended",
+                "Video Call Missed",
+                "Video call timed out"
+              );
+              handleVideoCallEnd();
+            }, 30000);
+
+            showCallNotification(
+              "info",
+              `Incoming video call from ${msg.call.caller_username}`,
+              5000
+            );
+          } else {
+            console.log(
+              "🔥 WEBSOCKET - Incoming video call not for current user or missing call data.",
+              msg
+            );
+          }
+          break;
+
+        case "video_call_accepted":
+          console.log("🔥 WEBSOCKET - Video call accepted");
+          setVideoCallState("active");
+          setVideoCallRoomId(msg.room_id);
+          setCallType("video");
+          showCallNotification(
+            "success",
+            `${
+              activeVideoCallRecipient?.username || "User"
+            } accepted your video call!`,
+            2000
+          );
+
+          // Start the video call interface for the caller when call is accepted
+          if (videoCallRef.current) {
+            videoCallRef.current.startVideoCall();
+          }
+          break;
+
+        case "video_call_rejected":
+          console.log("🔥 WEBSOCKET - Video call rejected");
+          const videoRejecterName =
+            activeVideoCallRecipient?.username || "User";
+          showCallEndedModal(
+            "declined",
+            "Video Call Declined",
+            `${videoRejecterName} declined your video call`
+          );
+          handleVideoCallEnd();
+          break;
+
+        case "video_call_ended":
+          console.log("🔥 WEBSOCKET - Video call ended");
+
+          // Handle video call ended for receiver who is still ringing
+          if (videoCallState === "ringing") {
+            console.log("🔥 WEBSOCKET - Video call ended while ringing");
+            stopIncomingCallRingtone();
+            showCallEndedModal(
+              "ended",
+              "Video Call Ended",
+              "The caller ended the video call"
+            );
+            handleVideoCallEnd();
+          }
+          // Handle video call ended for active video calls
+          else if (videoCallState === "active") {
+            console.log("🔥 WEBSOCKET - Active video call ended remotely");
+            const videoCallerName =
+              activeVideoCallRecipient?.username || "User";
+            showCallEndedModal(
+              "ended",
+              "Video Call Ended",
+              `Video call with ${videoCallerName} has ended`
+            );
+            handleVideoCallEnd();
+          }
+          // Handle video call ended for calling state (caller cancels)
+          else if (videoCallState === "calling") {
+            console.log("🔥 WEBSOCKET - Video call cancelled by caller");
+            showCallEndedModal(
+              "ended",
+              "Video Call Cancelled",
+              "The video call was cancelled"
+            );
+            handleVideoCallEnd();
+          }
+          break;
+
+        default:
+          console.warn("Unhandled WebSocket message type:", msg.type);
+      }
+    };
+
+    // The dependency array ensures this effect re-runs if `user` or `selectedRecipient` changes,
+    // which re-assigns the `onmessage` handler with the latest state in its closure.
+  }, [user, selectedRecipient, activeCallRecipient, callState, incomingCall]);
+
+  // Scroll to bottom of messages
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  // Prime the AudioContext on component mount to bypass autoplay restrictions
+  useEffect(() => {
+    const initAudioContext = () => {
+      if (!audioContextRef.current) {
+        try {
+          const context = new (window.AudioContext ||
+            window.webkitAudioContext)();
+          audioContextRef.current = context;
+          // Resume the context if it's in a suspended state (common in modern browsers)
+          if (context.state === "suspended") {
+            context.resume();
+          }
+        } catch (e) {
+          console.error("Failed to initialize AudioContext:", e);
         }
-      };
+      }
+    };
 
-      // Add one-time click listener to unlock audio
-      const unlockHandler = () => {
-        unlockAudio();
-        document.removeEventListener("click", unlockHandler);
-        document.removeEventListener("touchstart", unlockHandler);
-      };
+    // Add a user interaction listener to initialize the AudioContext
+    document.addEventListener("click", initAudioContext, { once: true });
+    document.addEventListener("keydown", initAudioContext, { once: true });
 
-      document.addEventListener("click", unlockHandler, { once: true });
-      document.addEventListener("touchstart", unlockHandler, { once: true });
-    } catch (error) {
-      console.error("Error setting up incoming call ringtone:", error);
+    return () => {
+      document.removeEventListener("click", initAudioContext);
+      document.removeEventListener("keydown", initAudioContext);
+    };
+  }, []);
+
+  // Debug logging for video call button state
+  useEffect(() => {
+    const isDisabled =
+      videoCallState === "calling" ||
+      videoCallState === "ringing" ||
+      callState !== "idle";
+    console.log("🔥 VIDEO CALL BUTTON STATE:", {
+      videoCallState,
+      callState,
+      selectedRecipient: selectedRecipient?.username,
+      disabled: isDisabled,
+      disabledReason:
+        videoCallState === "calling"
+          ? "videoCallState is calling"
+          : videoCallState === "ringing"
+          ? "videoCallState is ringing"
+          : callState !== "idle"
+          ? `callState is ${callState} (not idle)`
+          : "not disabled",
+    });
+  }, [videoCallState, callState, selectedRecipient?.username]);
+
+  // --- Sound ---
+  const playIncomingCallRingtone = () => {
+    console.log("🔥 SOUND - Attempting to play incoming call ringtone.");
+    if (window.playRingtone) {
+      window.playRingtone();
+    } else {
+      console.error("Ringtone function not available.");
     }
   };
 
   const stopIncomingCallRingtone = () => {
-    if (incomingCallRingtoneInterval) {
-      clearInterval(incomingCallRingtoneInterval);
-      setIncomingCallRingtoneInterval(null);
-      console.log("Incoming call ringtone stopped");
+    console.log("🔥 SOUND - Attempting to stop incoming call ringtone.");
+    if (window.stopRingtone) {
+      window.stopRingtone();
     }
   };
 
-  // Don't render chat interface if no receiver is selected
-  const shouldShowChat = isLoggedIn && selectedReceiver !== null;
-
-  // Debug: Log the conditions
-  useEffect(() => {
-    console.log("Debug conditions:", {
-      isLoggedIn,
-      selectedReceiver,
-      shouldShowChat,
-      user,
-      audioServiceStatus,
-    });
-  }, [isLoggedIn, selectedReceiver, shouldShowChat, user, audioServiceStatus]);
-
-  // Connect to unifiedchat-realtime-service WebSocket and send username
-  useEffect(() => {
-    if (isLoggedIn && user?.username) {
-      // Skip WebSocket only in demo mode when not forcing normal mode
-      if (isRenderDeployment && !FORCE_NORMAL_MODE) {
-        console.log("Demo mode: Skipping WebSocket connection");
-        return;
-      }
-
-      console.log("=== WEBSOCKET CONNECTION ATTEMPT ===");
-      console.log("User:", user);
-      console.log("isRenderDeployment:", isRenderDeployment);
-      console.log("FORCE_NORMAL_MODE:", FORCE_NORMAL_MODE);
-      console.log("REALTIME_API_BASE_URL:", REALTIME_API_BASE_URL);
-      console.log("Current hostname:", window.location.hostname);
-      console.log("Current protocol:", window.location.protocol);
-
-      // Close any previous connection
-      if (wsRef.current) {
-        console.log("Closing previous WebSocket connection");
-        wsRef.current.close();
-      }
-
-      // Connection variables
-      let reconnectAttempts = 0;
-      const MAX_RECONNECT_ATTEMPTS = 5;
-      let reconnectTimeout = null;
-
-      const connectWebSocket = () => {
-        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-          console.log("WebSocket already connected");
-          return;
-        }
-
-        console.log("Connecting to WebSocket...", REALTIME_API_BASE_URL);
-        const ws = new WebSocket(REALTIME_API_BASE_URL);
-        wsRef.current = ws;
-
-        ws.onopen = () => {
-          console.log("WebSocket connected");
-          // Send authentication immediately after connection
-          if (user) {
-            ws.send(
-              JSON.stringify({
-                type: "auth",
-                username: user.username,
-                user_id: user.id,
-              })
-            );
-          }
-        };
-
-        ws.onclose = (e) => {
-          console.log("WebSocket closed:", e.reason);
-          // Attempt to reconnect after 2 seconds
-          setTimeout(() => {
-            if (isLoggedIn) {
-              console.log("Attempting to reconnect WebSocket...");
-              connectWebSocket();
-            }
-          }, 2000);
-        };
-
-        ws.onerror = (error) => {
-          console.error("WebSocket error:", error);
-        };
-
-        ws.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            console.log("WebSocket message received:", data);
-
-            switch (data.type) {
-              case "presence_update":
-                if (Array.isArray(data.online_users)) {
-                  setOnlineUsers(data.online_users);
-                }
-                break;
-
-              case "private_message":
-                if (data.from_user_id && data.content) {
-                  setMessages((prevMessages) => [
-                    ...prevMessages,
-                    {
-                      id: Date.now(),
-                      sender_id: data.from_user_id,
-                      receiver_id: user?.id,
-                      content: data.content,
-                      timestamp: data.timestamp || Date.now(),
-                    },
-                  ]);
-                  scrollToBottom();
-                }
-                break;
-
-              case "call_notification":
-                if (data.from_user_id && data.call_id) {
-                  console.log("Received call notification:", data);
-                  const caller = users.find((u) => u.id === data.from_user_id);
-                  if (caller) {
-                    setIncomingCall({
-                      callerId: data.from_user_id,
-                      callerName: caller.username,
-                      roomId: data.call_id,
-                    });
-                    playIncomingCallRingtone();
-                  }
-                }
-                break;
-
-              default:
-                console.log("Unknown message type:", data.type);
-            }
-          } catch (error) {
-            console.error("Error processing WebSocket message:", error);
-          }
-        };
-      };
-
-      // Initial connection
-      connectWebSocket();
-
-      // Cleanup function
-      return () => {
-        if (wsRef.current) {
-          wsRef.current.close(1000, "Component unmounting");
-        }
-        if (reconnectTimeout) {
-          clearTimeout(reconnectTimeout);
-        }
-      };
+  // Ringback Tone Functions
+  const playRingbackTone = () => {
+    console.log("🔥 SOUND - Attempting to play ringback tone.");
+    if (window.playRingback) {
+      window.playRingback();
+    } else {
+      console.error("Ringback function not available.");
     }
-  }, [
-    isLoggedIn,
-    user,
-    isRenderDeployment,
-    FORCE_NORMAL_MODE,
-    REALTIME_API_BASE_URL,
-  ]);
+  };
 
-  // Check for localStorage call notifications (fallback mechanism)
-  useEffect(() => {
-    if (isLoggedIn && user) {
-      const checkLocalStorageNotifications = () => {
-        try {
-          const storedNotification = localStorage.getItem("call_notification");
-          if (storedNotification) {
-            const notification = JSON.parse(storedNotification);
-            console.log("Found localStorage call notification:", notification);
-
-            // Ensure consistent ID types for comparison
-            const currentUserId = Number(user.id);
-            const toUserId = Number(notification.to_user_id);
-            const fromUserId = Number(notification.from_user_id);
-
-            console.log("LocalStorage ID comparison:", {
-              currentUserId,
-              toUserId,
-              fromUserId,
-              isForCurrentUser: toUserId === currentUserId,
-              isFromCurrentUser: fromUserId === currentUserId,
-            });
-
-            // Check if this notification is for the current user
-            if (toUserId === currentUserId && fromUserId !== currentUserId) {
-              console.log(
-                "Processing localStorage call notification for user:",
-                user.username
-              );
-              setIncomingCall(notification);
-              // Start playing ringtone for incoming call
-              playIncomingCallRingtone();
-              // Clear the notification after processing
-              localStorage.removeItem("call_notification");
-            }
-          }
-        } catch (error) {
-          console.error("Error processing localStorage notification:", error);
-        }
-      };
-
-      // Check immediately
-      checkLocalStorageNotifications();
-
-      // Set up interval to check for notifications
-      const interval = setInterval(checkLocalStorageNotifications, 1000);
-
-      return () => clearInterval(interval);
+  const stopRingbackTone = () => {
+    console.log("🔥 SOUND - Attempting to stop ringback tone.");
+    if (window.stopRingback) {
+      window.stopRingback();
     }
-  }, [isLoggedIn, user]);
+  };
 
-  // Poll /online-users endpoint every 30 seconds as fallback
-  useEffect(() => {
-    let interval;
-    const fetchOnlineUsers = async () => {
-      try {
-        // Skip backend call only in demo mode when not forcing normal mode
-        if (isRenderDeployment && !FORCE_NORMAL_MODE) {
-          console.log("Demo mode: Using demo online users");
-          // In demo mode, show all users as online for testing
-          const allUsernames = users.map((u) => u.username);
-          setOnlineUsers(allUsernames);
-          setConnectedUsers(new Set(allUsernames));
-          return;
-        }
-
-        // Try to fetch from backend
-        const response = await axios.get(
-          `${REALTIME_API_BASE_URL}/online-users`
-        );
-        const backendOnlineUsers = response.data.online_users || [];
-        console.log("Backend online users:", backendOnlineUsers);
-
-        // Always include the current user as online
-        const currentUserOnline = user?.username ? [user.username] : [];
-        const allOnlineUsers = [
-          ...new Set([...backendOnlineUsers, ...currentUserOnline]),
-        ];
-
-        setOnlineUsers(allOnlineUsers);
-        setConnectedUsers(new Set(allOnlineUsers));
-      } catch (error) {
-        console.error("Failed to fetch online users:", error);
-        // Fallback: show all users as online when backend is not available
-        console.log(
-          "Backend not available, assuming all users are online for better UX"
-        );
-        const allUsernames = users.map((u) => u.username);
-        setOnlineUsers(allUsernames);
-        setConnectedUsers(new Set(allUsernames));
-      }
-    };
-    if (isLoggedIn) {
-      // Initial fetch
-      fetchOnlineUsers();
-      // Fallback polling every 30 seconds in case WebSocket fails
-      interval = setInterval(fetchOnlineUsers, 30000);
-
-      // Send periodic presence heartbeat via WebSocket
-      const presenceHeartbeat = setInterval(() => {
-        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-          wsRef.current.send(
-            JSON.stringify({
-              type: "presence_heartbeat",
-              user_id: user.id,
-              username: user.username,
-              timestamp: Date.now(),
-            })
-          );
-          console.log("Sent presence heartbeat for:", user.username);
-        }
-      }, 15000); // Every 15 seconds
-
-      return () => {
-        interval && clearInterval(interval);
-        clearInterval(presenceHeartbeat);
-      };
+  // --- Call Lifecycle ---
+  const initiateCall = async (recipient) => {
+    console.log("🔥 INITIATE CALL - Starting call to:", recipient.username);
+    if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
+      console.log("🔥 INITIATE CALL - WebSocket not connected");
+      showCallNotification(
+        "error",
+        "WebSocket is not connected. Please wait.",
+        3000
+      );
+      return;
     }
-    return () => interval && clearInterval(interval);
-  }, [isLoggedIn, isRenderDeployment, user?.username]);
-
-  const sendCallNotification = (receiverId, roomId) => {
-    if (!user) {
-      console.error("Cannot send notification, user not logged in");
+    if (callState !== "idle") {
+      console.log(
+        "🔥 INITIATE CALL - Call already in progress, current state:",
+        callState
+      );
+      showCallNotification(
+        "error",
+        "Cannot start a new call while another is in progress.",
+        3000
+      );
       return;
     }
 
-    // Ensure consistent ID types (convert to numbers)
-    const fromUserId = Number(user.id);
-    const toUserId = Number(receiverId);
+    const roomId = `call_${user.id}_${recipient.id}_${Date.now()}`;
+    console.log("🔥 INITIATE CALL - Setting call state to 'calling'");
 
-    // Debug: Log user information before sending notification
-    console.log("=== SENDING CALL NOTIFICATION ===");
-    debugUserInfo();
-    console.log("Receiver ID:", receiverId, "Type:", typeof receiverId);
+    // Set state to show the "calling" UI for the initiator
+    setActiveCallRecipient(recipient);
+    setCallRoomId(roomId);
+    setCallState("calling");
+    setForceHideModal(false); // Reset modal hiding flag for new call
     console.log(
-      "Receiver user:",
-      users.find((u) => u.id === receiverId)
+      "🔥 INITIATE CALL - State set, activeCallRecipient:",
+      recipient.username
     );
-    console.log("From User ID:", fromUserId, "Type:", typeof fromUserId);
-    console.log("To User ID:", toUserId, "Type:", typeof toUserId);
+    playRingbackTone();
 
-    const callData = {
-      type: "incoming_call",
-      from_user_id: fromUserId,
-      from_username: user.username,
-      to_user_id: toUserId,
-      room_id: roomId,
-      timestamp: Date.now(),
+    const callPayload = {
+      type: "call_initiate",
+      call: {
+        to_user_id: recipient.id,
+        from_user_id: user.id,
+        caller_username: user.username,
+        room_id: roomId,
+        call_type: "audio",
+      },
     };
 
-    console.log("Call notification data:", callData);
-    console.log("Attempting to send call notification:", {
-      from: user.username,
-      to: receiverId,
-      roomId: roomId,
-      wsState: wsRef.current ? wsRef.current.readyState : "no ref",
-      wsOpen: wsRef.current && wsRef.current.readyState === WebSocket.OPEN,
-    });
-
-    // Use WebSocket to send notification
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      console.log("✅ Sending call notification via WebSocket:", callData);
-      wsRef.current.send(JSON.stringify(callData));
-    } else {
-      // Fallback to localStorage for same-browser testing
-      console.warn("❌ WebSocket not available, using localStorage fallback");
-      console.log("Storing call notification in localStorage:", callData);
-      localStorage.setItem("call_notification", JSON.stringify(callData));
-    }
-    console.log("=== END SENDING CALL NOTIFICATION ===");
+    console.log("🔥 WEBSOCKET - Sending call_initiate payload:", callPayload);
+    ws.current.send(JSON.stringify(callPayload));
   };
 
-  // Clean up ringtone when incoming call changes
-  useEffect(() => {
-    if (!incomingCall) {
-      stopIncomingCallRingtone();
-    }
-  }, [incomingCall]);
+  const handleAcceptCall = async () => {
+    if (!incomingCall) return;
 
-  // Clean up ringtone on component unmount
-  useEffect(() => {
-    return () => {
-      stopIncomingCallRingtone();
-      stopCallTimer();
+    // Request microphone permission first
+    const micGranted = await requestMicrophonePermission();
+    if (!micGranted) {
+      console.log(
+        "🔥 ACCEPT CALL - Microphone permission denied, rejecting call"
+      );
+      handleRejectCall();
+      return;
+    }
+
+    // Initialize audio context immediately after microphone permission
+    console.log(
+      "🔥 ACCEPT CALL - Initializing audio context for immediate playback"
+    );
+    try {
+      if (!window.audioContext) {
+        window.audioContext = new (window.AudioContext ||
+          window.webkitAudioContext)();
+      }
+      if (window.audioContext.state === "suspended") {
+        await window.audioContext.resume();
+        console.log("🔥 ACCEPT CALL - Audio context resumed successfully");
+      }
+    } catch (audioError) {
+      console.error(
+        "🔥 ACCEPT CALL - Audio context initialization failed:",
+        audioError
+      );
+    }
+
+    // Clear ringtone timeout
+    if (ringtoneTimeoutRef.current) {
+      clearTimeout(ringtoneTimeoutRef.current);
+      ringtoneTimeoutRef.current = null;
+    }
+
+    stopIncomingCallRingtone();
+
+    // Show immediate feedback
+    showCallNotification("success", "Connecting to call...", 2000);
+
+    const callPayload = {
+      type: "call_accepted",
+      to_user_id: incomingCall.from_user_id,
+      room_id: incomingCall.room_id,
     };
+    ws.current?.send(JSON.stringify(callPayload));
+    setCallState("active");
+    setCallRoomId(incomingCall.room_id);
+    // Find the user object for the caller
+    const caller = users.find((u) => u.id === incomingCall.from_user_id);
+    setActiveCallRecipient(caller);
+    setIncomingCall(null);
+    setForceHideModal(false); // Reset modal hiding flag for accepted call
+
+    // Start the AudioCallHandler for the receiver
+    setTimeout(() => {
+      if (audioCallRef.current && audioCallRef.current.startCall) {
+        console.log(
+          "🔥 ACCEPT CALL - Starting AudioCallHandler for receiver with room:",
+          incomingCall.room_id
+        );
+        audioCallRef.current.startCall(incomingCall.room_id);
+      }
+    }, 100);
+  };
+
+  const handleRejectCall = () => {
+    if (!incomingCall) return;
+
+    // Clear ringtone timeout
+    if (ringtoneTimeoutRef.current) {
+      clearTimeout(ringtoneTimeoutRef.current);
+      ringtoneTimeoutRef.current = null;
+    }
+
+    stopIncomingCallRingtone();
+    const callPayload = {
+      type: "call_rejected",
+      to_user_id: incomingCall.from_user_id,
+      room_id: incomingCall.room_id,
+    };
+    ws.current?.send(JSON.stringify(callPayload));
+    showCallNotification("info", "Call rejected", 2000);
+    handleAudioCallEnd(); // Reset local state when call is rejected
+  };
+
+  const handleHangUp = () => {
+    console.log("🔥 HANG UP - Current state:", callState);
+    console.log(
+      "🔥 HANG UP - ActiveCallRecipient:",
+      activeCallRecipient?.username
+    );
+
+    // Allow hang up from any state - force cleanup if needed
+    if (callState === "idle") {
+      console.log("🔥 HANG UP - Already idle, nothing to do");
+      return;
+    }
+
+    console.log("🔥 HANG UP - IMMEDIATE AGGRESSIVE CLEANUP STARTING");
+    isEndingCallRef.current = false; // RESET flag to ensure cleanup can proceed
+
+    // Determine who to notify about the hangup
+    const targetUserId =
+      callState === "active"
+        ? activeCallRecipient?.id // If call is active, notify the other party
+        : callState === "ringing"
+        ? incomingCall?.from_user_id // If we are being called, notify the caller
+        : callState === "calling"
+        ? activeCallRecipient?.id // If we are calling, notify the person we are calling
+        : null;
+
+    // Show feedback based on call state
+    if (callState === "calling") {
+      showCallNotification("info", "Call cancelled", 2000);
+    } else if (callState === "active") {
+      showCallNotification("info", "Call ended", 2000);
+    }
+
+    // IMMEDIATE MICROPHONE CLEANUP - Do this BEFORE sending WebSocket message
+    console.log("🔥 HANG UP - IMMEDIATE SYNCHRONOUS MICROPHONE CLEANUP");
+
+    // 1. IMMEDIATE AudioCallHandler cleanup FIRST (most critical)
+    if (audioCallRef.current) {
+      console.log("🔥 HANG UP - IMMEDIATE AudioCallHandler cleanup");
+      try {
+        if (audioCallRef.current.forceCleanup) {
+          audioCallRef.current.forceCleanup();
+        }
+        if (audioCallRef.current.hangup) {
+          audioCallRef.current.hangup();
+        }
+      } catch (error) {
+        console.log("🔥 HANG UP - AudioCallHandler cleanup failed:", error);
+      }
+    }
+
+    // 2. IMMEDIATE global stream cleanup
+    console.log("🔥 HANG UP - IMMEDIATE global stream cleanup");
+
+    if (window.localAudioStream) {
+      console.log("🔥 HANG UP - Stopping window.localAudioStream");
+      window.localAudioStream.getTracks().forEach((track) => {
+        console.log("🔥 HANG UP - Stopping track:", track.kind, track.label);
+        track.stop();
+      });
+      window.localAudioStream = null;
+    }
+
+    if (window.currentCallStream) {
+      console.log("🔥 HANG UP - Stopping window.currentCallStream");
+      window.currentCallStream.getTracks().forEach((track) => {
+        console.log(
+          "🔥 HANG UP - Stopping call stream track:",
+          track.kind,
+          track.label
+        );
+        track.stop();
+      });
+      window.currentCallStream = null;
+    }
+
+    // 3. IMMEDIATE audio elements cleanup
+    console.log("🔥 HANG UP - IMMEDIATE audio elements cleanup");
+    const audioElements = document.querySelectorAll("audio");
+    audioElements.forEach((audio, index) => {
+      try {
+        audio.pause();
+        audio.currentTime = 0;
+        if (audio.srcObject) {
+          const stream = audio.srcObject;
+          if (stream && stream.getTracks) {
+            stream.getTracks().forEach((track) => {
+              console.log(
+                `🔥 HANG UP - Stopping track from audio element ${index}:`,
+                track.kind,
+                track.label
+              );
+              track.stop();
+            });
+          }
+          audio.srcObject = null;
+        }
+        audio.src = "";
+
+        // Remove temporary elements immediately
+        if (
+          audio.id &&
+          (audio.id.includes("temp-") ||
+            audio.id.includes("dedicated-") ||
+            audio.id.includes("emergency-"))
+        ) {
+          audio.remove();
+          console.log(`🔥 HANG UP - Removed temporary element: ${audio.id}`);
+        }
+      } catch (error) {
+        console.error(
+          `🔥 HANG UP - Error cleaning audio element ${index}:`,
+          error
+        );
+      }
+    });
+
+    // 4. IMMEDIATE state reset
+    console.log("🔥 HANG UP - IMMEDIATE STATE RESET");
+    setCallState("idle");
+    setActiveCallRecipient(null);
+    setIncomingCall(null);
+    setCallRoomId(null);
+    setForceHideModal(true);
+
+    // Stop all sounds
+    stopIncomingCallRingtone();
+    stopRingbackTone();
+
+    // 5. Send hangup notification AFTER cleanup to avoid race conditions
+    if (targetUserId && ws.current?.readyState === WebSocket.OPEN) {
+      console.log("🔥 HANG UP - Sending call_ended to user:", targetUserId);
+      const callPayload = { type: "call_ended", to_user_id: targetUserId };
+      ws.current.send(JSON.stringify(callPayload));
+    }
+
+    // 6. IMMEDIATE microphone availability verification
+    console.log("🔥 HANG UP - IMMEDIATE microphone verification");
+
+    // Test microphone availability immediately
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      navigator.mediaDevices
+        .getUserMedia({ audio: true })
+        .then((testStream) => {
+          console.log(
+            "🔥 HANG UP - SUCCESS: Microphone is available for new calls"
+          );
+          // Stop the test stream immediately
+          testStream.getTracks().forEach((track) => {
+            track.stop();
+          });
+          console.log("🔥 HANG UP - Test stream stopped");
+        })
+        .catch((error) => {
+          console.log(
+            "🔥 HANG UP - WARNING: Microphone may not be available:",
+            error.name,
+            error.message
+          );
+        });
+    }
+
+    console.log(
+      "🔥 HANG UP - IMMEDIATE CLEANUP COMPLETED - MICROPHONE RELEASED"
+    );
+  };
+
+  const endCall = () => {
+    console.log("🔥 END CALL - Current state:", callState);
+
+    if (isEndingCallRef.current) {
+      console.log("🔥 END CALL - Already in progress, skipping.");
+      return;
+    }
+    isEndingCallRef.current = true; // Set flag to true
+
+    // Prevent multiple executions (old guard, now augmented by isEndingCallRef)
+    if (callState === "idle") {
+      console.log("🔥 END CALL - Already idle, skipping");
+      isEndingCallRef.current = false; // Reset flag even if idle
+      return;
+    }
+
+    // Stop any sounds that might be playing
+    stopIncomingCallRingtone();
+    stopRingbackTone();
+
+    // Force cleanup the AudioCallHandler if it exists
+    if (audioCallRef.current) {
+      console.log("🔥 END CALL - Forcing AudioCallHandler cleanup");
+      audioCallRef.current.forceCleanup();
+    }
+
+    // Reset all call-related state directly - do NOT call AudioCallHandler.hangup()
+    // to avoid infinite recursion. The AudioCallHandler will clean itself up.
+    console.log("🔥 END CALL - Resetting state to idle");
+    setCallState("idle");
+    setIncomingCall(null);
+    setActiveCallRecipient(null);
+    setCallRoomId(null);
+
+    isEndingCallRef.current = false; // Reset flag after cleanup
+  };
+
+  // --- Video Call Functions ---
+  const initiateVideoCall = async (recipient) => {
+    console.log(
+      "🔥 INITIATE VIDEO CALL - Starting video call to:",
+      recipient.username
+    );
+
+    if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
+      console.log("🔥 INITIATE VIDEO CALL - WebSocket not connected");
+      showCallNotification(
+        "error",
+        "WebSocket is not connected. Please wait.",
+        3000
+      );
+      return;
+    }
+
+    if (videoCallState !== "idle" || callState !== "idle") {
+      console.log("🔥 INITIATE VIDEO CALL - Call already in progress");
+      showCallNotification(
+        "error",
+        "Cannot start a video call while another is in progress.",
+        3000
+      );
+      return;
+    }
+
+    const roomId = `video_call_${user.id}_${recipient.id}_${Date.now()}`;
+    console.log(
+      "🔥 INITIATE VIDEO CALL - Setting video call state to 'calling'"
+    );
+
+    // Set state to show the "calling" UI for the initiator
+    setActiveVideoCallRecipient(recipient);
+    setVideoCallRoomId(roomId);
+    setVideoCallState("calling");
+    setCallType("video");
+
+    const callPayload = {
+      type: "video_call_initiate",
+      call: {
+        to_user_id: recipient.id,
+        from_user_id: user.id,
+        caller_username: user.username,
+        room_id: roomId,
+        call_type: "video",
+      },
+    };
+
+    console.log(
+      "🔥 WEBSOCKET - Sending video_call_initiate payload:",
+      callPayload
+    );
+    ws.current.send(JSON.stringify(callPayload));
+
+    // Start video call interface
+    console.log(
+      "🔥 INITIATE VIDEO CALL - Checking videoCallRef.current:",
+      videoCallRef.current
+    );
+    if (videoCallRef.current) {
+      console.log("🔥 INITIATE VIDEO CALL - Calling startVideoCall() on ref");
+      videoCallRef.current.startVideoCall();
+    } else {
+      console.log(
+        "🔥 INITIATE VIDEO CALL - videoCallRef.current is null, scheduling retry..."
+      );
+      // VideoCallInterface not mounted yet, retry after render
+      setTimeout(() => {
+        console.log(
+          "🔥 INITIATE VIDEO CALL - Retry: videoCallRef.current:",
+          videoCallRef.current
+        );
+        if (videoCallRef.current) {
+          console.log(
+            "🔥 INITIATE VIDEO CALL - Retry: Calling startVideoCall() on ref"
+          );
+          videoCallRef.current.startVideoCall();
+        } else {
+          console.error(
+            "🔥 INITIATE VIDEO CALL - Retry failed: videoCallRef.current still null"
+          );
+        }
+      }, 100);
+    }
+  };
+
+  const handleAcceptVideoCall = async () => {
+    if (!incomingVideoCall) return;
+
+    console.log("🔥 ACCEPT VIDEO CALL - Accepting incoming video call");
+
+    // Stop any ringtones
+    stopIncomingCallRingtone();
+
+    // Clear ringtone timeout
+    if (ringtoneTimeoutRef.current) {
+      clearTimeout(ringtoneTimeoutRef.current);
+      ringtoneTimeoutRef.current = null;
+    }
+
+    // Show immediate feedback
+    showCallNotification("success", "Connecting to video call...", 2000);
+
+    const callPayload = {
+      type: "video_call_accepted",
+      to_user_id: incomingVideoCall.from_user_id,
+      room_id: incomingVideoCall.room_id,
+    };
+
+    ws.current?.send(JSON.stringify(callPayload));
+    setVideoCallState("active");
+    setVideoCallRoomId(incomingVideoCall.room_id);
+    setCallType("video");
+
+    // Find the user object for the caller
+    const caller = users.find((u) => u.id === incomingVideoCall.from_user_id);
+    setActiveVideoCallRecipient(caller);
+    setIncomingVideoCall(null);
+
+    // Accept the call in the video call interface
+    if (videoCallRef.current) {
+      videoCallRef.current.acceptCall();
+    }
+  };
+
+  const handleRejectVideoCall = () => {
+    if (!incomingVideoCall) return;
+
+    console.log("🔥 REJECT VIDEO CALL - Rejecting incoming video call");
+
+    // Clear ringtone timeout
+    if (ringtoneTimeoutRef.current) {
+      clearTimeout(ringtoneTimeoutRef.current);
+      ringtoneTimeoutRef.current = null;
+    }
+
+    stopIncomingCallRingtone();
+
+    const callPayload = {
+      type: "video_call_rejected",
+      to_user_id: incomingVideoCall.from_user_id,
+      room_id: incomingVideoCall.room_id,
+    };
+
+    ws.current?.send(JSON.stringify(callPayload));
+    showCallNotification("info", "Video call rejected", 2000);
+
+    // Reset video call state
+    setVideoCallState("idle");
+    setIncomingVideoCall(null);
+    setActiveVideoCallRecipient(null);
+    setVideoCallRoomId(null);
+  };
+
+  const handleVideoCallEnd = () => {
+    console.log("🔥 VIDEO CALL END - Ending video call");
+
+    if (videoCallState === "idle") {
+      console.log("🔥 VIDEO CALL END - Already idle, skipping");
+      return;
+    }
+
+    // Determine who to notify about the hangup
+    const targetUserId =
+      activeVideoCallRecipient?.id || incomingVideoCall?.from_user_id;
+
+    // Send hangup notification
+    if (targetUserId && ws.current?.readyState === WebSocket.OPEN) {
+      console.log(
+        "🔥 VIDEO CALL END - Sending video_call_ended to user:",
+        targetUserId
+      );
+      const callPayload = {
+        type: "video_call_ended",
+        to_user_id: targetUserId,
+      };
+      ws.current.send(JSON.stringify(callPayload));
+    }
+
+    // Reset video call state
+    setVideoCallState("idle");
+    setIncomingVideoCall(null);
+    setActiveVideoCallRecipient(null);
+    setVideoCallRoomId(null);
+    setCallType("audio");
+
+    // Show feedback
+    showCallNotification("info", "Video call ended", 2000);
+  };
+
+  // --- Auth & Data Fetching ---
+  const handleLoginOrRegister = async (e, endpoint) => {
+    e.preventDefault();
+    try {
+      const response = await axios.post(
+        `${AUTH_API_BASE_URL}${endpoint}`,
+        loginForm
+      );
+      const { user: userData, token } = response.data;
+      if (userData && token) {
+        setUser(userData);
+        setIsLoggedIn(true);
+        localStorage.setItem("token", token);
+        localStorage.setItem("user", JSON.stringify(userData));
+        await fetchAllUsers(); // This will now also populate the userMap
+      }
+    } catch (error) {
+      console.error(`${endpoint} failed`, error);
+      showCallNotification(
+        "error",
+        `${endpoint.slice(1)} failed. Please check credentials or register.`,
+        4000
+      );
+    }
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    setIsLoggedIn(false);
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    ws.current?.close();
+  };
+
+  const fetchAllUsers = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await axios.get(`${AUTH_API_BASE_URL}/users`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const usersData = response.data || [];
+      setUsers(usersData);
+      // Populate the userMap for easy username lookup
+      const newMap = new Map();
+      usersData.forEach((u) => newMap.set(u.id.toString(), u.username));
+      setUserMap(newMap);
+    } catch (error) {
+      console.error("Failed to fetch users", error);
+    }
+  };
+
+  const handleSendMessage = async () => {
+    if (!newMessage.trim() || !selectedRecipient) return;
+    const optimisticMessage = {
+      id: `local_${Date.now()}`,
+      from_user_id: user.id,
+      to_user_id: selectedRecipient.id,
+      content: newMessage,
+      timestamp: new Date().toISOString(),
+      status: "sending",
+    };
+    setMessages((prevMessages) => [...prevMessages, optimisticMessage]);
+    setNewMessage("");
+
+    try {
+      const response = await axios.post(MESSAGE_API_BASE_URL, {
+        from: user.id,
+        to: selectedRecipient.id,
+        content: optimisticMessage.content,
+        id: optimisticMessage.id, // Send local ID to backend
+      });
+      // The WebSocket event will handle updating the message status to 'sent'
+    } catch (error) {
+      console.error("Failed to send message:", error);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === optimisticMessage.id ? { ...m, status: "failed" } : m
+        )
+      );
+    }
+  };
+
+  const selectChatUser = async (userToSelect) => {
+    if (userToSelect?.id === selectedRecipient?.id) return;
+    setSelectedRecipient(userToSelect);
+    setMessages([]); // Clear messages for new chat
+    setHighlightedUser(null); // Clear highlight on selection
+    try {
+      const token = localStorage.getItem("token");
+      // PRIVACY FIX: Use secure endpoint that only returns messages between current user and selected user
+      const response = await axios.get(
+        `${MESSAGE_API_BASE_URL}/between/${user.id}/${userToSelect.id}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      setMessages(response.data || []);
+      console.log(
+        `🔐 PRIVACY SECURE: Fetched ${
+          response.data?.length || 0
+        } messages between ${user.username} and ${userToSelect.username}`
+      );
+    } catch (error) {
+      console.error("Failed to fetch messages:", error);
+    }
+  };
+
+  const handleSearch = (term) => {
+    if (!term) {
+      setSearchResults([]);
+      return;
+    }
+    const results = users.filter(
+      (u) =>
+        u.username.toLowerCase().includes(term.toLowerCase()) &&
+        u.id !== user.id
+    );
+    setSearchResults(results);
+  };
+
+  const isUserOnline = (username) => onlineUsers.includes(username);
+
+  // Check for existing session on mount
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    const storedUser = localStorage.getItem("user");
+    if (token && storedUser) {
+      setUser(JSON.parse(storedUser));
+      setIsLoggedIn(true);
+      fetchAllUsers();
+    }
   }, []);
 
-  // Auto-clear temporary call outcome messages
+  // Auto-dismiss call ended modal when call state changes to idle
   useEffect(() => {
-    if (callOutcomeMessage) {
-      const timer = setTimeout(() => {
-        setCallOutcomeMessage(null);
-      }, callOutcomeMessage.duration);
-
-      return () => clearTimeout(timer);
+    if (callState === "idle" && callEndedModal) {
+      console.log("🔥 AUTO-DISMISS - Call state is idle, dismissing modal");
+      setTimeout(() => setCallEndedModal(null), 1000); // Give user 1 second to see the modal
     }
-  }, [callOutcomeMessage]);
+  }, [callState, callEndedModal]);
 
-  // Initialize mobile audio context for iOS Safari
-
-  // Prevent hydration issues by only rendering after client-side initialization
-  if (!isClient) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-100 via-blue-100 to-pink-100 flex items-center justify-center">
+  // --- UI Components ---
+  const renderAuth = () => (
+    <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">
+      <div className="w-full max-w-md p-8 space-y-8 bg-gray-800 rounded-lg shadow-lg">
         <div className="text-center">
-          <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
+          <FaRocket className="mx-auto h-12 w-auto text-indigo-500" />
+          <h2 className="mt-6 text-3xl font-extrabold">Welcome to Alvis</h2>
+          <p className="mt-2 text-sm text-gray-400">Sign in to your account</p>
         </div>
+        <form
+          className="space-y-6"
+          onSubmit={(e) => handleLoginOrRegister(e, "/auth/login")}
+        >
+          <div className="rounded-md shadow-sm -space-y-px">
+            <input
+              type="text"
+              placeholder="Username"
+              className="w-full px-3 py-2 border border-gray-700 bg-gray-900 placeholder-gray-500 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              value={loginForm.username}
+              onChange={(e) =>
+                setLoginForm({ ...loginForm, username: e.target.value })
+              }
+            />
+            <input
+              type="password"
+              placeholder="Password"
+              className="w-full px-3 py-2 border border-gray-700 bg-gray-900 placeholder-gray-500 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              value={loginForm.password}
+              onChange={(e) =>
+                setLoginForm({ ...loginForm, password: e.target.value })
+              }
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <button
+              type="submit"
+              className="w-full py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              Sign In
+            </button>
+          </div>
+          <div className="text-center">
+            <button
+              type="button"
+              onClick={(e) => handleLoginOrRegister(e, "/auth/register")}
+              className="font-medium text-indigo-400 hover:text-indigo-300"
+            >
+              Don't have an account? Register
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+
+  const MessageBubble = ({ msg, isSender, isFirstInGroup }) => {
+    // Get sender's username from the map, fallback to an empty string
+    const senderUsername = userMap.get(msg.from_user_id?.toString()) || "";
+
+    return (
+      <div
+        className={`flex items-start mt-4 ${
+          isSender ? "justify-end" : "justify-start"
+        }`}
+      >
+        {!isSender && isFirstInGroup && (
+          <div className="flex-shrink-0 h-10 w-10 rounded-full bg-gray-700 flex items-center justify-center mr-3">
+            {senderUsername?.charAt(0).toUpperCase()}
+          </div>
+        )}
+        {isSender && (
+          <div
+            className={`px-4 py-2 rounded-lg max-w-xs lg:max-w-md bg-indigo-600`}
+          >
+            <p>{msg.content}</p>
+            <span className="text-xs text-gray-400 mt-1 block text-right">
+              {new Date(msg.timestamp).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+              {msg.status === "sending" && " ..."}
+              {msg.status === "failed" && " !"}
+            </span>
+          </div>
+        )}
+        {!isSender && (
+          <div
+            className={`px-4 py-2 rounded-lg max-w-xs lg:max-w-md bg-gray-700`}
+          >
+            <p className="font-bold">{isFirstInGroup && senderUsername}</p>
+            <p>{msg.content}</p>
+            <span className="text-xs text-gray-400 mt-1 block text-right">
+              {new Date(msg.timestamp).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </span>
+          </div>
+        )}
       </div>
     );
-  }
+  };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-100 via-blue-100 to-pink-100 flex flex-col">
+  const renderChat = () => (
+    <div className="flex h-screen bg-gray-800 text-white antialiased">
       <Head>
-        <title>UnifiedChat MVP</title>
-        <meta name="description" content="UnifiedChat MVP" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <link rel="icon" href="/favicon.ico" />
+        <title>Alvis Chat</title>
       </Head>
-
-      {/* Load WebRTC adapter and Janus library */}
       <Script
-        src="/adapter.js"
+        src="https://webrtc.github.io/adapter/adapter-latest.js"
         strategy="beforeInteractive"
         onLoad={() => {
-          console.log("WebRTC adapter loaded locally");
-          window.adapterLoaded = true;
-        }}
-        onError={() => {
-          console.error("Failed to load local adapter.js");
-          // Still mark as loaded to try Janus anyway
+          console.log("🔥 ADAPTER - Setting adapterLoaded flag");
           window.adapterLoaded = true;
         }}
       />
-      <Script
-        src="/janus.js"
-        strategy="beforeInteractive"
-        onLoad={() => {
-          console.log("Janus library loaded");
-          window.janusLoaded = true;
-        }}
-        onError={() => {
-          console.error("Failed to load Janus library");
-        }}
-      />
+      <Script src="/janus.js" strategy="beforeInteractive" />
+      <Script src="/sounds/ringtone.js" strategy="lazyOnload" />
 
-      {/* Demo Mode Banner */}
-      {isRenderDeployment && !FORCE_NORMAL_MODE && (
-        <div className="bg-yellow-500 text-black px-4 py-2 text-center text-sm font-semibold">
-          🚀 DEMO MODE: Audio calling testing on Render.com - Login with any
-          username/password
+      {/* Column 1: Workspace/Server List */}
+      <div className="bg-gray-900 w-20 flex-shrink-0 flex flex-col items-center py-4 space-y-4">
+        <div className="w-12 h-12 rounded-full bg-indigo-600 flex items-center justify-center text-2xl">
+          <FaRocket />
+        </div>
+        {/* Add more server icons here */}
+      </div>
+
+      {/* Column 2: User/Channel List */}
+      <div className="bg-gray-800 w-64 flex-shrink-0 flex flex-col border-r border-gray-700">
+        <div className="h-16 flex-shrink-0 px-4 flex items-center justify-between border-b border-gray-700">
+          <h2 className="text-xl font-bold">Direct Messages</h2>
+          <button
+            onClick={handleLogout}
+            className="text-gray-400 hover:text-white"
+          >
+            <FaSignOutAlt />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-2">
+          <div className="p-2">
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search users..."
+                className="w-full bg-gray-900 border border-gray-700 rounded-lg py-2 px-4 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                onChange={(e) => handleSearch(e.target.value)}
+              />
+              <FaSearch className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            </div>
+          </div>
+          <ul>
+            {(searchResults.length > 0
+              ? searchResults
+              : users.filter((u) => u.id !== user.id)
+            ).map((u) => (
+              <li
+                key={u.id}
+                className={`flex items-center justify-between px-4 py-3 cursor-pointer rounded-md hover:bg-gray-700 ${
+                  selectedRecipient?.id === u.id ? "bg-indigo-900" : ""
+                }`}
+                onClick={() => selectChatUser(u)}
+              >
+                <div className="flex items-center">
+                  <div className="relative mr-3">
+                    <div className="flex-shrink-0 h-9 w-9 rounded-full bg-gray-600 flex items-center justify-center font-bold">
+                      {u.username?.charAt(0).toUpperCase()}
+                    </div>
+                    <span
+                      className={`absolute bottom-0 right-0 block h-2.5 w-2.5 rounded-full ${
+                        isUserOnline(u.username)
+                          ? "bg-green-500"
+                          : "bg-gray-500"
+                      } ring-2 ring-gray-800`}
+                    ></span>
+                  </div>
+                  <span>{u.username}</span>
+                </div>
+                {highlightedUser === u.id && (
+                  <FaBell className="text-yellow-400 animate-pulse" />
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="h-20 flex-shrink-0 px-4 flex items-center justify-between border-t border-gray-700">
+          <div className="flex items-center">
+            <div className="relative mr-3">
+              <div className="flex-shrink-0 h-10 w-10 rounded-full bg-gray-600 flex items-center justify-center font-bold text-lg">
+                {user?.username?.charAt(0).toUpperCase()}
+              </div>
+              <span className="absolute bottom-0 right-0 block h-3 w-3 rounded-full bg-green-500 ring-2 ring-gray-800"></span>
+            </div>
+            <span className="font-semibold">{user?.username}</span>
+          </div>
+          <button className="text-gray-400 hover:text-white">
+            <FaCog />
+          </button>
+        </div>
+      </div>
+
+      {/* Column 3: Main Chat Area */}
+      <div className="flex-1 flex flex-col">
+        {selectedRecipient ? (
+          <>
+            {/* Header */}
+            <header className="flex items-center justify-between h-16 px-4 bg-gray-800 border-b border-gray-700 flex-shrink-0">
+              <div className="flex items-center">
+                <div className="relative mr-4">
+                  <div className="flex-shrink-0 h-10 w-10 rounded-full bg-gray-600 flex items-center justify-center font-bold">
+                    {selectedRecipient.username?.charAt(0).toUpperCase()}
+                  </div>
+                  <span
+                    className={`absolute bottom-0 right-0 block h-3 w-3 rounded-full ${
+                      isUserOnline(selectedRecipient.username)
+                        ? "bg-green-500"
+                        : "bg-gray-500"
+                    } ring-2 ring-gray-800`}
+                  ></span>
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold">
+                    {selectedRecipient.username}
+                  </h2>
+                  {callState === "active" &&
+                    activeCallRecipient?.id === selectedRecipient.id && (
+                      <p className="text-green-400 text-sm flex items-center">
+                        <span className="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></span>
+                        On call
+                      </p>
+                    )}
+                  {callState === "calling" &&
+                    activeCallRecipient?.id === selectedRecipient.id && (
+                      <p className="text-blue-400 text-sm flex items-center">
+                        <span className="w-2 h-2 bg-blue-400 rounded-full mr-2 animate-pulse"></span>
+                        Calling...
+                      </p>
+                    )}
+                  {videoCallState === "active" &&
+                    activeVideoCallRecipient?.id === selectedRecipient.id && (
+                      <p className="text-purple-400 text-sm flex items-center">
+                        <span className="w-2 h-2 bg-purple-400 rounded-full mr-2 animate-pulse"></span>
+                        On video call
+                      </p>
+                    )}
+                  {videoCallState === "calling" &&
+                    activeVideoCallRecipient?.id === selectedRecipient.id && (
+                      <p className="text-blue-400 text-sm flex items-center">
+                        <span className="w-2 h-2 bg-blue-400 rounded-full mr-2 animate-pulse"></span>
+                        Video calling...
+                      </p>
+                    )}
+                </div>
+              </div>
+              <div className="flex items-center space-x-3">
+                <button
+                  className={`p-2 rounded-full transition-all duration-200 ${
+                    callState === "idle"
+                      ? "text-gray-400 hover:text-white hover:bg-gray-700"
+                      : callState === "calling" &&
+                        activeCallRecipient?.id === selectedRecipient.id
+                      ? "text-blue-400 bg-blue-900/20"
+                      : callState === "active" &&
+                        activeCallRecipient?.id === selectedRecipient.id
+                      ? "text-green-400 bg-green-900/20"
+                      : "text-gray-400 hover:text-white hover:bg-gray-700"
+                  }`}
+                  onClick={async () => {
+                    try {
+                      if (callState === "idle") {
+                        // Request microphone permission directly from user interaction
+                        const micGranted = await requestMicrophonePermission();
+                        if (micGranted) {
+                          // Initialize audio context immediately after microphone permission
+                          console.log(
+                            "🔥 CALL BUTTON - Initializing audio context for immediate playback"
+                          );
+                          try {
+                            if (!window.audioContext) {
+                              window.audioContext = new (window.AudioContext ||
+                                window.webkitAudioContext)();
+                            }
+                            if (window.audioContext.state === "suspended") {
+                              await window.audioContext.resume();
+                              console.log(
+                                "🔥 CALL BUTTON - Audio context resumed successfully"
+                              );
+                            }
+                          } catch (audioError) {
+                            console.error(
+                              "🔥 CALL BUTTON - Audio context initialization failed:",
+                              audioError
+                            );
+                          }
+
+                          await initiateCall(selectedRecipient);
+                        }
+                      } else if (
+                        callState === "active" &&
+                        activeCallRecipient?.id === selectedRecipient.id
+                      ) {
+                        handleHangUp();
+                      }
+                    } catch (error) {
+                      console.error("Failed to handle call action:", error);
+                      showCallNotification(
+                        "error",
+                        "Failed to process call action",
+                        3000
+                      );
+                    }
+                  }}
+                  disabled={callState === "calling" || callState === "ringing"}
+                >
+                  <FaPhone className="w-4 h-4" />
+                </button>
+                <button
+                  className="p-2 rounded-full bg-red-500 text-white hover:bg-red-600"
+                  onClick={() => {
+                    console.log("🔥 TEST BUTTON CLICKED!");
+                    alert("TEST BUTTON WORKS!");
+                  }}
+                  title="Test button"
+                >
+                  TEST
+                </button>
+                <button
+                  className={`p-2 rounded-full transition-all duration-200 ${
+                    videoCallState === "calling" ||
+                    videoCallState === "ringing" ||
+                    callState !== "idle"
+                      ? "text-gray-600 cursor-not-allowed bg-gray-800"
+                      : "text-gray-400 hover:text-white hover:bg-gray-700"
+                  }`}
+                  onClick={async () => {
+                    console.log("🔥 VIDEO CALL BUTTON - CLICK DETECTED!");
+                    alert(
+                      "Video call button clicked! Check console for details."
+                    );
+                    console.log("🔥 VIDEO CALL BUTTON - Current states:", {
+                      videoCallState,
+                      callState,
+                      selectedRecipient: selectedRecipient?.username,
+                      wsConnected: ws.current?.readyState === WebSocket.OPEN,
+                    });
+                    try {
+                      await initiateVideoCall(selectedRecipient);
+                    } catch (error) {
+                      console.error("Failed to start video call:", error);
+                      showCallNotification(
+                        "error",
+                        "Failed to start video call",
+                        3000
+                      );
+                    }
+                  }}
+                  disabled={
+                    videoCallState === "calling" ||
+                    videoCallState === "ringing" ||
+                    callState !== "idle"
+                  }
+                  title={
+                    videoCallState === "calling" || videoCallState === "ringing"
+                      ? "Video call in progress"
+                      : callState !== "idle"
+                      ? `Cannot start video call - audio call state: ${callState}`
+                      : "Start video call"
+                  }
+                >
+                  <FaVideo className="w-4 h-4" />
+                </button>
+              </div>
+            </header>
+
+            {/* Messages */}
+            <main className="flex-1 p-4 overflow-y-auto">
+              <div className="space-y-1">
+                {messages.map((msg, index) => {
+                  const isSender =
+                    msg.from_user_id?.toString() === user.id.toString();
+                  const prevMsg = messages[index - 1];
+                  const isFirstInGroup =
+                    !prevMsg || prevMsg.from_user_id !== msg.from_user_id;
+                  return (
+                    <MessageBubble
+                      key={msg.id || index}
+                      msg={msg}
+                      isSender={isSender}
+                      isFirstInGroup={isFirstInGroup}
+                    />
+                  );
+                })}
+                <div ref={chatEndRef} />
+              </div>
+            </main>
+
+            {/* Message Input */}
+            <footer className="p-4 bg-gray-800">
+              <div className="flex items-center bg-gray-700 rounded-lg">
+                <input
+                  type="text"
+                  placeholder={`Message @${selectedRecipient.username}`}
+                  className="w-full bg-transparent p-4 focus:outline-none"
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
+                />
+                <button
+                  className="p-4 text-gray-400 hover:text-white disabled:text-gray-600"
+                  onClick={handleSendMessage}
+                  disabled={!newMessage.trim()}
+                >
+                  <FaPaperPlane />
+                </button>
+              </div>
+            </footer>
+          </>
+        ) : (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <FaRocket className="mx-auto h-24 w-24 text-gray-600" />
+              <h3 className="mt-2 text-lg font-medium text-gray-400">
+                Select a user to start chatting
+              </h3>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Call UI */}
+      {callState === "active" && activeCallRecipient && (
+        <AudioCallHandler
+          ref={audioCallRef}
+          user={user}
+          selectedReceiver={activeCallRecipient}
+          roomId={callRoomId}
+          callState={callState} // Pass callState so component can monitor changes
+          onCallEnd={handleAudioCallEnd} // Use the new handler here
+          sendCallNotification={showCallNotification}
+          onError={(error) => showCallNotification("error", error, 4000)}
+          janusInitialized={janusInitialized}
+        />
+      )}
+
+      {/* Video Call UI */}
+      {(() => {
+        const shouldShowVideoCall =
+          (videoCallState === "active" || videoCallState === "calling") &&
+          !!activeVideoCallRecipient; // Convert to boolean!
+        console.log(
+          "🔥 VIDEO CALL UI RENDER - Should show:",
+          shouldShowVideoCall,
+          {
+            videoCallState,
+            activeVideoCallRecipient: activeVideoCallRecipient?.username,
+            conditions: {
+              isActive: videoCallState === "active",
+              isCalling: videoCallState === "calling",
+              hasRecipient: !!activeVideoCallRecipient,
+            },
+          }
+        );
+        return shouldShowVideoCall;
+      })() && (
+        <div>
+          {/* DEBUG: Bright red banner to confirm video call UI is rendering */}
+          <div className="fixed top-0 left-0 right-0 z-[100] bg-red-500 text-white text-center py-4 text-2xl font-bold">
+            🔥 VIDEO CALL UI CONTAINER IS RENDERING! 🔥
+          </div>
+          <VideoCallInterface
+            ref={videoCallRef}
+            user={user}
+            selectedReceiver={activeVideoCallRecipient}
+            onCallEnd={handleVideoCallEnd}
+            sendCallNotification={showCallNotification}
+            onError={(error) => showCallNotification("error", error, 4000)}
+            callState={videoCallState}
+            roomId={videoCallRoomId}
+            isIncoming={false}
+          />
         </div>
       )}
 
-      {/* Debug Info - Only show in development */}
-      {process.env.NODE_ENV === "development" && (
-        <div className="bg-gray-800 text-green-400 px-4 py-2 text-xs font-mono">
-          <div className="flex justify-between items-center">
-            <div>
-              <div>
-                🟢 Online Users ({onlineUsers.length}):{" "}
-                {JSON.stringify(onlineUsers)}
+      {/* Incoming Video Call */}
+      {incomingVideoCall &&
+        videoCallState === "ringing" &&
+        (() => {
+          console.log(
+            "🔥 RENDER INCOMING VIDEO CALL - incomingVideoCall:",
+            incomingVideoCall
+          );
+          console.log(
+            "🔥 RENDER INCOMING VIDEO CALL - roomId:",
+            incomingVideoCall.room_id
+          );
+          return true;
+        })() && (
+          <VideoCallInterface
+            ref={videoCallRef}
+            user={user}
+            selectedReceiver={{ username: incomingVideoCall.caller_username }}
+            onCallEnd={handleVideoCallEnd}
+            sendCallNotification={showCallNotification}
+            onError={(error) => showCallNotification("error", error, 4000)}
+            callState={videoCallState}
+            roomId={incomingVideoCall.room_id}
+            isIncoming={true}
+            incomingCallData={incomingVideoCall}
+          />
+        )}
+
+      {/* Active Call Modal */}
+      {(() => {
+        const shouldShow =
+          callState === "active" && activeCallRecipient && !forceHideModal;
+        console.log(
+          "🔥 ACTIVE CALL MODAL - Should show:",
+          shouldShow,
+          "callState:",
+          callState,
+          "activeCallRecipient:",
+          activeCallRecipient?.username,
+          "forceHideModal:",
+          forceHideModal
+        );
+        return shouldShow;
+      })() && (
+        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50">
+          <div className="bg-gradient-to-br from-gray-800 to-gray-900 p-8 rounded-2xl text-center shadow-2xl max-w-md w-full mx-4 border border-gray-700">
+            <div className="mb-6">
+              <div className="relative mx-auto w-32 h-32 mb-4">
+                <div className="w-full h-full rounded-full bg-gradient-to-br from-green-500 to-blue-600 flex items-center justify-center text-4xl font-bold text-white shadow-lg">
+                  {activeCallRecipient.username?.charAt(0).toUpperCase()}
+                </div>
+                <div className="absolute inset-0 rounded-full border-4 border-green-400 opacity-60 animate-pulse"></div>
+                <div className="absolute inset-0 rounded-full border-4 border-green-400 opacity-30 animate-ping animation-delay-1000"></div>
               </div>
-              <div>
-                🔗 Connected Users: {JSON.stringify(Array.from(connectedUsers))}
+              <h3 className="text-2xl font-semibold text-white mb-2">
+                Active Call
+              </h3>
+              <p className="text-xl text-gray-300 mb-1">
+                {activeCallRecipient.username}
+              </p>
+              <div className="flex items-center justify-center mb-2">
+                <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse mr-2"></div>
+                <p className="text-sm text-green-400">Secure audio call</p>
               </div>
-              <div>👤 Current User: {user?.username}</div>
-              <div>
-                🌐 WebSocket:{" "}
-                {wsRef.current
-                  ? wsRef.current.readyState === WebSocket.OPEN
-                    ? "✅ Connected"
-                    : wsRef.current.readyState === WebSocket.CONNECTING
-                    ? "🔄 Connecting"
-                    : wsRef.current.readyState === WebSocket.CLOSING
-                    ? "⏳ Closing"
-                    : "❌ Closed"
-                  : "❌ No Connection"}
+              <div
+                id="call-status-display"
+                className="text-xs text-gray-400 mb-4"
+              >
+                {audioCallStatus}
               </div>
             </div>
-            <button
-              onClick={() => {
-                console.log("=== PRESENCE DEBUG ===");
-                console.log("Online Users:", onlineUsers);
-                console.log("Connected Users:", Array.from(connectedUsers));
-                console.log("All Users:", users);
-                console.log("WebSocket State:", wsRef.current?.readyState);
-                console.log("Current User:", user);
-                if (
-                  wsRef.current &&
-                  wsRef.current.readyState === WebSocket.OPEN
-                ) {
-                  wsRef.current.send(
-                    JSON.stringify({ type: "request_presence_update" })
-                  );
-                  console.log("Requested presence update");
+
+            {/* Call Controls */}
+            <div className="flex justify-center space-x-8 mb-6">
+              <button
+                onClick={() => {
+                  if (audioCallRef.current) {
+                    try {
+                      audioCallRef.current.toggleMute();
+                    } catch (error) {
+                      console.error("Failed to toggle mute:", error);
+                    }
+                  }
+                }}
+                className={`${
+                  audioCallMuted
+                    ? "bg-red-500 hover:bg-red-600 focus:ring-red-500"
+                    : "bg-gray-600 hover:bg-gray-700 focus:ring-gray-500"
+                } text-white p-4 rounded-full shadow-lg transition-all duration-200 transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-offset-2`}
+                aria-label={
+                  audioCallMuted ? "Unmute microphone" : "Mute microphone"
                 }
-                console.log("====================");
-              }}
-              className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
+                title={audioCallMuted ? "Unmute microphone" : "Mute microphone"}
+              >
+                {audioCallMuted ? (
+                  <FaMicrophoneSlash className="w-6 h-6" />
+                ) : (
+                  <FaMicrophone className="w-6 h-6" />
+                )}
+              </button>
+              <button
+                onClick={handleHangUp}
+                className="bg-red-500 hover:bg-red-600 text-white p-5 rounded-full shadow-lg transition-all duration-200 transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                aria-label="End call"
+                title="End call"
+              >
+                <FaPhoneSlash className="w-7 h-7" />
+              </button>
+            </div>
+
+            {/* Volume Control */}
+            <div className="mb-4">
+              <label className="block text-xs text-gray-400 mb-2">
+                Volume Control
+              </label>
+              <div className="flex items-center space-x-3">
+                <button
+                  onClick={() => {
+                    if (audioCallRef.current) {
+                      try {
+                        audioCallRef.current.adjustVolume(-0.1);
+                      } catch (error) {
+                        console.error("Failed to decrease volume:", error);
+                      }
+                    }
+                  }}
+                  className="text-gray-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-gray-500 rounded p-1"
+                  aria-label="Decrease volume"
+                >
+                  <svg
+                    className="w-4 h-4"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z" />
+                  </svg>
+                </button>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  value={audioCallVolume}
+                  onChange={(e) => {
+                    const newVolume = parseFloat(e.target.value);
+                    const delta = newVolume - audioCallVolume;
+                    if (audioCallRef.current) {
+                      try {
+                        audioCallRef.current.adjustVolume(delta);
+                      } catch (error) {
+                        console.error("Failed to adjust volume:", error);
+                      }
+                    }
+                  }}
+                  className="flex-1 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  aria-label="Volume control"
+                />
+                <button
+                  onClick={() => {
+                    if (audioCallRef.current) {
+                      try {
+                        audioCallRef.current.adjustVolume(0.1);
+                      } catch (error) {
+                        console.error("Failed to increase volume:", error);
+                      }
+                    }
+                  }}
+                  className="text-gray-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-gray-500 rounded p-1"
+                  aria-label="Increase volume"
+                >
+                  <svg
+                    className="w-4 h-4"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
+                  </svg>
+                </button>
+                <span className="text-xs text-gray-400 min-w-[3rem]">
+                  {Math.round(audioCallVolume * 100)}%
+                </span>
+              </div>
+            </div>
+
+            <div className="text-xs text-gray-500 space-y-1">
+              <div>Encrypted end-to-end audio call</div>
+              <div className="text-gray-600">Press Escape to end call</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Outgoing Call UI */}
+      {(() => {
+        console.log(
+          "🔥 UI RENDER - callState:",
+          callState,
+          "activeCallRecipient:",
+          activeCallRecipient?.username
+        );
+        return callState === "calling" && activeCallRecipient;
+      })() && (
+        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50">
+          <div className="bg-gradient-to-br from-gray-800 to-gray-900 p-8 rounded-2xl text-center shadow-2xl max-w-md w-full mx-4 border border-gray-700">
+            <div className="mb-6">
+              <div className="relative mx-auto w-32 h-32 mb-4">
+                <div className="w-full h-full rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-4xl font-bold text-white shadow-lg">
+                  {activeCallRecipient.username?.charAt(0).toUpperCase()}
+                </div>
+                <div className="absolute inset-0 rounded-full border-4 border-white opacity-30 animate-ping"></div>
+              </div>
+              <h3 className="text-2xl font-semibold text-white mb-2">
+                Calling...
+              </h3>
+              <p className="text-xl text-gray-300 mb-1">
+                {activeCallRecipient.username}
+              </p>
+              <div className="flex items-center justify-center mb-2">
+                <div
+                  className={`w-2 h-2 rounded-full mr-2 ${
+                    isUserOnline(activeCallRecipient.username)
+                      ? "bg-green-400 animate-pulse"
+                      : "bg-gray-400"
+                  }`}
+                ></div>
+                <p
+                  className={`text-sm ${
+                    isUserOnline(activeCallRecipient.username)
+                      ? "text-green-400"
+                      : "text-gray-400"
+                  }`}
+                >
+                  {isUserOnline(activeCallRecipient.username)
+                    ? "Online"
+                    : "Offline"}
+                </p>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                Waiting for {activeCallRecipient.username} to answer...
+              </p>
+            </div>
+
+            <div className="flex justify-center space-x-6">
+              <button
+                onClick={handleHangUp}
+                className="bg-red-500 hover:bg-red-600 text-white p-4 rounded-full shadow-lg transition-all duration-200 transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                aria-label="Cancel call"
+                title="Cancel call"
+              >
+                <svg
+                  className="w-6 h-6"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Incoming Call UI */}
+      {(() => {
+        const shouldShow = callState === "ringing" && incomingCall;
+        console.log(
+          "🔥 INCOMING MODAL - Should show:",
+          shouldShow,
+          "callState:",
+          callState,
+          "incomingCall:",
+          incomingCall
+        );
+        return shouldShow;
+      })() && (
+        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50">
+          <div className="bg-gradient-to-br from-gray-800 to-gray-900 p-8 rounded-2xl text-center shadow-2xl max-w-md w-full mx-4 border border-gray-700">
+            <div className="mb-8">
+              <div className="relative mx-auto w-32 h-32 mb-4">
+                <div className="w-full h-full rounded-full bg-gradient-to-br from-green-500 to-blue-600 flex items-center justify-center text-4xl font-bold text-white shadow-lg">
+                  {incomingCall.caller_username?.charAt(0).toUpperCase()}
+                </div>
+                <div className="absolute inset-0 rounded-full border-4 border-green-400 opacity-60 animate-pulse"></div>
+                <div className="absolute inset-0 rounded-full border-4 border-green-400 opacity-30 animate-ping animation-delay-1000"></div>
+              </div>
+              <h3 className="text-2xl font-semibold text-white mb-2">
+                Incoming Call
+              </h3>
+              <p className="text-xl text-gray-300 mb-1">
+                {incomingCall.caller_username}
+              </p>
+              <div className="flex items-center justify-center mb-2">
+                <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse mr-2"></div>
+                <p className="text-sm text-green-400">Secure audio call</p>
+              </div>
+              <p className="text-xs text-gray-500">Tap to answer or decline</p>
+            </div>
+
+            <div className="flex justify-center space-x-8">
+              <button
+                onClick={handleRejectCall}
+                className="bg-red-500 hover:bg-red-600 text-white p-5 rounded-full shadow-lg transition-all duration-200 transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                aria-label="Reject call"
+                title="Reject call"
+              >
+                <svg
+                  className="w-7 h-7"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z" />
+                </svg>
+              </button>
+              <button
+                onClick={handleAcceptCall}
+                className="bg-green-500 hover:bg-green-600 text-white p-5 rounded-full shadow-lg transition-all duration-200 transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                aria-label="Accept call"
+                title="Accept call"
+              >
+                <svg
+                  className="w-7 h-7"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Call Notification Toast */}
+      {callNotification && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 animate-fade-in">
+          <div
+            className={`px-6 py-4 rounded-lg shadow-lg border-l-4 max-w-md ${
+              callNotification.type === "success"
+                ? "bg-green-800 border-green-500 text-green-100"
+                : callNotification.type === "error"
+                ? "bg-red-800 border-red-500 text-red-100"
+                : "bg-blue-800 border-blue-500 text-blue-100"
+            }`}
+          >
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                {callNotification.type === "success" && (
+                  <svg
+                    className="w-5 h-5"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+                  </svg>
+                )}
+                {callNotification.type === "error" && (
+                  <svg
+                    className="w-5 h-5"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" />
+                  </svg>
+                )}
+                {callNotification.type === "info" && (
+                  <svg
+                    className="w-5 h-5"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" />
+                  </svg>
+                )}
+              </div>
+              <div className="ml-3">
+                <p className="text-sm font-medium">
+                  {callNotification.message}
+                </p>
+              </div>
+              <button
+                onClick={() => setCallNotification(null)}
+                className="ml-4 flex-shrink-0 text-current hover:text-white transition-colors duration-200"
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Call Ended Modal */}
+      {callEndedModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-8 shadow-2xl max-w-md w-full mx-4 text-center">
+            <div className="mb-6">
+              <div
+                className={`mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-4 ${
+                  callEndedModal.type === "declined"
+                    ? "bg-red-100"
+                    : "bg-gray-100"
+                }`}
+              >
+                {callEndedModal.type === "declined" ? (
+                  <svg
+                    className="w-8 h-8 text-red-600"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" />
+                  </svg>
+                ) : (
+                  <svg
+                    className="w-8 h-8 text-gray-600"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z" />
+                  </svg>
+                )}
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                {callEndedModal.title}
+              </h3>
+              <p className="text-gray-600">{callEndedModal.message}</p>
+            </div>
+            <button
+              onClick={() => setCallEndedModal(null)}
+              className={`px-6 py-3 rounded-lg font-medium transition-colors duration-200 ${
+                callEndedModal.type === "declined"
+                  ? "bg-red-600 hover:bg-red-700 text-white"
+                  : "bg-gray-600 hover:bg-gray-700 text-white"
+              }`}
             >
-              Refresh Presence
+              OK
             </button>
           </div>
         </div>
       )}
 
-      <main className="flex flex-1 h-screen max-h-screen overflow-hidden">
-        {/* Mobile Sidebar Overlay - Only show when logged in */}
-        {isLoggedIn && sidebarOpen && (
-          <div
-            className="fixed inset-0 bg-black bg-opacity-50 z-40 sm:hidden"
-            onClick={() => setSidebarOpen(false)}
-          />
-        )}
-
-        {/* Enhanced Mobile-First Sidebar - Only show when logged in */}
-        {isLoggedIn && (
-          <aside
-            className={`fixed inset-y-0 left-0 z-50 w-80 bg-gradient-to-b from-white to-gray-50 border-r shadow-2xl transform transition-transform duration-300 ease-in-out sm:relative sm:translate-x-0 ${
-              sidebarOpen ? "translate-x-0" : "-translate-x-full"
-            }`}
-          >
-            {/* Sidebar Header */}
-            <div className="p-6 border-b bg-gradient-to-r from-blue-500 to-purple-600">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
-                  <FaRocket className="text-yellow-300 animate-bounce" />
-                  UnifiedChat
-                </h2>
-                <button
-                  onClick={() => setSidebarOpen(false)}
-                  className="sm:hidden text-white hover:text-yellow-300 transition-colors"
-                >
-                  <FaTimes className="w-5 h-5" />
-                </button>
-              </div>
-              <p className="text-xs text-blue-100 mt-1 flex items-center gap-1">
-                <FaStar
-                  className="text-yellow-300 animate-spin"
-                  style={{ animationDuration: "3s" }}
-                />
-                Slack-style MVP
-              </p>
-            </div>
-
-            {/* User Info Section */}
-            <div className="p-4 border-b bg-gradient-to-r from-gray-50 to-blue-50">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center">
-                  <FaUser className="w-5 h-5 text-white" />
-                </div>
-                <div className="flex-1">
-                  <div className="font-semibold text-gray-800">
-                    {user?.username}
-                  </div>
-                  <div className="text-xs text-gray-500">Online</div>
-                </div>
-                <button
-                  onClick={() => {
-                    // Send logout message to WebSocket server
-                    if (
-                      wsRef.current &&
-                      wsRef.current.readyState === WebSocket.OPEN
-                    ) {
-                      const logoutMessage = {
-                        type: "logout",
-                        user_id: user.id,
-                        username: user.username,
-                      };
-                      wsRef.current.send(JSON.stringify(logoutMessage));
-                    }
-
-                    // Close WebSocket connection
-                    if (wsRef.current) {
-                      wsRef.current.close();
-                      wsRef.current = null;
-                    }
-
-                    // Clear all state
-                    localStorage.removeItem("token");
-                    setIsLoggedIn(false);
-                    setUser(null);
-                    setMessages([]);
-                    setSelectedReceiver(null);
-                    setOnlineUsers([]);
-                  }}
-                  className="text-red-500 hover:text-red-700 transition-colors"
-                >
-                  <FaSignOutAlt className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Search Bar */}
-            <div className="p-4 border-b">
-              <div className="relative">
-                <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <input
-                  type="text"
-                  placeholder="Search users..."
-                  className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
-                />
-              </div>
-            </div>
-
-            {/* Users List */}
-            <div className="flex-1 overflow-y-auto">
-              <div className="p-4">
-                <h3 className="text-xs font-semibold text-gray-400 mb-3 uppercase tracking-wider flex items-center gap-2">
-                  <FaUsers className="text-blue-500" />
-                  Direct Messages ({onlineUsers.length} online)
-                  {loadingUsers && (
-                    <div className="ml-auto">
-                      <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                    </div>
-                  )}
-                </h3>
-
-                {/* Online Users Summary */}
-                {onlineUsers.length > 0 && (
-                  <div className="mb-3 px-3 py-2 bg-green-50 border border-green-200 rounded-lg">
-                    <div className="text-xs text-green-700 font-medium mb-1">
-                      🟢 Currently Online:
-                    </div>
-                    <div className="text-xs text-green-600">
-                      {onlineUsers.join(", ")}
-                    </div>
-                  </div>
-                )}
-                {loadingUsers ? (
-                  <div className="text-center py-4">
-                    <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-                    <p className="text-xs text-gray-500">Loading users...</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {/* Header with instructions */}
-                    <div className="px-4 py-2 bg-blue-50 rounded-lg border border-blue-200">
-                      <p className="text-xs text-blue-700 font-medium">
-                        💬 Click any user to chat • 📞 Click phone icon to call
-                      </p>
-                    </div>
-
-                    {users
-                      .filter((u) => u.id !== user?.id)
-                      .map((u) => (
-                        <div key={u.id} className="mb-2">
-                          {/* Main clickable area for user selection */}
-                          <div
-                            onClick={() => {
-                              setSelectedReceiver(u.id);
-                              setSidebarOpen(false); // Close sidebar on mobile
-                            }}
-                            className={`group w-full text-left px-4 py-3 rounded-xl transition-all duration-300 ease-in-out transform hover:scale-105 cursor-pointer ${
-                              selectedReceiver === u.id
-                                ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold shadow-lg"
-                                : "hover:bg-gradient-to-r hover:from-gray-100 hover:to-blue-50 text-gray-700 border border-transparent hover:border-blue-200"
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                <div className="relative">
-                                  <div
-                                    className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                                      selectedReceiver === u.id
-                                        ? "bg-white/20"
-                                        : "bg-gradient-to-br from-gray-200 to-gray-300"
-                                    }`}
-                                  >
-                                    <FaUser
-                                      className={`w-5 h-5 ${
-                                        selectedReceiver === u.id
-                                          ? "text-white"
-                                          : "text-gray-600"
-                                      }`}
-                                    />
-                                  </div>
-                                  <div
-                                    className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white ${
-                                      isUserOnline(u.username)
-                                        ? "bg-green-400 animate-pulse"
-                                        : "bg-gray-400"
-                                    }`}
-                                  ></div>
-                                </div>
-                                <div className="text-left">
-                                  <div className="font-medium">
-                                    @{u.username}
-                                  </div>
-                                  <div
-                                    className={`text-xs ${
-                                      isUserOnline(u.username)
-                                        ? selectedReceiver === u.id
-                                          ? "text-white/80"
-                                          : "text-gray-500"
-                                        : "text-gray-400 italic"
-                                    }`}
-                                  >
-                                    {isUserOnline(u.username)
-                                      ? "Available for chat & calls"
-                                      : "Offline"}
-                                  </div>
-                                </div>
-                              </div>
-                              {/* Call button, which is a valid nested element */}
-                              <div className="flex items-center gap-2">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation(); // Prevent the parent div's onClick
-                                    const rect =
-                                      e.currentTarget.getBoundingClientRect();
-                                    setPopoverUser(u);
-                                    setPopoverAnchor(rect);
-                                  }}
-                                  className={`p-2 rounded-lg transition-all duration-300 ${
-                                    selectedReceiver === u.id
-                                      ? "bg-white/20 text-white hover:bg-white/30"
-                                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                                  }`}
-                                  title={`Call ${u.username}`}
-                                >
-                                  <FaPhone className="w-4 h-4" />
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-
-                    {/* Show message if no other users available */}
-                    {users.filter((u) => u.id !== user?.id).length === 0 && (
-                      <div className="text-center py-4 text-gray-500">
-                        <p className="text-sm">No other users available</p>
-                        <p className="text-xs mt-1">Try refreshing the page</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          </aside>
-        )}
-
-        {/* Enhanced Main Chat Area */}
-        <section className="flex-1 flex flex-col h-full max-h-screen bg-white shadow-2xl rounded-lg overflow-hidden relative">
-          {/* Enhanced Header with Mobile Menu - Only show menu button when logged in */}
-          <header className="flex items-center justify-between px-4 sm:px-6 py-4 border-b bg-gradient-to-r from-blue-500 to-purple-600 shadow-lg sticky top-0 z-10">
-            <div className="flex items-center gap-3">
-              {isLoggedIn && (
-                <button
-                  onClick={() => setSidebarOpen(true)}
-                  className="sm:hidden text-white hover:text-yellow-300 transition-colors"
-                >
-                  <FaBars className="w-5 h-5" />
-                </button>
-              )}
-              <div className="flex items-center gap-3">
-                {isLoggedIn && (
-                  <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
-                    <FaUser className="w-4 h-4 text-white" />
-                  </div>
-                )}
-                <div>
-                  <span className="text-lg font-bold text-white">
-                    {isLoggedIn && selectedReceiver
-                      ? getUserName(selectedReceiver)
-                      : "UnifiedChat MVP"}
-                  </span>
-                  {isLoggedIn && selectedReceiver && (
-                    <div className="text-xs text-blue-100">Direct Message</div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              {/* Call Buttons - Only show when logged in and receiver selected */}
-              {shouldShowChat && (
-                <div className="flex items-center gap-2">
-                  {/* Audio Call Button */}
-                  <button
-                    onClick={() => {
-                      console.log("Audio call button clicked");
-                      console.log("Audio service status:", audioServiceStatus);
-                      console.log("AudioCall ref:", audioCallRef.current);
-                      console.log("User:", user);
-                      console.log("Selected receiver:", selectedReceiver);
-
-                      if (!selectedReceiver) {
-                        alert("Please select a user to call first");
-                        return;
-                      }
-
-                      if (audioServiceStatus === "available") {
-                        // Use the ref to call startCall directly
-                        if (audioCallRef.current) {
-                          console.log("Testing microphone access first...");
-                          // Test microphone access before starting call
-                          audioCallRef.current
-                            .testMicrophone()
-                            .then((success) => {
-                              if (success) {
-                                console.log(
-                                  "Microphone test passed, starting call"
-                                );
-                                audioCallRef.current.startCall();
-                              } else {
-                                alert(
-                                  "Microphone access failed. Please check your browser permissions and try again."
-                                );
-                              }
-                            })
-                            .catch((error) => {
-                              console.error("Microphone test error:", error);
-                              alert(
-                                "Could not access microphone. Please check your browser permissions."
-                              );
-                            });
-                        } else {
-                          console.error("AudioCall ref not available");
-                          console.log("AudioCall ref details:", {
-                            ref: audioCallRef,
-                            current: audioCallRef.current,
-                            shouldShowChat,
-                          });
-                          alert(
-                            "Audio call feature is loading... Please wait a moment and try again."
-                          );
-                        }
-                      } else {
-                        alert(
-                          "Audio service is not available. Please check if the audio service is deployed."
-                        );
-                      }
-                    }}
-                    className={`group relative px-3 py-2 sm:px-4 sm:py-3 rounded-xl transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 flex items-center gap-2 font-bold shadow-lg ${
-                      audioServiceStatus === "available" && selectedReceiver
-                        ? "bg-gradient-to-r from-green-400 to-emerald-500 hover:from-green-500 hover:to-emerald-600 text-white"
-                        : "bg-gradient-to-r from-gray-400 to-gray-500 text-gray-600 cursor-not-allowed"
-                    }`}
-                    title={
-                      !selectedReceiver
-                        ? "Select a user to call first"
-                        : audioServiceStatus === "available"
-                        ? `Call ${getUserName(selectedReceiver)} (Audio)`
-                        : "Audio service unavailable"
-                    }
-                    disabled={
-                      audioServiceStatus !== "available" || !selectedReceiver
-                    }
-                  >
-                    {/* Glowing effect */}
-                    {audioServiceStatus === "available" && selectedReceiver && (
-                      <div className="absolute -inset-1 bg-gradient-to-r from-green-400 to-emerald-500 rounded-xl blur opacity-30 group-hover:opacity-50 transition duration-300"></div>
-                    )}
-                    <FaPhone className="w-4 h-4 sm:w-5 sm:h-5 relative z-10 animate-pulse group-hover:animate-bounce" />
-                    <span className="relative z-10 hidden sm:inline">
-                      {audioServiceStatus === "checking" ? "..." : "Audio"}
-                    </span>
-                  </button>
-
-                  {/* Video Call Button */}
-                  <button
-                    onClick={() => {
-                      console.log("Video call button clicked");
-                      console.log("Audio service status:", audioServiceStatus);
-                      console.log("VideoCall ref:", videoCallRef.current);
-                      console.log("User:", user);
-                      console.log("Selected receiver:", selectedReceiver);
-
-                      if (!selectedReceiver) {
-                        alert("Please select a user to call first");
-                        return;
-                      }
-
-                      if (audioServiceStatus === "available") {
-                        // Use the ref to call startVideoCall directly
-                        if (videoCallRef.current) {
-                          console.log("Calling startVideoCall via ref");
-                          videoCallRef.current.startVideoCall();
-                        } else {
-                          console.error("VideoCall ref not available");
-                          console.log("VideoCall ref details:", {
-                            ref: videoCallRef,
-                            current: videoCallRef.current,
-                            shouldShowChat,
-                          });
-                          alert(
-                            "Video call feature is loading... Please wait a moment and try again."
-                          );
-                        }
-                      } else {
-                        alert(
-                          "Video service is not available. Please check if the video service is deployed."
-                        );
-                      }
-                    }}
-                    className={`group relative px-3 py-2 sm:px-4 sm:py-3 rounded-xl transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 flex items-center gap-2 font-bold shadow-lg ${
-                      audioServiceStatus === "available" && selectedReceiver
-                        ? "bg-gradient-to-r from-blue-400 to-indigo-500 hover:from-blue-500 hover:to-indigo-600 text-white"
-                        : "bg-gradient-to-r from-gray-400 to-gray-500 text-gray-600 cursor-not-allowed"
-                    }`}
-                    title={
-                      !selectedReceiver
-                        ? "Select a user to call first"
-                        : audioServiceStatus === "available"
-                        ? `Call ${getUserName(selectedReceiver)} (Video)`
-                        : "Video service unavailable"
-                    }
-                    disabled={
-                      audioServiceStatus !== "available" || !selectedReceiver
-                    }
-                  >
-                    {/* Glowing effect */}
-                    {audioServiceStatus === "available" && selectedReceiver && (
-                      <div className="absolute -inset-1 bg-gradient-to-r from-blue-400 to-indigo-500 rounded-xl blur opacity-30 group-hover:opacity-50 transition duration-300"></div>
-                    )}
-                    <FaVideo className="w-4 h-4 sm:w-5 sm:h-5 relative z-10 animate-pulse group-hover:animate-bounce" />
-                    <span className="relative z-10 hidden sm:inline">
-                      {audioServiceStatus === "checking" ? "..." : "Video"}
-                    </span>
-                  </button>
-
-                  {/* All Features Button */}
-                  <button
-                    onClick={() => {
-                      console.log(
-                        "All Features button clicked - opening test page"
-                      );
-                      window.open("/test-calls", "_blank");
-                    }}
-                    className="group relative px-3 py-2 sm:px-4 sm:py-3 rounded-xl transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 flex items-center gap-2 font-bold shadow-lg bg-gradient-to-r from-purple-400 to-pink-500 hover:from-purple-500 hover:to-pink-600 text-white"
-                    title="Open comprehensive feature testing suite"
-                  >
-                    {/* Glowing effect */}
-                    <div className="absolute -inset-1 bg-gradient-to-r from-purple-400 to-pink-500 rounded-xl blur opacity-30 group-hover:opacity-50 transition duration-300"></div>
-                    <FaCog className="w-4 h-4 sm:w-5 sm:h-5 relative z-10 animate-pulse group-hover:animate-spin" />
-                    <span className="relative z-10 hidden sm:inline">
-                      Features
-                    </span>
-                  </button>
-
-                  {/* Mobile Audio Test Button */}
-                  <button
-                    onClick={testMobileAudio}
-                    className="group relative px-3 py-2 sm:px-4 sm:py-3 rounded-xl transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 flex items-center gap-2 font-bold shadow-lg bg-gradient-to-r from-orange-400 to-red-500 hover:from-orange-500 hover:to-red-600 text-white"
-                    title="Test audio functionality (especially for mobile devices)"
-                  >
-                    {/* Glowing effect */}
-                    <div className="absolute -inset-1 bg-gradient-to-r from-orange-400 to-red-500 rounded-xl blur opacity-30 group-hover:opacity-50 transition duration-300"></div>
-                    <FaVolumeUp className="w-4 h-4 sm:w-5 sm:h-5 relative z-10 animate-pulse group-hover:animate-bounce" />
-                    <span className="relative z-10 hidden sm:inline">
-                      Test Audio
-                    </span>
-                  </button>
-                </div>
-              )}
-
-              {/* Call Components */}
-              {isLoggedIn && isClient && (
-                <>
-                  <JanusAudioCall
-                    ref={audioCallRef}
-                    user={user}
-                    selectedReceiver={selectedReceiver}
-                    onCallEnd={handleAudioCallEnd}
-                    getUserName={getUserName}
-                    sendCallNotification={sendCallNotification}
-                    onCallStateChange={handleCallStateChange}
-                  />
-                  <JanusVideoCall
-                    ref={videoCallRef}
-                    user={user}
-                    selectedReceiver={selectedReceiver}
-                    onCallEnd={handleVideoCallEnd}
-                    getUserName={getUserName}
-                    sendCallNotification={sendCallNotification}
-                  />
-                </>
-              )}
-            </div>
-          </header>
-
-          {/* Enhanced Login Form */}
-          {!isLoggedIn && (
-            <div className="flex flex-1 items-center justify-center p-4 bg-gradient-to-br from-blue-50 to-purple-50">
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  console.log("Form onSubmit triggered");
-                  console.log("Event:", e);
-                  console.log("LoginForm state:", loginForm);
-
-                  // Validate form before proceeding
-                  if (!loginForm.username || !loginForm.password) {
-                    console.log(
-                      "Form validation failed - missing username or password"
-                    );
-                    alert("Please enter both username and password");
-                    return;
-                  }
-
-                  try {
-                    login(e);
-                  } catch (error) {
-                    console.error("Error in form submission:", error);
-                    alert("An error occurred during login. Please try again.");
-                  }
-                }}
-                className="relative w-full max-w-md bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-2xl p-8 space-y-6 border-0"
-              >
-                {/* Glowing ring effect */}
-                <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl blur opacity-25"></div>
-
-                <div className="relative text-center">
-                  <h2 className="text-3xl font-bold text-gray-800 mb-2 flex items-center justify-center gap-2">
-                    <FaRocket className="text-blue-500 animate-bounce" />
-                    Welcome Back!
-                  </h2>
-                  <p className="text-gray-600">Sign in to start chatting</p>
-                </div>
-
-                <div className="relative space-y-4">
-                  <div>
-                    <label className="block text-sm font-semibold mb-2 text-gray-700">
-                      Username
-                    </label>
-                    <input
-                      type="text"
-                      name="username"
-                      autoComplete="username"
-                      value={loginForm.username}
-                      onChange={(e) => {
-                        console.log("Username input changed:", e.target.value);
-                        setLoginForm((prev) => ({
-                          ...prev,
-                          username: e.target.value,
-                        }));
-                      }}
-                      className="w-full p-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all duration-300"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold mb-2 text-gray-700">
-                      Password
-                    </label>
-                    <input
-                      type="password"
-                      name="password"
-                      autoComplete="current-password"
-                      value={loginForm.password}
-                      onChange={(e) => {
-                        console.log("Password input changed:", e.target.value);
-                        setLoginForm((prev) => ({
-                          ...prev,
-                          password: e.target.value,
-                        }));
-                      }}
-                      className="w-full p-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all duration-300"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  className="group relative w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white p-3 rounded-xl font-bold shadow-lg transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95"
-                >
-                  {/* Glowing effect */}
-                  <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl blur opacity-30 group-hover:opacity-50 transition duration-300"></div>
-                  <span className="relative z-10 flex items-center justify-center gap-2">
-                    <FaUser className="w-4 h-4 animate-pulse group-hover:animate-bounce" />
-                    Sign In
-                  </span>
-                </button>
-              </form>
-            </div>
-          )}
-
-          {/* Enhanced Chat Area - Only show when logged in and receiver selected */}
-          {shouldShowChat && (
-            <div className="flex-1 flex flex-col h-full max-h-full">
-              <div
-                className="flex-1 overflow-y-auto px-4 py-6 bg-gradient-to-b from-blue-50 via-white to-purple-50"
-                style={{ minHeight: 0 }}
-              >
-                {!messages || messages.length === 0 ? (
-                  <div className="text-center mt-8">
-                    <div className="w-16 h-16 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
-                      <FaRocket className="w-8 h-8 text-white animate-bounce" />
-                    </div>
-                    <p className="text-gray-500 text-lg font-semibold">
-                      No messages yet. Start a conversation! 🚀
-                    </p>
-                  </div>
-                ) : (
-                  (messages || []).map((msg, index) => (
-                    <div
-                      key={index}
-                      className={`flex mb-4 ${
-                        isOwnMessage(msg) ? "justify-end" : "justify-start"
-                      }`}
-                    >
-                      <div
-                        className={`max-w-[85%] sm:max-w-md p-4 rounded-2xl shadow-lg transition-all duration-300 ease-in-out transform hover:scale-105 ${
-                          isOwnMessage(msg)
-                            ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-br-none"
-                            : "bg-gradient-to-r from-gray-100 to-white text-gray-800 rounded-bl-none border border-gray-200"
-                        }`}
-                      >
-                        <div className="text-xs opacity-80 mb-2 flex items-center gap-2">
-                          <span className="font-bold">
-                            {getUserName(msg.sender_id)}
-                          </span>
-                          <span className="">
-                            {formatTime(msg.timestamp || msg.created_at)}
-                          </span>
-                        </div>
-                        <div className="break-words whitespace-pre-wrap">
-                          {msg.content}
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-                <div ref={chatEndRef} />
-              </div>
-
-              {/* Enhanced Message Input Bar */}
-              <div className="w-full bg-gradient-to-r from-white to-gray-50 border-t p-4 flex items-center gap-3 sticky bottom-0 shadow-lg">
-                <input
-                  type="text"
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-                  placeholder="Type a message..."
-                  className="flex-1 p-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all duration-300"
-                />
-
-                {/* Enhanced Send Button */}
-                <button
-                  onClick={sendMessage}
-                  className="group relative bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white p-3 rounded-xl font-bold shadow-lg transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 flex items-center gap-2"
-                >
-                  {/* Glowing effect */}
-                  <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl blur opacity-30 group-hover:opacity-50 transition duration-300"></div>
-                  <FaPaperPlane className="w-4 h-4 relative z-10 animate-pulse group-hover:animate-bounce" />
-                  <span className="relative z-10 hidden sm:inline">Send</span>
-                </button>
-
-                {/* Enhanced Quick Call Button */}
-                <button
-                  onClick={() => {
-                    if (
-                      callState.isInitiating ||
-                      callState.isConnecting ||
-                      callState.isConnected
-                    ) {
-                      // If in a call, end it
-                      endCall();
-                    } else {
-                      // Start a new call
-                      initiateCall();
-                    }
-                  }}
-                  className={`group relative p-3 rounded-xl transition-all duration-300 ease-in-out transform hover:scale-105 active:scale-95 shadow-lg ${
-                    callState.isInitiating ||
-                    callState.isConnecting ||
-                    callState.isConnected
-                      ? "bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white"
-                      : "bg-gradient-to-r from-green-400 to-emerald-500 hover:from-green-500 hover:to-emerald-600 text-white"
-                  }`}
-                  title={
-                    callState.isInitiating ||
-                    callState.isConnecting ||
-                    callState.isConnected
-                      ? "End call"
-                      : `Call ${getUserName(selectedReceiver)}`
-                  }
-                >
-                  {callState.isInitiating ||
-                  callState.isConnecting ||
-                  callState.isConnected ? (
-                    <FaPhoneSlash className="w-4 h-4 animate-pulse" />
-                  ) : (
-                    <FaPhone className="w-4 h-4 animate-pulse" />
-                  )}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* No User Selected Message */}
-          {isLoggedIn && !selectedReceiver && (
-            <div className="flex-1 flex items-center justify-center p-8 bg-gradient-to-br from-blue-50 to-purple-50">
-              <div className="text-center max-w-md">
-                <div className="w-20 h-20 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
-                  <FaUsers className="w-10 h-10 text-white" />
-                </div>
-                <h3 className="text-xl font-bold text-gray-800 mb-3">
-                  Select a User to Start
-                </h3>
-                <p className="text-gray-600 mb-4">
-                  Choose any user from the sidebar to start chatting and
-                  calling. Everyone can call everyone in this app! 📞
-                </p>
-                <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                  <p className="text-sm text-blue-700 font-medium">
-                    💡 <strong>How to call someone:</strong>
-                  </p>
-                  <ul className="text-xs text-blue-600 mt-2 space-y-1">
-                    <li>• Click on any user in the sidebar</li>
-                    <li>• Use the Audio/Video call buttons in the header</li>
-                    <li>• Or click the phone icon next to any user</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          )}
-        </section>
-      </main>
-
-      {/* Render the popover */}
-      {popoverUser && popoverAnchor && (
-        <UserPopover
-          user={popoverUser}
-          anchorRect={popoverAnchor}
-          onClose={() => setPopoverUser(null)}
-          onCall={() => {
-            setSelectedReceiver(popoverUser.id);
-            setPopoverUser(null);
-            setTimeout(() => {
-              if (audioCallRef.current) {
-                console.log("Popover call: Calling startCall via ref");
-                audioCallRef.current.startCall();
-              } else {
-                console.error("AudioCall ref not available for popover call");
-                alert(
-                  "Audio call feature is loading... Please wait a moment and try again."
-                );
-              }
-            }, 10);
-          }}
-        />
-      )}
-
-      {/* Modern Incoming Call Interface */}
-      {incomingCall && (
-        <div className="fixed inset-0 bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 flex flex-col items-center justify-center z-50 animate-scale-in-bounce">
-          {/* Background Effects */}
-          <div className="absolute inset-0 bg-black bg-opacity-30"></div>
-          <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
-
-          {/* Call Content */}
-          <div className="relative z-10 flex flex-col items-center justify-center h-full px-8 text-center">
-            {/* Incoming Call Label */}
-            <div className="mb-8 animate-slide-in-top">
-              <p className="text-white/70 text-sm uppercase tracking-wide font-medium animate-status-breathe">
-                Incoming call
-              </p>
-            </div>
-
-            {/* Caller Avatar with Enhanced Animation */}
-            <div className="relative mb-8">
-              {/* Multiple Pulse Ring Animations */}
-              <div className="absolute inset-0 rounded-full bg-white/20 animate-call-wave"></div>
-              <div className="absolute inset-0 rounded-full bg-white/15 animate-call-wave animation-delay-200"></div>
-              <div className="absolute inset-0 rounded-full bg-white/10 animate-call-pulse"></div>
-
-              {/* Avatar with Glow */}
-              <div className="relative w-40 h-40 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center shadow-2xl animate-avatar-glow">
-                <span className="text-5xl font-bold text-white animate-phone-ring">
-                  {incomingCall.from_username?.charAt(0)?.toUpperCase() || "?"}
-                </span>
-              </div>
-            </div>
-
-            {/* Caller Name */}
-            <div className="mb-4 animate-fadeIn">
-              <h1 className="text-3xl font-light text-white mb-2">
-                {incomingCall.from_username || "Unknown Caller"}
-              </h1>
-              <p className="text-white/70 text-lg">Audio Call</p>
-            </div>
-
-            {/* Call Action Buttons */}
-            <div className="flex items-center justify-center gap-8 mt-16 animate-slideInUp">
-              {/* Decline Button */}
-              <button
-                onClick={declineCall}
-                className="w-16 h-16 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center shadow-2xl transition-all duration-200 transform hover:scale-110 active:animate-button-press"
-              >
-                <FaPhoneSlash className="text-white text-xl" />
-              </button>
-
-              {/* Accept Button */}
-              <button
-                onClick={acceptCall}
-                className="w-20 h-20 bg-green-500 hover:bg-green-600 rounded-full flex items-center justify-center shadow-2xl transition-all duration-200 transform hover:scale-110 active:animate-button-press animate-call-pulse"
-              >
-                <FaPhone className="text-white text-2xl" />
-              </button>
-            </div>
-
-            {/* Swipe hint for mobile */}
-            <div className="mt-12 animate-fadeIn animation-delay-200">
-              <p className="text-white/50 text-sm">Tap to answer or decline</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modern Active Call Interface */}
-      {(callState.isInitiating ||
-        callState.isConnecting ||
-        callState.isConnected) && (
-        <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 flex flex-col z-50 animate-scale-in-bounce">
-          {/* Background Effects */}
-          <div className="absolute inset-0 bg-black bg-opacity-40"></div>
-
-          {/* Header with Status */}
-          <div className="relative z-10 flex items-center justify-between p-6 pt-12 animate-slide-in-top">
-            <div className="flex items-center gap-3">
-              <div
-                className={`w-3 h-3 rounded-full ${
-                  callState.isConnected
-                    ? "bg-green-400 animate-status-breathe"
-                    : callState.isConnecting
-                    ? "bg-yellow-400 animate-status-breathe"
-                    : "bg-blue-400 animate-status-breathe"
-                }`}
-              ></div>
-              <span className="text-white/90 text-sm font-medium">
-                {callState.isConnected
-                  ? "Connected"
-                  : callState.isConnecting
-                  ? "Connecting..."
-                  : "Calling..."}
-              </span>
-            </div>
-
-            {callState.isConnected && (
-              <div className="text-white/90 text-sm font-mono animate-fadeIn">
-                {formatCallDuration(callState.callDuration)}
-              </div>
-            )}
-          </div>
-
-          {/* Main Call Content */}
-          <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-8">
-            {/* Contact Avatar */}
-            <div className="relative mb-8">
-              {/* Connection Status Ring */}
-              {!callState.isConnected && (
-                <div className="absolute inset-0 rounded-full border-4 border-white/30 animate-spin border-t-white/80"></div>
-              )}
-
-              {/* Enhanced Call Wave Animations for Active Calls */}
-              {callState.isConnected && (
-                <>
-                  <div className="absolute inset-0 rounded-full bg-green-400/20 animate-call-wave"></div>
-                  <div className="absolute inset-0 rounded-full bg-green-400/15 animate-call-wave animation-delay-200"></div>
-                </>
-              )}
-
-              {/* Avatar */}
-              <div
-                className={`w-48 h-48 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center shadow-2xl ${
-                  callState.isConnected
-                    ? "animate-avatar-glow"
-                    : "animate-call-pulse"
-                }`}
-              >
-                <span className="text-6xl font-light text-white">
-                  {callState.callPartner?.username?.charAt(0)?.toUpperCase() ||
-                    getUserName(selectedReceiver)?.charAt(0)?.toUpperCase() ||
-                    "?"}
-                </span>
-              </div>
-            </div>
-
-            {/* Contact Name and Status */}
-            <div className="text-center mb-12 animate-fadeIn">
-              <h1 className="text-4xl font-light text-white mb-4">
-                {callState.callPartner?.username ||
-                  getUserName(selectedReceiver) ||
-                  "Unknown"}
-              </h1>
-
-              <div className="space-y-2">
-                {callState.callStatus && (
-                  <p className="text-white/70 text-lg animate-status-breathe">
-                    {callState.callStatus}
-                  </p>
-                )}
-
-                <div className="flex items-center justify-center gap-3 animate-fadeIn animation-delay-200">
-                  <div className="flex items-center gap-1 text-white/60 text-sm">
-                    <FaPhone className="w-3 h-3" />
-                    <span>Audio Call</span>
-                  </div>
-
-                  {callState.callDirection && (
-                    <div className="flex items-center gap-1 text-white/60 text-sm">
-                      <span>•</span>
-                      <span className="capitalize">
-                        {callState.callDirection}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Call Controls */}
-            <div className="flex items-center justify-center gap-8 animate-slideInUp">
-              {callState.isConnected ? (
-                <>
-                  {/* Mute Button */}
-                  <button
-                    onClick={() => {
-                      playAudioFeedback("button_press");
-                      toggleMute();
-                    }}
-                    className={`w-14 h-14 rounded-full flex items-center justify-center backdrop-blur-sm transition-all duration-200 transform hover:scale-110 active:animate-button-press ${
-                      isMuted
-                        ? "bg-red-500/80 hover:bg-red-600/80 animate-call-pulse"
-                        : "bg-white/20 hover:bg-white/30"
-                    }`}
-                    title={isMuted ? "Unmute" : "Mute"}
-                  >
-                    {isMuted ? (
-                      <FaMicrophoneSlash className="text-white text-lg" />
-                    ) : (
-                      <FaMicrophone className="text-white text-lg" />
-                    )}
-                  </button>
-
-                  {/* End Call Button */}
-                  <button
-                    onClick={endCall}
-                    className="w-16 h-16 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center shadow-2xl transition-all duration-200 transform hover:scale-110 active:animate-button-press"
-                    title="End Call"
-                  >
-                    <FaPhoneSlash className="text-white text-xl" />
-                  </button>
-
-                  {/* Speaker Button */}
-                  <button
-                    onClick={() => {
-                      playAudioFeedback("button_press");
-                      toggleSpeaker();
-                    }}
-                    className={`w-14 h-14 rounded-full flex items-center justify-center backdrop-blur-sm transition-all duration-200 transform hover:scale-110 active:animate-button-press ${
-                      isSpeakerOn
-                        ? "bg-blue-500/80 hover:bg-blue-600/80 animate-call-pulse"
-                        : "bg-white/20 hover:bg-white/30"
-                    }`}
-                    title={isSpeakerOn ? "Speaker Off" : "Speaker On"}
-                  >
-                    <FaVolumeUp
-                      className={`text-lg ${
-                        isSpeakerOn ? "text-blue-100" : "text-white"
-                      }`}
-                    />
-                  </button>
-                </>
-              ) : (
-                /* End/Cancel Call Button for non-connected states */
-                <button
-                  onClick={endCall}
-                  className="w-16 h-16 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center shadow-2xl transition-all duration-200 transform hover:scale-110 active:animate-button-press"
-                  title="Cancel Call"
-                >
-                  <FaPhoneSlash className="text-white text-xl" />
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Bottom Safe Area */}
-          <div className="h-8"></div>
-        </div>
-      )}
-
-      {/* Enhanced Post-Call Experience */}
-      {callOutcomeMessage && (
-        <div
-          key="call-outcome-message"
-          className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50"
-        >
-          <div
-            className={`rounded-xl shadow-2xl text-white font-medium animate-slideInDown backdrop-blur-lg ${
-              callOutcomeMessage.type === "declined"
-                ? "bg-red-500/90"
-                : "bg-gray-800/90"
-            }`}
-          >
-            {/* Call Status Header */}
-            <div className="px-4 py-3 border-b border-white/10">
-              <div className="flex items-center gap-3">
-                {callOutcomeMessage.type === "declined" ? (
-                  <FaPhoneSlash className="w-4 h-4" />
-                ) : (
-                  <FaPhone className="w-4 h-4" />
-                )}
-                <span className="text-sm">{callOutcomeMessage.message}</span>
-              </div>
-            </div>
-
-            {/* Post-Call Actions */}
-            {callOutcomeMessage.showActions && (
-              <div className="px-4 py-3">
-                <div className="flex items-center gap-2">
-                  {/* Call Again Button */}
-                  <button
-                    onClick={() => {
-                      setCallOutcomeMessage(null);
-                      if (callOutcomeMessage.partnerId) {
-                        setSelectedReceiver(callOutcomeMessage.partnerId);
-                        setTimeout(() => initiateCall(), 100);
-                      }
-                    }}
-                    className="flex items-center gap-2 px-3 py-2 bg-green-500/80 hover:bg-green-600/80 rounded-lg text-xs font-medium transition-all duration-200 transform hover:scale-105 active:animate-button-press"
-                  >
-                    <FaPhone className="w-3 h-3" />
-                    Call Again
-                  </button>
-
-                  {/* Send Message Button */}
-                  <button
-                    onClick={() => {
-                      setCallOutcomeMessage(null);
-                      if (callOutcomeMessage.partnerId) {
-                        setSelectedReceiver(callOutcomeMessage.partnerId);
-                      }
-                    }}
-                    className="flex items-center gap-2 px-3 py-2 bg-blue-500/80 hover:bg-blue-600/80 rounded-lg text-xs font-medium transition-all duration-200 transform hover:scale-105 active:animate-button-press"
-                  >
-                    <FaPaperPlane className="w-3 h-3" />
-                    Message
-                  </button>
-
-                  {/* Dismiss Button */}
-                  <button
-                    onClick={() => setCallOutcomeMessage(null)}
-                    className="flex items-center gap-2 px-3 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-medium transition-all duration-200 transform hover:scale-105 active:animate-button-press"
-                  >
-                    <FaTimes className="w-3 h-3" />
-                    Dismiss
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      {/* Hidden audio element for remote streams */}
+      <audio
+        ref={(el) => {
+          if (el && window) {
+            window.remoteAudioElement = el;
+          }
+        }}
+        autoPlay
+        playsInline
+        controls={false}
+        style={{ display: "none" }}
+      />
     </div>
   );
+
+  return isLoggedIn ? renderChat() : renderAuth();
 }
