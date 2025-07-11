@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"github.com/gin-contrib/cors"
@@ -22,10 +23,20 @@ func main() {
 	}
 
 	// Initialize database connection
-	dsn := os.Getenv("MESSAGE_SERVICE_POSTGRES_DSN")
-	if dsn == "" {
-		dsn = "host=postgres user=unifiedchat password=password123 dbname=unifiedchat port=5432 sslmode=disable"
+	dbHost := os.Getenv("DB_HOST")
+	dbPort := os.Getenv("DB_PORT")
+	dbUser := os.Getenv("DB_USER")
+	dbPassword := os.Getenv("DB_PASSWORD")
+	dbName := os.Getenv("DB_NAME")
+
+	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable",
+		dbHost, dbUser, dbPassword, dbName, dbPort)
+
+	// Fallback for local development or if environment variables are not fully set
+	if dbHost == "" || dbUser == "" || dbPassword == "" || dbName == "" || dbPort == "" {
+		dsn = "host=localhost user=unifiedchat password=password123 dbname=unifiedchat port=5432 sslmode=disable"
 	}
+
 	var err error
 	DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
@@ -65,7 +76,7 @@ func main() {
 	r.GET("/messages/between/:currentUserID/:selectedUserID", handlers.GetMessagesBetweenUsersGin)
 	r.PUT("/messages/:id/status", handlers.UpdateMessageStatusGin)
 
-	port := os.Getenv("MESSAGE_SERVICE_PORT")
+	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8083"
 	}
