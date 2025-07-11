@@ -15,7 +15,7 @@ import {
   FaCog,
   FaPlay,
   FaStop,
-  FaRefresh,
+  FaRedo,
 } from "react-icons/fa";
 
 const JanusDeviceTest = forwardRef(({ user, onTestEnd }, ref) => {
@@ -640,7 +640,7 @@ const JanusDeviceTest = forwardRef(({ user, onTestEnd }, ref) => {
                 className="flex items-center space-x-2 px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors"
                 disabled={isTesting}
               >
-                <FaRefresh />
+                <FaRedo />
                 <span>Refresh</span>
               </button>
             </div>
