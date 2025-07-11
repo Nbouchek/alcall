@@ -52,17 +52,41 @@ func main() {
 	}
 
 	// Database connection with retry logic
-	dbHost := os.Getenv("DB_HOST")
-	dbPort := os.Getenv("DB_PORT")
-	dbUser := os.Getenv("DB_USER")
-	dbPassword := os.Getenv("DB_PASSWORD")
-	dbName := os.Getenv("DB_NAME")
+	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
+		log.Println("DATABASE_URL not found, falling back to individual environment variables.")
+		// Use Render's environment variables if available, otherwise fall back to generic ones
+		dbHost := os.Getenv("PGHOST")
+		if dbHost == "" {
+			dbHost = os.Getenv("DB_HOST")
+		}
+		dbPort := os.Getenv("PGPORT")
+		if dbPort == "" {
+			dbPort = os.Getenv("DB_PORT")
+		}
+		dbUser := os.Getenv("PGUSER")
+		if dbUser == "" {
+			dbUser = os.Getenv("DB_USER")
+		}
+		dbPassword := os.Getenv("PGPASSWORD")
+		if dbPassword == "" {
+			dbPassword = os.Getenv("DB_PASSWORD")
+		}
+		dbName := os.Getenv("PGDATABASE")
+		if dbName == "" {
+			dbName = os.Getenv("DB_NAME")
+		}
 
-	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", dbHost, dbPort, dbUser, dbPassword, dbName)
+		if dbHost != "" && dbPort != "" && dbUser != "" && dbName != "" {
+			// For Render, it's good practice to require SSL
+			dsn = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=require", dbHost, dbPort, dbUser, dbPassword, dbName)
+		}
+	}
 
-	if dbHost == "" || dbPort == "" || dbUser == "" || dbPassword == "" || dbName == "" {
-		dsn = "host=localhost user=user password=password dbname=chat_db port=5432 sslmode=disable" // Fallback for development outside Docker
-		log.Printf("Warning: One or more database environment variables are empty. Using default DSN: %s", dsn)
+	// Final fallback for local development if no DSN has been constructed
+	if dsn == "" {
+		dsn = "host=localhost user=user password=password dbname=chat_db port=5432 sslmode=disable"
+		log.Printf("Warning: Could not construct DSN from environment variables. Using default local DSN.")
 	}
 
 	maxRetries := 10
