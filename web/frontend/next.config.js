@@ -13,6 +13,17 @@ const nextConfig = {
       process.env.NEXT_PUBLIC_REALTIME_HTTP_API_URL,
     NODE_ENV: process.env.NODE_ENV,
   },
+  // Add publicRuntimeConfig for debugging
+  publicRuntimeConfig: {
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+    NEXT_PUBLIC_MESSAGE_API_URL: process.env.NEXT_PUBLIC_MESSAGE_API_URL,
+    NEXT_PUBLIC_REALTIME_API_URL: process.env.NEXT_PUBLIC_REALTIME_API_URL,
+    NEXT_PUBLIC_JANUS_HTTP_URL: process.env.NEXT_PUBLIC_JANUS_HTTP_URL,
+    NEXT_PUBLIC_JANUS_URL: process.env.NEXT_PUBLIC_JANUS_URL,
+    NEXT_PUBLIC_REALTIME_HTTP_API_URL:
+      process.env.NEXT_PUBLIC_REALTIME_HTTP_API_URL,
+    NODE_ENV: process.env.NODE_ENV,
+  },
   // Aggressive cache busting
   generateBuildId: async () => {
     const timestamp = Date.now();
