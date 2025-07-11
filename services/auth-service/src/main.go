@@ -96,7 +96,7 @@ func main() {
 
 	// Standardized CORS configuration
 	config := cors.DefaultConfig()
-	config.AllowAllOrigins = true
+	config.AllowOrigins = []string{"https://unifiedchat-frontend.onrender.com"}
 	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
 	config.AllowHeaders = []string{"Origin", "Content-Type", "Authorization", "Accept", "X-Requested-With"}
 	config.ExposeHeaders = []string{"Content-Length"}
