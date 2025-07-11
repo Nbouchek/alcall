@@ -28,6 +28,14 @@ const AUTH_API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 const MESSAGE_API_BASE_URL = process.env.NEXT_PUBLIC_MESSAGE_API_URL;
 const WEBSOCKET_URL = process.env.NEXT_PUBLIC_REALTIME_API_URL;
 
+// Debug logging
+console.log("🔥 DEBUG - Environment variables:", {
+  AUTH_API_BASE_URL,
+  MESSAGE_API_BASE_URL,
+  WEBSOCKET_URL,
+  NODE_ENV: process.env.NODE_ENV,
+});
+
 export default function Home() {
   console.log(
     "🔥 FRONTEND CACHE BUSTER v2.4.0 - DIRECT HANGUP CLEANUP FIX LOADED 🔥"
