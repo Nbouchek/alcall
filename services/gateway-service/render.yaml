@@ -1,11 +1,11 @@
 services:
   - type: web
-    name: unifiedchat-gateway-service
+    name: alcall-gateway-service
     runtime: docker
-    region: oregon
+    region: frankfurt
     plan: starter
     buildCommand: docker build -t gateway-service .
-    
+
     healthCheckPath: /health
     autoDeploy: true
     numInstances: 1

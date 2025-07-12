@@ -1,10 +1,9 @@
 services:
   - type: web
-    name: unifiedchat-janus-service
+    name: alcall-janus-service
     runtime: docker
-    region: oregon
+    region: frankfurt
     plan: starter
-    
 
     autoDeploy: true
     numInstances: 1

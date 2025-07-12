@@ -1,12 +1,12 @@
 services:
   - type: web
-    name: unifiedchat-message-service
+    name: alcall-message-service
     runtime: docker
-    region: oregon
+    region: frankfurt
     plan: starter
     dockerfilePath: Dockerfile
     dockerContext: .
-    
+
     healthCheckPath: /health
     autoDeploy: true
     numInstances: 1

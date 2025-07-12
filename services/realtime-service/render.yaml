@@ -1,11 +1,11 @@
 services:
   - type: web
-    name: unifiedchat-realtime-service
+    name: alcall-realtime-service
     runtime: docker
-    region: oregon
+    region: frankfurt
     plan: starter
     buildCommand: docker build -t realtime-service .
-    
+
     healthCheckPath: /health
     autoDeploy: true
     numInstances: 1

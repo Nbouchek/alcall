@@ -1,12 +1,12 @@
 services:
   - type: web
-    name: unifiedchat-auth-service
+    name: alcall-auth-service
     runtime: docker
-    region: oregon
+    region: frankfurt
     plan: starter
     dockerfilePath: Dockerfile
     dockerContext: .
-    
+
     healthCheckPath: /health
     autoDeploy: true
     numInstances: 1

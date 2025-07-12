@@ -41,7 +41,7 @@ nat: {
     # TURN server configuration for relay when direct connection fails
     turn_server = "turn.openrelay.metered.ca"
     turn_port = 80
-    turn_type = "turns"
+    turn_type = "turn"
     turn_user = "openrelayproject"
     turn_pwd = "openrelayproject"
 
