@@ -40,3 +40,18 @@ resource "render_web_service" "auth_service" {
     "DATABASE_URL" = { value = render_postgres.alcall_db.connection_info.external_connection_string }
   }
 }
+
+resource "render_web_service" "janus_service" {
+  name               = "alcall-janus-service"
+  plan               = "starter"
+  region             = "frankfurt" # Following user preference [[memory:3058791]]
+
+  runtime_source = {
+    docker = {
+      auto_deploy   = true
+      branch        = "repo-setup-fixes"
+      repo_url      = "https://github.com/Nbouchek/alcall"
+      root_directory = "services/janus-service"
+    }
+  }
+}
