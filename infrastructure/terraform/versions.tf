@@ -1,13 +1,14 @@
 terraform {
+  required_version = ">= 1.3.0"
   required_providers {
     render = {
-      version = "1.1.1" # Use the latest stable version
-      source  = "jackall3n/render"
+      source  = "render-oss/render"
+      version = "~> 0.2.1"
     }
   }
 }
 
 provider "render" {
-  # api_key = var.render_api_key
-  email = var.render_owner_email
+  api_key  = var.render_api_key
+  owner_id = var.render_owner_id
 }
