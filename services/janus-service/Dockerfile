@@ -33,6 +33,8 @@ RUN make && make install
 # Copy configuration files
 COPY ../../config/janus.jcfg /opt/janus/etc/janus/
 COPY ../../config/turnserver.conf /opt/janus/etc/janus/
+COPY ../../config/janus.transport.websockets.jcfg /opt/janus/etc/janus/
+COPY ../../config/janus.transport.http.jcfg /opt/janus/etc/janus/
 
 EXPOSE 8088 8188 8089 8090
 
