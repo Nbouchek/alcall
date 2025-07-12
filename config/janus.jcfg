@@ -39,12 +39,13 @@ nat: {
     stun_port = 19302
 
     # TURN server configuration for relay when direct connection fails
-    turn_server = "turn.openrelay.metered.ca:3478"
+    turn_server = "turn.openrelay.metered.ca"
+    turn_port = 3478
     turn_user = "openrelayproject"
     turn_pwd = "openrelayproject"
 
     # Enable TURN relay (optional, for better connectivity)
-    nice_debug = false
+    # nice_debug = false # Commented out to match sample default
     full_trickle = true
     ice_lite = false
     ice_tcp = false
