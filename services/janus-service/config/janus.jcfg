@@ -45,8 +45,8 @@ nat: {
     #turn_port = 3478
     #turn_server = "turn.openrelay.metered.ca"
     #turn_port = 3478
-    turn_server = "YOUR_TURN_SERVER_ADDRESS"
-    turn_port = YOUR_TURN_SERVER_PORT
+    #turn_server = "YOUR_TURN_SERVER_ADDRESS"
+    #turn_port = YOUR_TURN_SERVER_PORT
 
     # If you need to specify a TURN username and password, use these
     #turn_username = "user"
