@@ -39,8 +39,24 @@ nat: {
     stun_port = 19302
 
     # TURN server configuration for relay when direct connection fails
-    turn_server = "turn.openrelay.metered.ca"
-    turn_port = 3478
+    # STUN/TURN (most likely you'll want to set up your own, or use a commercial one)
+    # You can also specify an IP address here, to avoid SRV lookups
+    #turn_server = "turn.example.com"
+    #turn_port = 3478
+    #turn_server = "turn.openrelay.metered.ca"
+    #turn_port = 3478
+    turn_server = "YOUR_TURN_SERVER_ADDRESS"
+    turn_port = YOUR_TURN_SERVER_PORT
+
+    # If you need to specify a TURN username and password, use these
+    #turn_username = "user"
+    #turn_password = "password"
+
+    # If the TURN server only supports UDP, TCP and/or TLS, enable/disable as needed
+    # If you don't enable any of them, ALL protocols will be tried
+    #turn_udp = yes
+    #turn_tcp = yes
+    #turn_tls = yes
     turn_user = "openrelayproject"
     turn_pwd = "openrelayproject"
 
