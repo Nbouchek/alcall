@@ -1,4 +1,4 @@
-FROM canyan/janus-gateway:master
+FROM meetecho/janus-gateway:latest
 
 COPY config/*.jcfg /usr/local/etc/janus/
 COPY config/turnserver.conf /usr/local/etc/janus/
