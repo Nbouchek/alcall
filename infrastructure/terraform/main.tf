@@ -153,8 +153,8 @@ resource "render_web_service" "user_service" {
 resource "render_web_service" "frontend_service" {
   name = "alcall-frontend-service"
   plan = "starter"
-  region = "frankfurt"
-  start_command = "npm start"
+  region = "oregon"
+  start_command = "next start"
 
   runtime_source = {
     native_runtime = {
@@ -167,6 +167,30 @@ resource "render_web_service" "frontend_service" {
     }
   }
 
-  health_check_path = "/health"
+  env_vars = {
+    "PORT" = {
+      value = "3000"
+    },
+    "NEXT_PUBLIC_AUTH_API_URL" = {
+      value = "https://unifiedchat-auth-service.onrender.com/api/v1"
+    },
+    "NEXT_PUBLIC_MESSAGE_API_URL" = {
+      value = "https://unifiedchat-message-service.onrender.com"
+    },
+    "NEXT_PUBLIC_REALTIME_API_URL" = {
+      value = "https://unifiedchat-realtime-service.onrender.com"
+    },
+    "NEXT_PUBLIC_JANUS_URL" = {
+      value = "wss://unifiedchat-janus-service.onrender.com/janus"
+    },
+    "NEXT_PUBLIC_JANUS_HTTP_URL" = {
+      value = "https://unifiedchat-janus-service.onrender.com"
+    },
+    "NEXT_PUBLIC_FORCE_NORMAL_MODE" = {
+      value = "true"
+    }
+  }
+
+  health_check_path = "/"
   num_instances = 1
 }
