@@ -149,6 +149,10 @@ func main() {
 		port = "8082"
 	}
 	log.Printf("Auth service starting on port %s", port)
+
+	// Add a small delay to ensure everything is ready before listening
+	time.Sleep(5 * time.Second)
+
 	r.Run(":" + port)
 }
 
