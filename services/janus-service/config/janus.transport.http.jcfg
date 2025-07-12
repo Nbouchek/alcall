@@ -2,4 +2,6 @@ general: {
   enabled = true
   port = 8088
   interface = "0.0.0.0"
+  admin_enabled = true
+  admin_port = 7088
 }
