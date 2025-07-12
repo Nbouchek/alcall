@@ -1,6 +1,4 @@
-general: {
-  ws = yes
-  ws_port = 8188
-  wss = no
-  ws_logging = err
-}
+ws = yes
+ws_port = 8188
+wss = no
+ws_logging = err

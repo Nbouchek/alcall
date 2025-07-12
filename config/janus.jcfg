@@ -39,8 +39,7 @@ nat: {
     stun_port = 19302
 
     # TURN server configuration for relay when direct connection fails
-    turn_server = "turn.openrelay.metered.ca:3478?transport=udp"
-    turn_server = "turn.openrelay.metered.ca:3478?transport=tcp"
+    turn_server = "turn.openrelay.metered.ca:3478"
     turn_user = "openrelayproject"
     turn_pwd = "openrelayproject"
 

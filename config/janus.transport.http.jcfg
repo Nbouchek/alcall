@@ -1,6 +1,4 @@
-general: {
-  http = yes
-  port = 8088
-  base_path = /janus
-  admin_base_path = /admin
-}
+http = yes
+port = 8088
+base_path = /janus
+admin_base_path = /admin
