@@ -1,0 +1,6 @@
+general: {
+  ws = true
+  ws_port = 8188
+  wss = false
+  ws_logging = err
+}
