@@ -1,6 +1,5 @@
 general: {
-  http = true
+  enabled = true
   port = 8088
-  base_path = /janus
-  admin_base_path = /admin
+  interface = "0.0.0.0"
 }
