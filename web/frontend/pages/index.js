@@ -23,16 +23,20 @@ import {
   FaCog,
 } from "react-icons/fa";
 
-// --- Configuration ---
-const AUTH_API_BASE_URL = process.env.NEXT_PUBLIC_AUTH_API_URL_NEW;
-const MESSAGE_API_BASE_URL = process.env.NEXT_PUBLIC_MESSAGE_API_URL;
-const WEBSOCKET_URL = process.env.NEXT_PUBLIC_REALTIME_API_URL;
+// --- Configuration (will be populated at runtime) ---
+let AUTH_API_BASE_URL;
+let MESSAGE_API_BASE_URL;
+let WEBSOCKET_URL;
+let JANUS_HTTP_URL;
+let JANUS_URL;
+let REALTIME_HTTP_API_URL;
 
 export default function Home() {
   console.log(
     "🔥 FRONTEND CACHE BUSTER v2.4.0 - DIRECT HANGUP CLEANUP FIX LOADED 🔥"
   );
   // --- State ---
+  const [envVars, setEnvVars] = useState(null); // New state to hold runtime env vars
   const [user, setUser] = useState(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [users, setUsers] = useState([]);
@@ -220,250 +224,93 @@ export default function Home() {
       ringtoneTimeoutRef.current = null;
     }
 
-    // Stop all sounds
-    stopIncomingCallRingtone();
-    stopRingbackTone();
-
-    // 6. IMMEDIATE microphone availability verification
-    console.log("🔥 INDEX - IMMEDIATE microphone verification");
-
-    // Test microphone availability immediately
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      navigator.mediaDevices
-        .getUserMedia({ audio: true })
-        .then((testStream) => {
-          console.log(
-            "🔥 INDEX - SUCCESS: Microphone is available for new calls"
-          );
-          // Stop the test stream immediately
-          testStream.getTracks().forEach((track) => {
-            track.stop();
-          });
-          console.log("🔥 INDEX - Test stream stopped");
-        })
-        .catch((error) => {
-          console.log(
-            "🔥 INDEX - WARNING: Microphone may not be available:",
-            error.name,
-            error.message
-          );
-        });
-    }
-
-    // 7. Force garbage collection if available
-    try {
-      if (window.gc) {
-        window.gc();
-        console.log("🔥 INDEX - Forced garbage collection");
+    // Nullify Janus objects globally
+    if (window.janusGlobal) {
+      console.log("🔥 INDEX - Destroying janusGlobal");
+      try {
+        window.janusGlobal.destroy();
+      } catch (error) {
+        console.error("🔥 INDEX - Error destroying janusGlobal:", error);
       }
-    } catch (error) {
-      console.log("🔥 INDEX - GC not available");
+      window.janusGlobal = null;
+    }
+    if (window.echotestPlugin) {
+      console.log("🔥 INDEX - Detaching echotestPlugin");
+      try {
+        window.echotestPlugin.detach();
+      } catch (error) {
+        console.error("🔥 INDEX - Error detaching echotestPlugin:", error);
+      }
+      window.echotestPlugin = null;
     }
 
-    // Reset the ending flag immediately
+    console.log("🔥 INDEX - Full cleanup complete.");
     isEndingCallRef.current = false;
-    console.log("🔥 INDEX - IMMEDIATE CLEANUP COMPLETED - MICROPHONE RELEASED");
   };
 
-  // Initialize Janus when window loads
-  useEffect(() => {
-    const initializeJanus = () => {
-      if (typeof window !== "undefined" && window.Janus && !janusInitialized) {
-        console.log("🔥 JANUS - Initializing Janus library...");
-        window.Janus.init({
-          debug: "all",
-          callback: () => {
-            console.log("🔥 JANUS - Janus initialized successfully!");
-            setJanusInitialized(true);
-          },
-          error: (error) => {
-            console.error("🔥 JANUS - Failed to initialize:", error);
-            showCallNotification(
-              "error",
-              "Call service initialization failed",
-              5000
-            );
-          },
-        });
-      } else if (!window.Janus) {
-        console.log("🔥 JANUS - Waiting for Janus library to load...");
-        setTimeout(initializeJanus, 500);
-      }
-    };
+  const isEndingCallRef = useRef(false);
+  const audioCallRef = useRef(null);
+  const ringtoneTimeoutRef = useRef(null);
 
-    initializeJanus();
+  const initializeJanus = () => {
+    if (typeof window !== "undefined" && window.Janus) {
+      console.log("🔥 JANUS - Initializing Janus library...");
+      window.Janus.init({
+        debug: "all",
+        callback: () => {
+          console.log("🔥 JANUS - Janus initialized successfully!");
+          setJanusInitialized(true);
+        },
+      });
+    } else {
+      console.log("Janus library not loaded, retrying...");
+      setTimeout(initializeJanus, 500); // Retry after 500ms
+    }
+  };
 
-    // Add global test function for microphone cleanup verification
-    if (typeof window !== "undefined") {
+  const showCallNotification = (type, message, duration = 3000) => {
+    setCallNotification({ type, message });
+    setTimeout(() => setCallNotification(null), duration);
+  };
+
+  const showCallEndedModal = (type, title, message, duration = 4000) => {
+    setCallEndedModal({ type, title, message });
+    setTimeout(() => setCallEndedModal(null), duration);
+  };
+
+  const requestMicrophonePermission = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      window.localAudioStream = stream; // Store the stream globally if needed
+      console.log("Microphone permission granted and stream obtained.");
+
+      // Check microphone cleanup status
       window.testMicrophoneCleanup = () => {
-        console.log("🎤 MICROPHONE CLEANUP TEST");
-        console.log("=========================");
-
-        let issues = 0;
-
-        // Check global audio streams
-        if (window.localAudioStream) {
-          console.log("❌ window.localAudioStream still exists!");
-          window.localAudioStream.getTracks().forEach((track) => {
-            console.log(
-              `  - Track: ${track.kind} (${track.label}) - State: ${track.readyState}`
-            );
-            if (track.readyState === "live") {
-              issues++;
-              console.log("    ⚠️  This track is still LIVE!");
-            }
-          });
-        } else {
-          console.log("✅ window.localAudioStream properly cleaned up");
-        }
-
-        if (window.currentCallStream) {
-          console.log("❌ window.currentCallStream still exists!");
-          window.currentCallStream.getTracks().forEach((track) => {
-            console.log(
-              `  - Track: ${track.kind} (${track.label}) - State: ${track.readyState}`
-            );
-            if (track.readyState === "live") {
-              issues++;
-              console.log("    ⚠️  This track is still LIVE!");
-            }
-          });
-        } else {
-          console.log("✅ window.currentCallStream properly cleaned up");
-        }
-
-        // Check all audio elements
-        const audioElements = document.querySelectorAll("audio");
-        console.log(`\n🔍 Checking ${audioElements.length} audio elements...`);
-
-        audioElements.forEach((audio, index) => {
-          console.log(`  Audio Element ${index}:`);
-          console.log(`    - ID: ${audio.id || "no-id"}`);
-          console.log(`    - SrcObject: ${audio.srcObject ? "YES" : "NO"}`);
-          console.log(`    - Paused: ${audio.paused}`);
-          console.log(`    - CurrentTime: ${audio.currentTime}`);
-
-          if (audio.srcObject && audio.srcObject.getTracks) {
-            audio.srcObject.getTracks().forEach((track) => {
-              console.log(
-                `      - Track: ${track.kind} (${track.label}) - State: ${track.readyState}`
-              );
-              if (track.readyState === "live") {
-                issues++;
-                console.log("        ⚠️  This track is still LIVE!");
-              }
-            });
-          }
-        });
-
-        // Check Web Audio API context
-        if (window.audioContext) {
-          console.log(`\n🔍 Audio Context State: ${window.audioContext.state}`);
-          if (window.audioContext.state === "running") {
-            console.log(
-              "    ⚠️  Audio context is still running (may be normal)"
-            );
-          } else {
-            console.log("    ✅ Audio context is properly suspended/closed");
-          }
-        } else {
-          console.log("\n✅ No audio context found");
-        }
-
-        // Test microphone availability
-        console.log("\n🔍 Testing microphone availability...");
-        navigator.mediaDevices
-          .getUserMedia({ audio: true, video: false })
-          .then((testStream) => {
-            console.log("✅ Microphone is available for new calls");
-            // Immediately stop the test stream
-            testStream.getTracks().forEach((track) => {
-              track.stop();
-            });
-            console.log("   Test stream stopped successfully");
-          })
-          .catch((error) => {
-            issues++;
-            console.log(
-              "❌ Microphone is NOT available:",
-              error.name,
-              error.message
-            );
-          });
-
-        console.log("\n📊 CLEANUP TEST RESULTS");
-        console.log("========================");
-        console.log(`Total Issues Found: ${issues}`);
-
-        if (issues === 0) {
-          console.log("\n🎉 SUCCESS: All audio resources properly cleaned up!");
-          console.log("   The microphone should be available for new calls.");
+        const tracks = window.localAudioStream
+          ? window.localAudioStream.getTracks()
+          : [];
+        console.log("Microphone stream tracks:", tracks);
+        if (tracks.length === 0) {
+          console.log("✅ Microphone stream is clean.");
+          return true;
         } else {
           console.log(
-            "\n❌ ISSUES FOUND: Some audio resources are still active!"
+            "❌ Microphone stream is NOT clean. Tracks still active."
           );
-          console.log(
-            "   The microphone may still be in use, preventing new calls."
-          );
-          console.log("   Try refreshing the page to fully release resources.");
+          return false;
         }
-
-        return issues === 0;
       };
 
-      // Add function to force cleanup everything
+      // Force cleanup function
       window.forceMicrophoneCleanup = () => {
-        console.log("🔧 FORCE MICROPHONE CLEANUP");
-        console.log("===========================");
-
-        // Stop all possible streams
         if (window.localAudioStream) {
-          window.localAudioStream.getTracks().forEach((track) => {
-            console.log(
-              "🔧 Force stopping localAudioStream track:",
-              track.kind,
-              track.label
-            );
-            track.stop();
-          });
+          console.log("Forcing microphone cleanup...");
+          window.localAudioStream.getTracks().forEach((track) => track.stop());
           window.localAudioStream = null;
+          console.log("Microphone cleanup forced.");
+        } else {
+          console.log("No active microphone stream to force cleanup.");
         }
-
-        if (window.currentCallStream) {
-          window.currentCallStream.getTracks().forEach((track) => {
-            console.log(
-              "🔧 Force stopping currentCallStream track:",
-              track.kind,
-              track.label
-            );
-            track.stop();
-          });
-          window.currentCallStream = null;
-        }
-
-        // Clean all audio elements
-        const audioElements = document.querySelectorAll("audio");
-        audioElements.forEach((audio, index) => {
-          audio.pause();
-          audio.currentTime = 0;
-          if (audio.srcObject) {
-            const stream = audio.srcObject;
-            if (stream && stream.getTracks) {
-              stream.getTracks().forEach((track) => {
-                console.log(
-                  `🔧 Force stopping track from audio element ${index}:`,
-                  track.kind,
-                  track.label
-                );
-                track.stop();
-              });
-            }
-            audio.srcObject = null;
-          }
-          audio.src = "";
-        });
-
-        console.log("🔧 Force cleanup completed");
       };
 
       console.log(
@@ -472,1199 +319,369 @@ export default function Home() {
       console.log(
         "💡 TIP: Run 'forceMicrophoneCleanup()' in console to force cleanup all audio resources"
       );
-    }
-  }, [janusInitialized]);
-
-  // Monitor audio call status from AudioCallHandler
-  useEffect(() => {
-    if (callState === "active") {
-      const interval = setInterval(() => {
-        const audioStatusElement = document.getElementById("audio-call-status");
-        if (audioStatusElement) {
-          const status = audioStatusElement.getAttribute("data-call-status");
-          const muted =
-            audioStatusElement.getAttribute("data-is-muted") === "true";
-          const volume =
-            parseFloat(audioStatusElement.getAttribute("data-volume")) || 1.0;
-
-          if (status) setAudioCallStatus(status);
-          setAudioCallMuted(muted);
-          setAudioCallVolume(volume);
-        }
-
-        // Also try to get status from the audio call ref
-        if (audioCallRef.current) {
-          try {
-            const callStatus = audioCallRef.current.getCallStatus();
-            if (callStatus) {
-              if (callStatus.callStatus)
-                setAudioCallStatus(callStatus.callStatus);
-              if (typeof callStatus.isMuted === "boolean")
-                setAudioCallMuted(callStatus.isMuted);
-              if (typeof callStatus.volume === "number")
-                setAudioCallVolume(callStatus.volume);
-            }
-          } catch (error) {
-            console.log("Could not get call status:", error);
-          }
-        }
-      }, 500); // Check every 500ms
-
-      return () => clearInterval(interval);
-    }
-  }, [callState]);
-
-  // Show notification helper
-  const showCallNotification = (type, message, duration = 3000) => {
-    console.log(
-      "🔥 NOTIFICATION - Calling showCallNotification with type:",
-      type,
-      "message:",
-      message
-    );
-    setCallNotification({ type, message });
-    setTimeout(() => setCallNotification(null), duration);
-  };
-
-  // Show call ended modal
-  const showCallEndedModal = (type, title, message, duration = 4000) => {
-    console.log("🔥 CALL ENDED MODAL - Showing:", { type, title, message });
-    setCallEndedModal({ type, title, message });
-    setTimeout(() => setCallEndedModal(null), duration);
-  };
-
-  // Request microphone permissions upfront
-  const requestMicrophonePermission = async () => {
-    console.log("🔥 MIC PERMISSION - Requesting microphone access...");
-
-    try {
-      // First check if permission is already granted
-      if (navigator.permissions) {
-        const permission = await navigator.permissions.query({
-          name: "microphone",
-        });
-        console.log(
-          "🔥 MIC PERMISSION - Current permission state:",
-          permission.state
-        );
-
-        if (permission.state === "granted") {
-          console.log("🔥 MIC PERMISSION - Already granted!");
-          return true;
-        }
-      }
-
-      // Clean up any existing stream first
-      if (window.localAudioStream) {
-        console.log("🔥 MIC PERMISSION - Cleaning up existing stream first");
-        window.localAudioStream.getTracks().forEach((track) => {
-          track.stop();
-        });
-        window.localAudioStream = null;
-      }
-
-      // Request microphone access
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          autoGainControl: true,
-          echoCancellation: true,
-          noiseSuppression: true,
-          sampleRate: 48000,
-        },
-        video: false,
-      });
-
-      console.log("🔥 MIC PERMISSION - GRANTED! Stream:", stream);
-      console.log(
-        "🔥 MIC PERMISSION - Stream tracks:",
-        stream.getTracks().map((t) => ({
-          kind: t.kind,
-          label: t.label,
-          state: t.readyState,
-        }))
-      );
-
-      // Store the stream globally for later use AND track it
-      window.localAudioStream = stream;
-      window.currentCallStream = stream; // Additional tracking
-
-      // Show success notification
-      showCallNotification("success", "Microphone access granted", 2000);
 
       return true;
     } catch (error) {
-      console.error("🔥 MIC PERMISSION - DENIED:", error);
-
-      let errorMessage =
-        "Microphone access denied. Please allow microphone access in your browser settings.";
-
-      if (error.name === "NotAllowedError") {
-        errorMessage =
-          "Microphone permission denied. Please click 'Allow' when prompted, or enable microphone access in your browser settings.";
-      } else if (error.name === "NotFoundError") {
-        errorMessage =
-          "No microphone found. Please connect a microphone and try again.";
-      } else if (error.name === "NotReadableError") {
-        errorMessage =
-          "Microphone is being used by another application. Please close other applications using the microphone.";
-      } else {
-        errorMessage = `Microphone access failed: ${error.message}`;
-      }
-
-      showCallNotification("error", errorMessage, 5000);
+      console.error("Microphone permission denied:", error);
+      showCallNotification(
+        "error",
+        "Microphone permission denied. Calls may not work.",
+        5000
+      );
       return false;
     }
   };
 
-  // --- Refs ---
-  const ws = useRef(null);
-  const audioCallRef = useRef(null);
-  const videoCallRef = useRef(null);
-  const chatEndRef = useRef(null);
-  const isEndingCallRef = useRef(false); // New ref to prevent recursive endCall
-  const ringtoneTimeoutRef = useRef(null); // New ref for ringtone timeout
-
-  // --- Effects ---
-
-  // Main WebSocket connection management
-  useEffect(() => {
-    if (!user?.id) {
-      if (ws.current) {
-        ws.current.close();
-        ws.current = null;
-      }
-      return;
+  const initAudioContext = () => {
+    if (typeof window !== "undefined" && !window.audioContext) {
+      window.audioContext = new (window.AudioContext ||
+        window.webkitAudioContext)();
+      console.log(
+        "🔥 INDEX - AudioContext initialized:",
+        window.audioContext.state
+      );
     }
+  };
 
-    if (!ws.current) {
-      const wsUrl = `${WEBSOCKET_URL}?user_id=${user.id}&username=${user.username}`;
-      console.log(`Connecting WebSocket to ${wsUrl}`);
-      ws.current = new WebSocket(wsUrl);
-
-      ws.current.onopen = () => console.log("WebSocket connected.");
-      ws.current.onclose = () => {
-        console.log("WebSocket disconnected.");
-        ws.current = null;
-      };
-      ws.current.onerror = (error) => {
-        console.error("WebSocket error:", error);
-        ws.current = null;
-      };
-    }
-
-    // Enhanced WebSocket message handling
-    ws.current.onmessage = (event) => {
-      const msg = JSON.parse(event.data);
-      console.log("[WEBSOCKET] Received:", msg);
-
-      switch (msg.type) {
-        case "presence_update":
-          setOnlineUsers(msg.online_users || []);
-          break;
-        case "new_message":
-          // Check if this message has a local_id and is from the current user (echo from server).
-          if (
-            msg.local_id &&
-            msg.from_user_id?.toString() === user?.id.toString()
-          ) {
-            // Replace the optimistic message with the one from the server.
-            setMessages((prevMessages) =>
-              prevMessages.map((m) => (m.id === msg.local_id ? msg : m))
-            );
-          } else if (
-            msg.from_user_id?.toString() ===
-              selectedRecipient?.id?.toString() &&
-            msg.to_user_id?.toString() === user?.id.toString()
-          ) {
-            // If the message is from the selected recipient to the current user, add it to the chat.
-            setMessages((prevMessages) => [...prevMessages, msg]);
-          } else if (msg.to_user_id?.toString() === user?.id.toString()) {
-            // If the message is for the current user but not from the selected recipient, highlight the sender.
-            setHighlightedUser(msg.from_user_id);
-          }
-          break;
-        case "call_initiate":
-          console.log("🔥 WEBSOCKET - Received call_initiate:", msg);
-          if (
-            msg.call &&
-            msg.call.to_user_id?.toString() === user.id.toString()
-          ) {
-            console.log("🔥 WEBSOCKET - Incoming call for current user.");
-            setIncomingCall(msg.call);
-            setCallState("ringing");
-            playIncomingCallRingtone();
-
-            // Clear any existing timeout
-            if (ringtoneTimeoutRef.current) {
-              clearTimeout(ringtoneTimeoutRef.current);
-            }
-
-            // Backup mechanism: Stop ringtone after 30 seconds if no action taken
-            ringtoneTimeoutRef.current = setTimeout(() => {
-              console.log(
-                "🔥 BACKUP - Auto-stopping ringtone after 30s timeout"
-              );
-              stopIncomingCallRingtone();
-              showCallEndedModal("ended", "Call Missed", "Call timed out");
-              handleAudioCallEnd();
-            }, 30000);
-
-            showCallNotification(
-              "info",
-              `Incoming call from ${msg.call.caller_username}`,
-              5000
-            ); // Show notification for incoming call
-          } else {
-            console.log(
-              "🔥 WEBSOCKET - Incoming call not for current user or missing call data.",
-              msg
-            );
-          }
-          break;
-        case "call_accepted":
-          stopRingbackTone(); // Stop ringback for the caller
-          setCallState("active");
-          setCallRoomId(msg.room_id);
-          showCallNotification(
-            "success",
-            `${activeCallRecipient?.username || "User"} accepted your call!`,
-            2000
-          );
-
-          // Start the AudioCallHandler for the caller when call is accepted
-          setTimeout(() => {
-            if (audioCallRef.current && audioCallRef.current.startCall) {
-              console.log(
-                "🔥 CALL ACCEPTED - Starting AudioCallHandler for caller with room:",
-                msg.room_id
-              );
-              audioCallRef.current.startCall(msg.room_id);
-            }
-          }, 100);
-          break;
-        case "call_rejected":
-          const rejecterName = activeCallRecipient?.username || "User";
-          showCallEndedModal(
-            "declined",
-            "Call Declined",
-            `${rejecterName} declined your call`
-          );
-          handleAudioCallEnd(); // Reset local state when call is rejected
-          break;
-        case "call_ended":
-          console.log(
-            "🔥 WEBSOCKET - Received call_ended, current state:",
-            callState,
-            "incomingCall:",
-            incomingCall
-          );
-
-          // IMMEDIATE MICROPHONE CLEANUP for all call_ended scenarios
-          console.log("🔥 WEBSOCKET - IMMEDIATE MICROPHONE CLEANUP");
-
-          // Stop all microphone streams immediately
-          if (window.localAudioStream) {
-            console.log("🔥 WEBSOCKET - Stopping window.localAudioStream");
-            window.localAudioStream.getTracks().forEach((track) => {
-              console.log(
-                "🔥 WEBSOCKET - Stopping track:",
-                track.kind,
-                track.label
-              );
-              track.stop();
-            });
-            window.localAudioStream = null;
-          }
-
-          if (window.currentCallStream) {
-            console.log("🔥 WEBSOCKET - Stopping window.currentCallStream");
-            window.currentCallStream.getTracks().forEach((track) => {
-              console.log(
-                "🔥 WEBSOCKET - Stopping call stream track:",
-                track.kind,
-                track.label
-              );
-              track.stop();
-            });
-            window.currentCallStream = null;
-          }
-
-          // Force cleanup AudioCallHandler immediately
-          if (audioCallRef.current) {
-            console.log("🔥 WEBSOCKET - Forcing AudioCallHandler cleanup");
-            try {
-              if (audioCallRef.current.forceCleanup) {
-                audioCallRef.current.forceCleanup();
-              }
-              if (audioCallRef.current.hangup) {
-                audioCallRef.current.hangup();
-              }
-            } catch (error) {
-              console.log(
-                "🔥 WEBSOCKET - AudioCallHandler cleanup error:",
-                error
-              );
-            }
-          }
-
-          // Clean up all audio elements
-          const audioElements = document.querySelectorAll("audio");
-          audioElements.forEach((audio, index) => {
-            try {
-              audio.pause();
-              audio.currentTime = 0;
-              if (audio.srcObject) {
-                const stream = audio.srcObject;
-                if (stream && stream.getTracks) {
-                  stream.getTracks().forEach((track) => {
-                    console.log(
-                      `🔥 WEBSOCKET - Stopping track from audio element ${index}:`,
-                      track.kind,
-                      track.label
-                    );
-                    track.stop();
-                  });
-                }
-                audio.srcObject = null;
-              }
-              audio.src = "";
-            } catch (error) {
-              console.error(
-                `🔥 WEBSOCKET - Error cleaning audio element ${index}:`,
-                error
-              );
-            }
-          });
-
-          // Handle call ended for receiver who is still ringing
-          if (callState === "ringing") {
-            console.log(
-              "🔥 WEBSOCKET - Call ended while ringing, stopping ringtone"
-            );
-            stopIncomingCallRingtone();
-            showCallEndedModal(
-              "ended",
-              "Call Ended",
-              "The caller ended the call"
-            );
-            handleAudioCallEnd();
-          }
-          // Handle call ended for active calls
-          else if (callState === "active") {
-            console.log("🔥 WEBSOCKET - Active call ended remotely");
-            const callerName = activeCallRecipient?.username || "User";
-
-            showCallEndedModal(
-              "ended",
-              "Call Ended",
-              `Call with ${callerName} has ended`
-            );
-            handleAudioCallEnd(); // Reset local state when call ends remotely
-          }
-          // Handle call ended for calling state (caller cancels)
-          else if (callState === "calling") {
-            console.log(
-              "🔥 WEBSOCKET - Call cancelled by caller during calling state"
-            );
-            stopRingbackTone();
-            showCallEndedModal(
-              "ended",
-              "Call Cancelled",
-              "The call was cancelled"
-            );
-            handleAudioCallEnd();
-          }
-          // Handle any other non-idle states
-          else if (callState !== "idle") {
-            console.log("🔥 WEBSOCKET - Call ended in state:", callState);
-            const callerName = activeCallRecipient?.username || "User";
-
-            showCallEndedModal(
-              "ended",
-              "Call Ended",
-              `Call with ${callerName} has ended`
-            );
-            handleAudioCallEnd(); // Reset local state when call ends remotely
-          }
-
-          // Verify microphone is available after cleanup
-          setTimeout(() => {
-            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-              navigator.mediaDevices
-                .enumerateDevices()
-                .then((devices) => {
-                  const audioInputs = devices.filter(
-                    (device) => device.kind === "audioinput"
-                  );
-                  console.log(
-                    `🔥 WEBSOCKET VERIFICATION - ${audioInputs.length} audio input devices available for new calls`
-                  );
-                })
-                .catch((error) => {
-                  console.error(
-                    "🔥 WEBSOCKET VERIFICATION - Error checking devices:",
-                    error
-                  );
-                });
-            }
-          }, 200);
-          break;
-        case "video_call_initiate":
-          console.log("🔥 WEBSOCKET - Received video_call_initiate:", msg);
-          if (
-            msg.call &&
-            msg.call.to_user_id?.toString() === user.id.toString()
-          ) {
-            console.log("🔥 WEBSOCKET - Incoming video call for current user.");
-            setIncomingVideoCall(msg.call);
-            setVideoCallState("ringing");
-            setCallType("video");
-            playIncomingCallRingtone();
-
-            // Clear any existing timeout
-            if (ringtoneTimeoutRef.current) {
-              clearTimeout(ringtoneTimeoutRef.current);
-            }
-
-            // Backup mechanism: Stop ringtone after 30 seconds if no action taken
-            ringtoneTimeoutRef.current = setTimeout(() => {
-              console.log(
-                "🔥 BACKUP - Auto-stopping video call ringtone after 30s timeout"
-              );
-              stopIncomingCallRingtone();
-              showCallEndedModal(
-                "ended",
-                "Video Call Missed",
-                "Video call timed out"
-              );
-              handleVideoCallEnd();
-            }, 30000);
-
-            showCallNotification(
-              "info",
-              `Incoming video call from ${msg.call.caller_username}`,
-              5000
-            );
-          } else {
-            console.log(
-              "🔥 WEBSOCKET - Incoming video call not for current user or missing call data.",
-              msg
-            );
-          }
-          break;
-
-        case "video_call_accepted":
-          console.log("🔥 WEBSOCKET - Video call accepted");
-          setVideoCallState("active");
-          setVideoCallRoomId(msg.room_id);
-          setCallType("video");
-          showCallNotification(
-            "success",
-            `${
-              activeVideoCallRecipient?.username || "User"
-            } accepted your video call!`,
-            2000
-          );
-
-          // Start the video call interface for the caller when call is accepted
-          if (videoCallRef.current) {
-            videoCallRef.current.startVideoCall();
-          }
-          break;
-
-        case "video_call_rejected":
-          console.log("🔥 WEBSOCKET - Video call rejected");
-          const videoRejecterName =
-            activeVideoCallRecipient?.username || "User";
-          showCallEndedModal(
-            "declined",
-            "Video Call Declined",
-            `${videoRejecterName} declined your video call`
-          );
-          handleVideoCallEnd();
-          break;
-
-        case "video_call_ended":
-          console.log("🔥 WEBSOCKET - Video call ended");
-
-          // Handle video call ended for receiver who is still ringing
-          if (videoCallState === "ringing") {
-            console.log("🔥 WEBSOCKET - Video call ended while ringing");
-            stopIncomingCallRingtone();
-            showCallEndedModal(
-              "ended",
-              "Video Call Ended",
-              "The caller ended the video call"
-            );
-            handleVideoCallEnd();
-          }
-          // Handle video call ended for active video calls
-          else if (videoCallState === "active") {
-            console.log("🔥 WEBSOCKET - Active video call ended remotely");
-            const videoCallerName =
-              activeVideoCallRecipient?.username || "User";
-            showCallEndedModal(
-              "ended",
-              "Video Call Ended",
-              `Video call with ${videoCallerName} has ended`
-            );
-            handleVideoCallEnd();
-          }
-          // Handle video call ended for calling state (caller cancels)
-          else if (videoCallState === "calling") {
-            console.log("🔥 WEBSOCKET - Video call cancelled by caller");
-            showCallEndedModal(
-              "ended",
-              "Video Call Cancelled",
-              "The video call was cancelled"
-            );
-            handleVideoCallEnd();
-          }
-          break;
-
-        default:
-          console.warn("Unhandled WebSocket message type:", msg.type);
-      }
-    };
-
-    // The dependency array ensures this effect re-runs if `user` or `selectedRecipient` changes,
-    // which re-assigns the `onmessage` handler with the latest state in its closure.
-  }, [user, selectedRecipient, activeCallRecipient, callState, incomingCall]);
-
-  // Scroll to bottom of messages
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  // Prime the AudioContext on component mount to bypass autoplay restrictions
-  useEffect(() => {
-    const initAudioContext = () => {
-      if (!audioContextRef.current) {
-        try {
-          const context = new (window.AudioContext ||
-            window.webkitAudioContext)();
-          audioContextRef.current = context;
-          // Resume the context if it's in a suspended state (common in modern browsers)
-          if (context.state === "suspended") {
-            context.resume();
-          }
-        } catch (e) {
-          console.error("Failed to initialize AudioContext:", e);
-        }
-      }
-    };
-
-    // Add a user interaction listener to initialize the AudioContext
-    document.addEventListener("click", initAudioContext, { once: true });
-    document.addEventListener("keydown", initAudioContext, { once: true });
-
-    return () => {
-      document.removeEventListener("click", initAudioContext);
-      document.removeEventListener("keydown", initAudioContext);
-    };
-  }, []);
-
-  // Debug logging for video call button state
-  useEffect(() => {
-    const isDisabled =
-      videoCallState === "calling" ||
-      videoCallState === "ringing" ||
-      callState !== "idle";
-    console.log("🔥 VIDEO CALL BUTTON STATE:", {
-      videoCallState,
-      callState,
-      selectedRecipient: selectedRecipient?.username,
-      disabled: isDisabled,
-      disabledReason:
-        videoCallState === "calling"
-          ? "videoCallState is calling"
-          : videoCallState === "ringing"
-          ? "videoCallState is ringing"
-          : callState !== "idle"
-          ? `callState is ${callState} (not idle)`
-          : "not disabled",
-    });
-  }, [videoCallState, callState, selectedRecipient?.username]);
-
-  // --- Sound ---
   const playIncomingCallRingtone = () => {
-    console.log("🔥 SOUND - Attempting to play incoming call ringtone.");
     if (window.playRingtone) {
       window.playRingtone();
-    } else {
-      console.error("Ringtone function not available.");
+      console.log("Playing incoming call ringtone.");
     }
   };
 
   const stopIncomingCallRingtone = () => {
-    console.log("🔥 SOUND - Attempting to stop incoming call ringtone.");
     if (window.stopRingtone) {
       window.stopRingtone();
+      console.log("Stopping incoming call ringtone.");
     }
   };
 
-  // Ringback Tone Functions
   const playRingbackTone = () => {
-    console.log("🔥 SOUND - Attempting to play ringback tone.");
     if (window.playRingback) {
       window.playRingback();
-    } else {
-      console.error("Ringback function not available.");
+      console.log("Playing ringback tone.");
     }
   };
 
   const stopRingbackTone = () => {
-    console.log("🔥 SOUND - Attempting to stop ringback tone.");
     if (window.stopRingback) {
       window.stopRingback();
+      console.log("Stopping ringback tone.");
     }
   };
 
-  // --- Call Lifecycle ---
   const initiateCall = async (recipient) => {
-    console.log("🔥 INITIATE CALL - Starting call to:", recipient.username);
-    if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
-      console.log("🔥 INITIATE CALL - WebSocket not connected");
-      showCallNotification(
-        "error",
-        "WebSocket is not connected. Please wait.",
-        3000
-      );
+    if (!recipient) {
+      showCallNotification("error", "Please select a recipient to call.", 3000);
       return;
     }
     if (callState !== "idle") {
-      console.log(
-        "🔥 INITIATE CALL - Call already in progress, current state:",
-        callState
-      );
-      showCallNotification(
-        "error",
-        "Cannot start a new call while another is in progress.",
-        3000
-      );
+      showCallNotification("error", "Already in a call or call attempt.", 3000);
+      return;
+    }
+    if (user.id === recipient.id) {
+      showCallNotification("error", "Cannot call yourself.", 3000);
       return;
     }
 
-    const roomId = `call_${user.id}_${recipient.id}_${Date.now()}`;
-    console.log("🔥 INITIATE CALL - Setting call state to 'calling'");
+    try {
+      setCallState("calling"); // Initiating call
+      setActiveCallRecipient(recipient);
+      playRingbackTone();
 
-    // Set state to show the "calling" UI for the initiator
-    setActiveCallRecipient(recipient);
-    setCallRoomId(roomId);
-    setCallState("calling");
-    setForceHideModal(false); // Reset modal hiding flag for new call
-    console.log(
-      "🔥 INITIATE CALL - State set, activeCallRecipient:",
-      recipient.username
-    );
-    playRingbackTone();
+      console.log(`Attempting to call ${recipient.username}...`);
 
-    const callPayload = {
-      type: "call_initiate",
-      call: {
-        to_user_id: recipient.id,
-        from_user_id: user.id,
-        caller_username: user.username,
-        room_id: roomId,
-        call_type: "audio",
-      },
-    };
+      const token = localStorage.getItem("token");
+      const response = await axios.post(
+        `${envVars.NEXT_PUBLIC_REALTIME_API_URL}/call/initiate`,
+        {
+          from_user_id: user.id,
+          to_user_id: recipient.id,
+          call_type: callType,
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
 
-    console.log("🔥 WEBSOCKET - Sending call_initiate payload:", callPayload);
-    ws.current.send(JSON.stringify(callPayload));
+      const { room_id } = response.data;
+      setCallRoomId(room_id);
+      console.log(`Call initiated. Room ID: ${room_id}`);
+
+      // Open AudioCallHandler or VideoCallInterface after initiation
+      if (callType === "audio") {
+        if (audioCallRef.current) {
+          audioCallRef.current.startCall(
+            room_id,
+            user.id,
+            envVars.NEXT_PUBLIC_JANUS_URL,
+            envVars.NEXT_PUBLIC_JANUS_HTTP_URL
+          );
+        }
+      } else if (callType === "video") {
+        setActiveVideoCallRecipient(recipient);
+        setVideoCallRoomId(room_id);
+        setVideoCallState("calling");
+      }
+    } catch (error) {
+      console.error("Failed to initiate call:", error);
+      showCallNotification(
+        "error",
+        `Failed to initiate ${callType} call.`,
+        4000
+      );
+      stopRingbackTone();
+      setCallState("idle");
+      setActiveCallRecipient(null);
+      setCallRoomId(null);
+    }
   };
 
   const handleAcceptCall = async () => {
     if (!incomingCall) return;
 
-    // Request microphone permission first
-    const micGranted = await requestMicrophonePermission();
-    if (!micGranted) {
-      console.log(
-        "🔥 ACCEPT CALL - Microphone permission denied, rejecting call"
-      );
-      handleRejectCall();
-      return;
-    }
-
-    // Initialize audio context immediately after microphone permission
-    console.log(
-      "🔥 ACCEPT CALL - Initializing audio context for immediate playback"
-    );
     try {
-      if (!window.audioContext) {
-        window.audioContext = new (window.AudioContext ||
-          window.webkitAudioContext)();
-      }
-      if (window.audioContext.state === "suspended") {
-        await window.audioContext.resume();
-        console.log("🔥 ACCEPT CALL - Audio context resumed successfully");
-      }
-    } catch (audioError) {
-      console.error(
-        "🔥 ACCEPT CALL - Audio context initialization failed:",
-        audioError
+      stopIncomingCallRingtone();
+      setCallState("active");
+      setActiveCallRecipient(incomingCall.caller_user);
+      setCallRoomId(incomingCall.room_id);
+      setIncomingCall(null);
+
+      console.log(`Accepting call from ${incomingCall.caller_username}`);
+
+      // Notify backend about accepted call
+      const token = localStorage.getItem("token");
+      await axios.post(
+        `${envVars.NEXT_PUBLIC_REALTIME_API_URL}/call/accept`,
+        {
+          call_id: incomingCall.call_id,
+          room_id: incomingCall.room_id,
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
       );
-    }
 
-    // Clear ringtone timeout
-    if (ringtoneTimeoutRef.current) {
-      clearTimeout(ringtoneTimeoutRef.current);
-      ringtoneTimeoutRef.current = null;
-    }
-
-    stopIncomingCallRingtone();
-
-    // Show immediate feedback
-    showCallNotification("success", "Connecting to call...", 2000);
-
-    const callPayload = {
-      type: "call_accepted",
-      to_user_id: incomingCall.from_user_id,
-      room_id: incomingCall.room_id,
-    };
-    ws.current?.send(JSON.stringify(callPayload));
-    setCallState("active");
-    setCallRoomId(incomingCall.room_id);
-    // Find the user object for the caller
-    const caller = users.find((u) => u.id === incomingCall.from_user_id);
-    setActiveCallRecipient(caller);
-    setIncomingCall(null);
-    setForceHideModal(false); // Reset modal hiding flag for accepted call
-
-    // Start the AudioCallHandler for the receiver
-    setTimeout(() => {
-      if (audioCallRef.current && audioCallRef.current.startCall) {
-        console.log(
-          "🔥 ACCEPT CALL - Starting AudioCallHandler for receiver with room:",
-          incomingCall.room_id
-        );
-        audioCallRef.current.startCall(incomingCall.room_id);
+      // Start the call in AudioCallHandler
+      if (callType === "audio") {
+        if (audioCallRef.current) {
+          audioCallRef.current.startCall(
+            incomingCall.room_id,
+            user.id,
+            envVars.NEXT_PUBLIC_JANUS_URL,
+            envVars.NEXT_PUBLIC_JANUS_HTTP_URL
+          );
+        }
+      } else if (callType === "video") {
+        setActiveVideoCallRecipient(incomingCall.caller_user);
+        setVideoCallRoomId(incomingCall.room_id);
+        setVideoCallState("active");
       }
-    }, 100);
+    } catch (error) {
+      console.error("Failed to accept call:", error);
+      showCallNotification("error", "Failed to accept call.", 4000);
+      setCallState("idle");
+      setIncomingCall(null);
+      setActiveCallRecipient(null);
+      setCallRoomId(null);
+    }
   };
 
   const handleRejectCall = () => {
     if (!incomingCall) return;
 
-    // Clear ringtone timeout
-    if (ringtoneTimeoutRef.current) {
-      clearTimeout(ringtoneTimeoutRef.current);
-      ringtoneTimeoutRef.current = null;
+    console.log(`Rejecting call from ${incomingCall.caller_username}`);
+    stopIncomingCallRingtone();
+
+    // Notify backend about rejected call
+    const token = localStorage.getItem("token");
+    if (token && envVars.NEXT_PUBLIC_REALTIME_API_URL) {
+      axios
+        .post(
+          `${envVars.NEXT_PUBLIC_REALTIME_API_URL}/call/reject`,
+          {
+            call_id: incomingCall.call_id,
+          },
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        )
+        .catch((error) => console.error("Failed to notify backend:", error));
     }
 
-    stopIncomingCallRingtone();
-    const callPayload = {
-      type: "call_rejected",
-      to_user_id: incomingCall.from_user_id,
-      room_id: incomingCall.room_id,
-    };
-    ws.current?.send(JSON.stringify(callPayload));
-    showCallNotification("info", "Call rejected", 2000);
-    handleAudioCallEnd(); // Reset local state when call is rejected
+    setCallState("idle");
+    setIncomingCall(null);
+    setActiveCallRecipient(null);
+    setCallRoomId(null);
+    showCallNotification("info", "Call rejected.", 3000);
   };
 
   const handleHangUp = () => {
-    console.log("🔥 HANG UP - Current state:", callState);
-    console.log(
-      "🔥 HANG UP - ActiveCallRecipient:",
-      activeCallRecipient?.username
-    );
-
-    // Allow hang up from any state - force cleanup if needed
     if (callState === "idle") {
-      console.log("🔥 HANG UP - Already idle, nothing to do");
+      console.log("No active call to hang up.");
       return;
     }
 
-    console.log("🔥 HANG UP - IMMEDIATE AGGRESSIVE CLEANUP STARTING");
-    isEndingCallRef.current = false; // RESET flag to ensure cleanup can proceed
-
-    // Determine who to notify about the hangup
-    const targetUserId =
-      callState === "active"
-        ? activeCallRecipient?.id // If call is active, notify the other party
-        : callState === "ringing"
-        ? incomingCall?.from_user_id // If we are being called, notify the caller
-        : callState === "calling"
-        ? activeCallRecipient?.id // If we are calling, notify the person we are calling
-        : null;
-
-    // Show feedback based on call state
-    if (callState === "calling") {
-      showCallNotification("info", "Call cancelled", 2000);
-    } else if (callState === "active") {
-      showCallNotification("info", "Call ended", 2000);
-    }
-
-    // IMMEDIATE MICROPHONE CLEANUP - Do this BEFORE sending WebSocket message
-    console.log("🔥 HANG UP - IMMEDIATE SYNCHRONOUS MICROPHONE CLEANUP");
-
-    // 1. IMMEDIATE AudioCallHandler cleanup FIRST (most critical)
-    if (audioCallRef.current) {
-      console.log("🔥 HANG UP - IMMEDIATE AudioCallHandler cleanup");
-      try {
-        if (audioCallRef.current.forceCleanup) {
-          audioCallRef.current.forceCleanup();
-        }
-        if (audioCallRef.current.hangup) {
-          audioCallRef.current.hangup();
-        }
-      } catch (error) {
-        console.log("🔥 HANG UP - AudioCallHandler cleanup failed:", error);
-      }
-    }
-
-    // 2. IMMEDIATE global stream cleanup
-    console.log("🔥 HANG UP - IMMEDIATE global stream cleanup");
-
-    if (window.localAudioStream) {
-      console.log("🔥 HANG UP - Stopping window.localAudioStream");
-      window.localAudioStream.getTracks().forEach((track) => {
-        console.log("🔥 HANG UP - Stopping track:", track.kind, track.label);
-        track.stop();
-      });
-      window.localAudioStream = null;
-    }
-
-    if (window.currentCallStream) {
-      console.log("🔥 HANG UP - Stopping window.currentCallStream");
-      window.currentCallStream.getTracks().forEach((track) => {
-        console.log(
-          "🔥 HANG UP - Stopping call stream track:",
-          track.kind,
-          track.label
-        );
-        track.stop();
-      });
-      window.currentCallStream = null;
-    }
-
-    // 3. IMMEDIATE audio elements cleanup
-    console.log("🔥 HANG UP - IMMEDIATE audio elements cleanup");
-    const audioElements = document.querySelectorAll("audio");
-    audioElements.forEach((audio, index) => {
-      try {
-        audio.pause();
-        audio.currentTime = 0;
-        if (audio.srcObject) {
-          const stream = audio.srcObject;
-          if (stream && stream.getTracks) {
-            stream.getTracks().forEach((track) => {
-              console.log(
-                `🔥 HANG UP - Stopping track from audio element ${index}:`,
-                track.kind,
-                track.label
-              );
-              track.stop();
-            });
-          }
-          audio.srcObject = null;
-        }
-        audio.src = "";
-
-        // Remove temporary elements immediately
-        if (
-          audio.id &&
-          (audio.id.includes("temp-") ||
-            audio.id.includes("dedicated-") ||
-            audio.id.includes("emergency-"))
-        ) {
-          audio.remove();
-          console.log(`🔥 HANG UP - Removed temporary element: ${audio.id}`);
-        }
-      } catch (error) {
-        console.error(
-          `🔥 HANG UP - Error cleaning audio element ${index}:`,
-          error
-        );
-      }
-    });
-
-    // 4. IMMEDIATE state reset
-    console.log("🔥 HANG UP - IMMEDIATE STATE RESET");
-    setCallState("idle");
-    setActiveCallRecipient(null);
-    setIncomingCall(null);
-    setCallRoomId(null);
-    setForceHideModal(true);
-
-    // Stop all sounds
-    stopIncomingCallRingtone();
+    console.log("Attempting to hang up call...");
     stopRingbackTone();
-
-    // 5. Send hangup notification AFTER cleanup to avoid race conditions
-    if (targetUserId && ws.current?.readyState === WebSocket.OPEN) {
-      console.log("🔥 HANG UP - Sending call_ended to user:", targetUserId);
-      const callPayload = { type: "call_ended", to_user_id: targetUserId };
-      ws.current.send(JSON.stringify(callPayload));
+    // Signal to AudioCallHandler to hang up
+    if (audioCallRef.current) {
+      audioCallRef.current.hangup();
     }
-
-    // 6. IMMEDIATE microphone availability verification
-    console.log("🔥 HANG UP - IMMEDIATE microphone verification");
-
-    // Test microphone availability immediately
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      navigator.mediaDevices
-        .getUserMedia({ audio: true })
-        .then((testStream) => {
-          console.log(
-            "🔥 HANG UP - SUCCESS: Microphone is available for new calls"
-          );
-          // Stop the test stream immediately
-          testStream.getTracks().forEach((track) => {
-            track.stop();
-          });
-          console.log("🔥 HANG UP - Test stream stopped");
-        })
-        .catch((error) => {
-          console.log(
-            "🔥 HANG UP - WARNING: Microphone may not be available:",
-            error.name,
-            error.message
-          );
-        });
+    // For video calls, handle hang up in VideoCallInterface
+    if (callType === "video" && videoCallState !== "idle") {
+      setVideoCallState("idle");
+      setActiveVideoCallRecipient(null);
+      setVideoCallRoomId(null);
     }
-
-    console.log(
-      "🔥 HANG UP - IMMEDIATE CLEANUP COMPLETED - MICROPHONE RELEASED"
-    );
+    // This will trigger handleAudioCallEnd or handleVideoCallEnd via WebSocket or AudioCallHandler callback
   };
 
   const endCall = () => {
-    console.log("🔥 END CALL - Current state:", callState);
-
-    if (isEndingCallRef.current) {
-      console.log("🔥 END CALL - Already in progress, skipping.");
-      return;
-    }
-    isEndingCallRef.current = true; // Set flag to true
-
-    // Prevent multiple executions (old guard, now augmented by isEndingCallRef)
-    if (callState === "idle") {
-      console.log("🔥 END CALL - Already idle, skipping");
-      isEndingCallRef.current = false; // Reset flag even if idle
-      return;
-    }
-
-    // Stop any sounds that might be playing
-    stopIncomingCallRingtone();
-    stopRingbackTone();
-
-    // Force cleanup the AudioCallHandler if it exists
-    if (audioCallRef.current) {
-      console.log("🔥 END CALL - Forcing AudioCallHandler cleanup");
-      audioCallRef.current.forceCleanup();
-    }
-
-    // Reset all call-related state directly - do NOT call AudioCallHandler.hangup()
-    // to avoid infinite recursion. The AudioCallHandler will clean itself up.
-    console.log("🔥 END CALL - Resetting state to idle");
-    setCallState("idle");
-    setIncomingCall(null);
-    setActiveCallRecipient(null);
-    setCallRoomId(null);
-
-    isEndingCallRef.current = false; // Reset flag after cleanup
+    handleAudioCallEnd();
+    showCallEndedModal("info", "Call Ended", "The call has ended.", 3000);
   };
 
-  // --- Video Call Functions ---
   const initiateVideoCall = async (recipient) => {
-    console.log(
-      "🔥 INITIATE VIDEO CALL - Starting video call to:",
-      recipient.username
-    );
-
-    if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
-      console.log("🔥 INITIATE VIDEO CALL - WebSocket not connected");
+    if (!recipient) {
       showCallNotification(
         "error",
-        "WebSocket is not connected. Please wait.",
-        3000
+        "Please select a recipient for video call."
       );
       return;
     }
-
-    if (videoCallState !== "idle" || callState !== "idle") {
-      console.log("🔥 INITIATE VIDEO CALL - Call already in progress");
-      showCallNotification(
-        "error",
-        "Cannot start a video call while another is in progress.",
-        3000
-      );
+    if (videoCallState !== "idle") {
+      showCallNotification("error", "Already in a video call or call attempt.");
+      return;
+    }
+    if (user.id === recipient.id) {
+      showCallNotification("error", "Cannot video call yourself.", 3000);
       return;
     }
 
-    const roomId = `video_call_${user.id}_${recipient.id}_${Date.now()}`;
-    console.log(
-      "🔥 INITIATE VIDEO CALL - Setting video call state to 'calling'"
-    );
+    try {
+      setCallType("video");
+      setVideoCallState("calling");
+      setActiveVideoCallRecipient(recipient);
+      console.log(`Attempting to video call ${recipient.username}...`);
 
-    // Set state to show the "calling" UI for the initiator
-    setActiveVideoCallRecipient(recipient);
-    setVideoCallRoomId(roomId);
-    setVideoCallState("calling");
-    setCallType("video");
-
-    const callPayload = {
-      type: "video_call_initiate",
-      call: {
-        to_user_id: recipient.id,
-        from_user_id: user.id,
-        caller_username: user.username,
-        room_id: roomId,
-        call_type: "video",
-      },
-    };
-
-    console.log(
-      "🔥 WEBSOCKET - Sending video_call_initiate payload:",
-      callPayload
-    );
-    ws.current.send(JSON.stringify(callPayload));
-
-    // Start video call interface
-    console.log(
-      "🔥 INITIATE VIDEO CALL - Checking videoCallRef.current:",
-      videoCallRef.current
-    );
-    if (videoCallRef.current) {
-      console.log("🔥 INITIATE VIDEO CALL - Calling startVideoCall() on ref");
-      videoCallRef.current.startVideoCall();
-    } else {
-      console.log(
-        "🔥 INITIATE VIDEO CALL - videoCallRef.current is null, scheduling retry..."
-      );
-      // VideoCallInterface not mounted yet, retry after render
-      setTimeout(() => {
-        console.log(
-          "🔥 INITIATE VIDEO CALL - Retry: videoCallRef.current:",
-          videoCallRef.current
-        );
-        if (videoCallRef.current) {
-          console.log(
-            "🔥 INITIATE VIDEO CALL - Retry: Calling startVideoCall() on ref"
-          );
-          videoCallRef.current.startVideoCall();
-        } else {
-          console.error(
-            "🔥 INITIATE VIDEO CALL - Retry failed: videoCallRef.current still null"
-          );
+      const token = localStorage.getItem("token");
+      const response = await axios.post(
+        `${envVars.NEXT_PUBLIC_REALTIME_API_URL}/call/initiate`,
+        {
+          from_user_id: user.id,
+          to_user_id: recipient.id,
+          call_type: "video",
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
         }
-      }, 100);
+      );
+
+      const { room_id } = response.data;
+      setVideoCallRoomId(room_id);
+      console.log(`Video call initiated. Room ID: ${room_id}`);
+      // VideoCallInterface will start the call once videoCallState is "calling"
+    } catch (error) {
+      console.error("Failed to initiate video call:", error);
+      showCallNotification("error", "Failed to initiate video call.", 4000);
+      setVideoCallState("idle");
+      setActiveVideoCallRecipient(null);
+      setVideoCallRoomId(null);
+      setCallType("audio"); // Reset to default
     }
   };
 
   const handleAcceptVideoCall = async () => {
     if (!incomingVideoCall) return;
 
-    console.log("🔥 ACCEPT VIDEO CALL - Accepting incoming video call");
+    try {
+      setVideoCallState("active");
+      setActiveVideoCallRecipient(incomingVideoCall.caller_user);
+      setVideoCallRoomId(incomingVideoCall.room_id);
+      setIncomingVideoCall(null);
+      setCallType("video");
 
-    // Stop any ringtones
-    stopIncomingCallRingtone();
+      console.log(
+        `Accepting video call from ${incomingVideoCall.caller_username}`
+      );
 
-    // Clear ringtone timeout
-    if (ringtoneTimeoutRef.current) {
-      clearTimeout(ringtoneTimeoutRef.current);
-      ringtoneTimeoutRef.current = null;
-    }
-
-    // Show immediate feedback
-    showCallNotification("success", "Connecting to video call...", 2000);
-
-    const callPayload = {
-      type: "video_call_accepted",
-      to_user_id: incomingVideoCall.from_user_id,
-      room_id: incomingVideoCall.room_id,
-    };
-
-    ws.current?.send(JSON.stringify(callPayload));
-    setVideoCallState("active");
-    setVideoCallRoomId(incomingVideoCall.room_id);
-    setCallType("video");
-
-    // Find the user object for the caller
-    const caller = users.find((u) => u.id === incomingVideoCall.from_user_id);
-    setActiveVideoCallRecipient(caller);
-    setIncomingVideoCall(null);
-
-    // Accept the call in the video call interface
-    if (videoCallRef.current) {
-      videoCallRef.current.acceptCall();
+      const token = localStorage.getItem("token");
+      await axios.post(
+        `${envVars.NEXT_PUBLIC_REALTIME_API_URL}/call/accept`,
+        {
+          call_id: incomingVideoCall.call_id,
+          room_id: incomingVideoCall.room_id,
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+    } catch (error) {
+      console.error("Failed to accept video call:", error);
+      showCallNotification("error", "Failed to accept video call.", 4000);
+      setVideoCallState("idle");
+      setIncomingVideoCall(null);
+      setActiveVideoCallRecipient(null);
+      setVideoCallRoomId(null);
+      setCallType("audio");
     }
   };
 
   const handleRejectVideoCall = () => {
     if (!incomingVideoCall) return;
 
-    console.log("🔥 REJECT VIDEO CALL - Rejecting incoming video call");
+    console.log(
+      `Rejecting video call from ${incomingVideoCall.caller_username}`
+    );
 
-    // Clear ringtone timeout
-    if (ringtoneTimeoutRef.current) {
-      clearTimeout(ringtoneTimeoutRef.current);
-      ringtoneTimeoutRef.current = null;
+    const token = localStorage.getItem("token");
+    if (token && envVars.NEXT_PUBLIC_REALTIME_API_URL) {
+      axios
+        .post(
+          `${envVars.NEXT_PUBLIC_REALTIME_API_URL}/call/reject`,
+          {
+            call_id: incomingVideoCall.call_id,
+          },
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        )
+        .catch((error) => console.error("Failed to notify backend:", error));
     }
 
-    stopIncomingCallRingtone();
-
-    const callPayload = {
-      type: "video_call_rejected",
-      to_user_id: incomingVideoCall.from_user_id,
-      room_id: incomingVideoCall.room_id,
-    };
-
-    ws.current?.send(JSON.stringify(callPayload));
-    showCallNotification("info", "Video call rejected", 2000);
-
-    // Reset video call state
-    setVideoCallState("idle");
-    setIncomingVideoCall(null);
-    setActiveVideoCallRecipient(null);
-    setVideoCallRoomId(null);
-  };
-
-  const handleVideoCallEnd = () => {
-    console.log("🔥 VIDEO CALL END - Ending video call");
-
-    if (videoCallState === "idle") {
-      console.log("🔥 VIDEO CALL END - Already idle, skipping");
-      return;
-    }
-
-    // Determine who to notify about the hangup
-    const targetUserId =
-      activeVideoCallRecipient?.id || incomingVideoCall?.from_user_id;
-
-    // Send hangup notification
-    if (targetUserId && ws.current?.readyState === WebSocket.OPEN) {
-      console.log(
-        "🔥 VIDEO CALL END - Sending video_call_ended to user:",
-        targetUserId
-      );
-      const callPayload = {
-        type: "video_call_ended",
-        to_user_id: targetUserId,
-      };
-      ws.current.send(JSON.stringify(callPayload));
-    }
-
-    // Reset video call state
     setVideoCallState("idle");
     setIncomingVideoCall(null);
     setActiveVideoCallRecipient(null);
     setVideoCallRoomId(null);
     setCallType("audio");
-
-    // Show feedback
-    showCallNotification("info", "Video call ended", 2000);
+    showCallNotification("info", "Video call rejected.", 3000);
   };
 
-  // --- Auth & Data Fetching ---
+  const handleVideoCallEnd = () => {
+    setVideoCallState("idle");
+    setActiveVideoCallRecipient(null);
+    setIncomingVideoCall(null);
+    setVideoCallRoomId(null);
+    setCallType("audio");
+    showCallEndedModal("info", "Video Call Ended", "The video call has ended.");
+  };
+
   const handleLoginOrRegister = async (e, endpoint) => {
     e.preventDefault();
+    if (!envVars) {
+      console.error("Environment variables not loaded yet.");
+      showCallNotification(
+        "error",
+        "Configuration loading, please wait.",
+        3000
+      );
+      return;
+    }
     try {
       const response = await axios.post(
-        `${AUTH_API_BASE_URL}${endpoint}`,
+        `${envVars.NEXT_PUBLIC_AUTH_API_URL}${endpoint}`,
         loginForm
       );
       const { user: userData, token } = response.data;
@@ -1694,11 +711,18 @@ export default function Home() {
   };
 
   const fetchAllUsers = async () => {
+    if (!envVars) {
+      console.error("Environment variables not loaded yet for fetching users.");
+      return;
+    }
     try {
       const token = localStorage.getItem("token");
-      const response = await axios.get(`${AUTH_API_BASE_URL}/users`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await axios.get(
+        `${envVars.NEXT_PUBLIC_AUTH_API_URL}/users`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
       const usersData = response.data || [];
       setUsers(usersData);
       // Populate the userMap for easy username lookup
@@ -1711,7 +735,7 @@ export default function Home() {
   };
 
   const handleSendMessage = async () => {
-    if (!newMessage.trim() || !selectedRecipient) return;
+    if (!newMessage.trim() || !selectedRecipient || !envVars) return;
     const optimisticMessage = {
       id: `local_${Date.now()}`,
       from_user_id: user.id,
@@ -1746,6 +770,12 @@ export default function Home() {
     setSelectedRecipient(userToSelect);
     setMessages([]); // Clear messages for new chat
     setHighlightedUser(null); // Clear highlight on selection
+    if (!envVars) {
+      console.error(
+        "Environment variables not loaded yet for fetching messages."
+      );
+      return;
+    }
     try {
       const token = localStorage.getItem("token");
       // PRIVACY FIX: Use secure endpoint that only returns messages between current user and selected user
@@ -1781,16 +811,56 @@ export default function Home() {
 
   const isUserOnline = (username) => onlineUsers.includes(username);
 
-  // Check for existing session on mount
+  // Fetch env vars on component mount
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    const storedUser = localStorage.getItem("user");
-    if (token && storedUser) {
-      setUser(JSON.parse(storedUser));
-      setIsLoggedIn(true);
-      fetchAllUsers();
+    async function fetchEnvVars() {
+      try {
+        const response = await axios.get("/api/config");
+        const fetchedEnvVars = response.data;
+        setEnvVars(fetchedEnvVars);
+        console.log(
+          "🔥 DEBUG - Fetched Environment variables at runtime:",
+          fetchedEnvVars
+        );
+
+        // Assign to global variables for use in other functions
+        AUTH_API_BASE_URL = fetchedEnvVars.NEXT_PUBLIC_AUTH_API_URL;
+        MESSAGE_API_BASE_URL = fetchedEnvVars.NEXT_PUBLIC_MESSAGE_API_URL;
+        WEBSOCKET_URL = fetchedEnvVars.NEXT_PUBLIC_REALTIME_API_URL;
+        JANUS_HTTP_URL = fetchedEnvVars.NEXT_PUBLIC_JANUS_HTTP_URL;
+        JANUS_URL = fetchedEnvVars.NEXT_PUBLIC_JANUS_URL;
+        REALTIME_HTTP_API_URL =
+          fetchedEnvVars.NEXT_PUBLIC_REALTIME_HTTP_API_URL;
+
+        // After fetching env vars, check for existing session
+        const token = localStorage.getItem("token");
+        const storedUser = localStorage.getItem("user");
+        if (token && storedUser) {
+          setUser(JSON.parse(storedUser));
+          setIsLoggedIn(true);
+          // fetchAllUsers() relies on envVars, so call it here
+          if (fetchedEnvVars.NEXT_PUBLIC_AUTH_API_URL) {
+            fetchAllUsers();
+          } else {
+            console.error(
+              "Auth API URL not available after fetching env vars."
+            );
+          }
+        }
+      } catch (error) {
+        console.error(
+          "Failed to fetch environment variables at runtime:",
+          error
+        );
+        showCallNotification(
+          "error",
+          "Failed to load configuration. Please refresh.",
+          5000
+        );
+      }
     }
-  }, []);
+    fetchEnvVars();
+  }, []); // Run once on mount
 
   // Auto-dismiss call ended modal when call state changes to idle
   useEffect(() => {
@@ -1799,6 +869,148 @@ export default function Home() {
       setTimeout(() => setCallEndedModal(null), 1000); // Give user 1 second to see the modal
     }
   }, [callState, callEndedModal]);
+
+  // WebSocket connection effect
+  useEffect(() => {
+    if (isLoggedIn && user && envVars && envVars.NEXT_PUBLIC_REALTIME_API_URL) {
+      console.log(
+        "Attempting WebSocket connection to:",
+        envVars.NEXT_PUBLIC_REALTIME_API_URL
+      );
+      if (ws.current) {
+        ws.current.close(); // Close existing connection if any
+      }
+
+      ws.current = new WebSocket(envVars.NEXT_PUBLIC_REALTIME_API_URL);
+
+      ws.current.onopen = () => {
+        console.log("WebSocket connected");
+        ws.current.send(JSON.stringify({ type: "presence", user_id: user.id }));
+      };
+
+      ws.current.onmessage = (event) => {
+        const message = JSON.parse(event.data);
+        console.log("WebSocket message received:", message);
+
+        if (message.type === "presence_update") {
+          setOnlineUsers(message.online_users);
+        } else if (message.type === "message") {
+          setMessages((prevMessages) => [...prevMessages, message.message]);
+          // If the message is for the currently selected chat, mark it as read
+          if (
+            selectedRecipient &&
+            message.message.from_user_id === selectedRecipient.id &&
+            message.message.status !== "read"
+          ) {
+            const token = localStorage.getItem("token");
+            if (token && envVars.NEXT_PUBLIC_MESSAGE_API_URL) {
+              axios
+                .put(
+                  `${envVars.NEXT_PUBLIC_MESSAGE_API_URL}/${message.message.id}/status`,
+                  { status: "read" },
+                  {
+                    headers: { Authorization: `Bearer ${token}` },
+                  }
+                )
+                .catch((err) =>
+                  console.error("Failed to mark message as read:", err)
+                );
+            }
+          }
+        } else if (message.type === "call_initiate") {
+          console.log("Incoming call:", message.call);
+          setIncomingCall({
+            ...message.call,
+            caller_user: userMap.get(message.call.from_user_id.toString()), // Populate full user object if needed
+          });
+          setCallState("ringing");
+          setCallType(message.call.call_type || "audio"); // Set call type based on incoming call
+          playIncomingCallRingtone();
+        } else if (message.type === "call_accepted") {
+          stopRingbackTone();
+          setCallState("active");
+          showCallNotification(
+            "success",
+            `${userMap.get(
+              message.from_user_id.toString()
+            )} accepted your call.`,
+            3000
+          );
+          if (callType === "video" && videoCallState === "calling") {
+            setVideoCallState("active");
+          }
+        } else if (message.type === "call_rejected") {
+          stopRingbackTone();
+          setCallState("idle");
+          setIncomingCall(null);
+          setActiveCallRecipient(null);
+          setCallRoomId(null);
+          setCallType("audio"); // Reset to default
+          showCallNotification(
+            "info",
+            `${userMap.get(
+              message.from_user_id.toString()
+            )} rejected your call.`,
+            3000
+          );
+        } else if (message.type === "call_ended") {
+          console.log("Call ended by:", message.from_user_id);
+          // If it's an active audio call, trigger cleanup
+          if (callType === "audio" && callState === "active") {
+            handleAudioCallEnd();
+          } else if (callType === "video" && videoCallState === "active") {
+            handleVideoCallEnd();
+          }
+          showCallEndedModal("info", "Call Ended", "The call has ended.", 3000);
+        }
+      };
+
+      ws.current.onclose = () => {
+        console.log("WebSocket disconnected");
+        setOnlineUsers([]); // Clear online users on disconnect
+        // Attempt to reconnect if disconnected unexpectedly
+        if (isLoggedIn) {
+          setTimeout(() => {
+            console.log("Attempting to reconnect WebSocket...");
+            // Ensure envVars are still available for reconnect attempt
+            if (envVars && envVars.NEXT_PUBLIC_REALTIME_API_URL) {
+              ws.current = new WebSocket(envVars.NEXT_PUBLIC_REALTIME_API_URL);
+            } else {
+              console.error("Cannot reconnect: envVars or URL missing.");
+            }
+          }, 3000); // Reconnect after 3 seconds
+        }
+      };
+
+      ws.current.onerror = (error) => {
+        console.error("WebSocket error:", error);
+        showCallNotification("error", "WebSocket connection error.", 5000);
+      };
+
+      return () => {
+        console.log("Cleaning up WebSocket connection.");
+        if (ws.current) {
+          ws.current.close();
+        }
+      };
+    }
+  }, [isLoggedIn, user, envVars]); // Reconnect when login status or user changes
+
+  const ws = useRef(null);
+
+  // Check for existing session on mount
+  useEffect(() => {
+    // This part now depends on envVars being loaded, so move logic into fetchEnvVars
+  }, []);
+
+  // Auto-dismiss call ended modal when call state changes to idle
+  // Original effect is above, this one is redundant
+  // useEffect(() => {
+  //   if (callState === "idle" && callEndedModal) {
+  //     console.log("🔥 AUTO-DISMISS - Call state is idle, dismissing modal");
+  //     setTimeout(() => setCallEndedModal(null), 1000); // Give user 1 second to see the modal
+  //   }
+  // }, [callState, callEndedModal]);
 
   // --- UI Components ---
   const renderAuth = () => (
@@ -1861,42 +1073,50 @@ export default function Home() {
 
     return (
       <div
-        className={`flex items-start mt-4 ${
-          isSender ? "justify-end" : "justify-start"
+        className={`flex ${isSender ? "justify-end" : "justify-start"} mb-1.5 ${
+          isFirstInGroup ? "mt-3" : ""
         }`}
       >
-        {!isSender && isFirstInGroup && (
-          <div className="flex-shrink-0 h-10 w-10 rounded-full bg-gray-700 flex items-center justify-center mr-3">
-            {senderUsername?.charAt(0).toUpperCase()}
-          </div>
-        )}
-        {isSender && (
-          <div
-            className={`px-4 py-2 rounded-lg max-w-xs lg:max-w-md bg-indigo-600`}
-          >
-            <p>{msg.content}</p>
-            <span className="text-xs text-gray-400 mt-1 block text-right">
-              {new Date(msg.timestamp).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-              {msg.status === "sending" && " ..."}
-              {msg.status === "failed" && " !"}
-            </span>
-          </div>
-        )}
         {!isSender && (
+          <div className="flex-shrink-0 mr-2">
+            {/* User Avatar */}
+            <FaUser className="h-8 w-8 text-gray-400 rounded-full bg-gray-700 p-1" />
+          </div>
+        )}
+        <div
+          className={`relative max-w-xs lg:max-w-md px-4 py-2 rounded-lg shadow ${
+            isSender
+              ? "bg-indigo-600 text-white rounded-br-none"
+              : "bg-gray-700 text-gray-100 rounded-bl-none"
+          }`}
+        >
+          {!isSender && (
+            <div className="text-xs font-semibold mb-1 text-gray-300">
+              {senderUsername}
+            </div>
+          )}
+          <p className="text-sm">{msg.content}</p>
           <div
-            className={`px-4 py-2 rounded-lg max-w-xs lg:max-w-md bg-gray-700`}
+            className={`text-xs mt-1 ${
+              isSender ? "text-indigo-200" : "text-gray-400"
+            } text-right`}
           >
-            <p className="font-bold">{isFirstInGroup && senderUsername}</p>
-            <p>{msg.content}</p>
-            <span className="text-xs text-gray-400 mt-1 block text-right">
-              {new Date(msg.timestamp).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </span>
+            {new Date(msg.timestamp).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </div>
+          {isSender && msg.status === "sending" && (
+            <div className="text-xs text-indigo-300 text-right">Sending...</div>
+          )}
+          {isSender && msg.status === "failed" && (
+            <div className="text-xs text-red-400 text-right">Failed</div>
+          )}
+        </div>
+        {isSender && (
+          <div className="flex-shrink-0 ml-2">
+            {/* User Avatar */}
+            <FaUser className="h-8 w-8 text-indigo-300 rounded-full bg-indigo-800 p-1" />
           </div>
         )}
       </div>
@@ -1904,825 +1124,312 @@ export default function Home() {
   };
 
   const renderChat = () => (
-    <div className="flex h-screen bg-gray-800 text-white antialiased">
-      <Head>
-        <title>Alvis Chat</title>
-      </Head>
-      <Script
-        src="https://webrtc.github.io/adapter/adapter-latest.js"
-        strategy="beforeInteractive"
-        onLoad={() => {
-          console.log("🔥 ADAPTER - Setting adapterLoaded flag");
-          window.adapterLoaded = true;
-        }}
-      />
-      <Script src="/janus.js" strategy="beforeInteractive" />
-      <Script src="/sounds/ringtone.js" strategy="lazyOnload" />
-
-      {/* Column 1: Workspace/Server List */}
-      <div className="bg-gray-900 w-20 flex-shrink-0 flex flex-col items-center py-4 space-y-4">
-        <div className="w-12 h-12 rounded-full bg-indigo-600 flex items-center justify-center text-2xl">
-          <FaRocket />
-        </div>
-        {/* Add more server icons here */}
-      </div>
-
-      {/* Column 2: User/Channel List */}
-      <div className="bg-gray-800 w-64 flex-shrink-0 flex flex-col border-r border-gray-700">
-        <div className="h-16 flex-shrink-0 px-4 flex items-center justify-between border-b border-gray-700">
-          <h2 className="text-xl font-bold">Direct Messages</h2>
+    <div className="flex h-screen bg-gray-900 text-white">
+      {/* Sidebar */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 w-64 bg-gray-800 p-4 transform ${
+          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+        } transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0`}
+      >
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-bold">Alvis</h2>
           <button
-            onClick={handleLogout}
-            className="text-gray-400 hover:text-white"
+            className="lg:hidden text-gray-400 hover:text-white"
+            onClick={() => setSidebarOpen(false)}
           >
-            <FaSignOutAlt />
+            <FaTimes size={20} />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto p-2">
-          <div className="p-2">
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Search users..."
-                className="w-full bg-gray-900 border border-gray-700 rounded-lg py-2 px-4 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                onChange={(e) => handleSearch(e.target.value)}
-              />
-              <FaSearch className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        <div className="mb-6 relative">
+          <input
+            type="text"
+            placeholder="Search users..."
+            className="w-full px-3 py-2 pr-10 bg-gray-700 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+            onChange={(e) => handleSearch(e.target.value)}
+          />
+          <FaSearch className="absolute right-3 top-3 text-gray-400" />
+          {searchResults.length > 0 && (
+            <div className="absolute z-10 w-full bg-gray-700 border border-gray-600 rounded-md mt-1 shadow-lg max-h-60 overflow-y-auto">
+              {searchResults.map((user) => (
+                <div
+                  key={user.id}
+                  className="flex items-center p-3 hover:bg-gray-600 cursor-pointer"
+                  onClick={() => {
+                    setSelectedRecipient(user);
+                    setSearchResults([]); // Clear search results on selection
+                  }}
+                >
+                  <FaUser className="h-8 w-8 text-gray-400 rounded-full bg-gray-600 p-1 mr-3" />
+                  <div>
+                    <div className="font-semibold text-white">
+                      {user.username}
+                    </div>
+                    <div className="text-sm text-gray-400">
+                      {isUserOnline(user.username) ? "Online" : "Offline"}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
-          </div>
+          )}
+        </div>
+
+        {/* User List */}
+        <nav>
           <ul>
-            {(searchResults.length > 0
-              ? searchResults
-              : users.filter((u) => u.id !== user.id)
-            ).map((u) => (
+            {users.map((u) => (
               <li
                 key={u.id}
-                className={`flex items-center justify-between px-4 py-3 cursor-pointer rounded-md hover:bg-gray-700 ${
-                  selectedRecipient?.id === u.id ? "bg-indigo-900" : ""
-                }`}
                 onClick={() => selectChatUser(u)}
+                className={`flex items-center p-3 mb-2 rounded-md cursor-pointer transition-colors duration-200 ${
+                  selectedRecipient?.id === u.id
+                    ? "bg-gray-700"
+                    : "hover:bg-gray-700"
+                }`}
               >
-                <div className="flex items-center">
-                  <div className="relative mr-3">
-                    <div className="flex-shrink-0 h-9 w-9 rounded-full bg-gray-600 flex items-center justify-center font-bold">
-                      {u.username?.charAt(0).toUpperCase()}
-                    </div>
-                    <span
-                      className={`absolute bottom-0 right-0 block h-2.5 w-2.5 rounded-full ${
-                        isUserOnline(u.username)
-                          ? "bg-green-500"
-                          : "bg-gray-500"
-                      } ring-2 ring-gray-800`}
-                    ></span>
-                  </div>
-                  <span>{u.username}</span>
+                <div className="relative">
+                  <FaUser
+                    className={`h-9 w-9 rounded-full p-1 mr-3 ${
+                      selectedRecipient?.id === u.id
+                        ? "text-indigo-400 bg-indigo-800"
+                        : "text-gray-400 bg-gray-600"
+                    }`}
+                  />
+                  {isUserOnline(u.username) && (
+                    <span className="absolute bottom-0 right-2 block h-3 w-3 rounded-full ring-2 ring-gray-800 bg-green-400"></span>
+                  )}
                 </div>
+                <span
+                  className={`font-medium ${
+                    selectedRecipient?.id === u.id
+                      ? "text-white"
+                      : "text-gray-300"
+                  }`}
+                >
+                  {u.username}
+                </span>
                 {highlightedUser === u.id && (
-                  <FaBell className="text-yellow-400 animate-pulse" />
+                  <FaBell className="ml-auto text-yellow-400" />
                 )}
               </li>
             ))}
           </ul>
-        </div>
-        <div className="h-20 flex-shrink-0 px-4 flex items-center justify-between border-t border-gray-700">
-          <div className="flex items-center">
-            <div className="relative mr-3">
-              <div className="flex-shrink-0 h-10 w-10 rounded-full bg-gray-600 flex items-center justify-center font-bold text-lg">
-                {user?.username?.charAt(0).toUpperCase()}
-              </div>
-              <span className="absolute bottom-0 right-0 block h-3 w-3 rounded-full bg-green-500 ring-2 ring-gray-800"></span>
-            </div>
-            <span className="font-semibold">{user?.username}</span>
-          </div>
-          <button className="text-gray-400 hover:text-white">
-            <FaCog />
+        </nav>
+        <div className="absolute bottom-4 left-4">
+          <button
+            onClick={handleLogout}
+            className="flex items-center px-4 py-2 text-sm font-medium text-gray-300 bg-gray-700 rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          >
+            <FaSignOutAlt className="mr-2" />
+            Logout
           </button>
         </div>
-      </div>
+      </aside>
 
-      {/* Column 3: Main Chat Area */}
-      <div className="flex-1 flex flex-col">
-        {selectedRecipient ? (
-          <>
-            {/* Header */}
-            <header className="flex items-center justify-between h-16 px-4 bg-gray-800 border-b border-gray-700 flex-shrink-0">
-              <div className="flex items-center">
-                <div className="relative mr-4">
-                  <div className="flex-shrink-0 h-10 w-10 rounded-full bg-gray-600 flex items-center justify-center font-bold">
-                    {selectedRecipient.username?.charAt(0).toUpperCase()}
-                  </div>
-                  <span
-                    className={`absolute bottom-0 right-0 block h-3 w-3 rounded-full ${
-                      isUserOnline(selectedRecipient.username)
-                        ? "bg-green-500"
-                        : "bg-gray-500"
-                    } ring-2 ring-gray-800`}
-                  ></span>
+      {/* Main Chat Area */}
+      <main className="flex-1 flex flex-col bg-gray-900 lg:ml-64">
+        {/* Header */}
+        <header className="flex items-center justify-between p-4 bg-gray-800 shadow-md">
+          <div className="flex items-center">
+            <button
+              className="lg:hidden mr-4 text-gray-400 hover:text-white"
+              onClick={() => setSidebarOpen(true)}
+            >
+              <FaBars size={20} />
+            </button>
+            {selectedRecipient ? (
+              <>
+                <div className="relative">
+                  <FaUser className="h-10 w-10 text-indigo-400 rounded-full bg-indigo-800 p-1 mr-3" />
+                  {isUserOnline(selectedRecipient.username) && (
+                    <span className="absolute bottom-0 right-2 block h-3.5 w-3.5 rounded-full ring-2 ring-gray-800 bg-green-400"></span>
+                  )}
                 </div>
-                <div>
-                  <h2 className="text-xl font-semibold">
-                    {selectedRecipient.username}
-                  </h2>
-                  {callState === "active" &&
-                    activeCallRecipient?.id === selectedRecipient.id && (
-                      <p className="text-green-400 text-sm flex items-center">
-                        <span className="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></span>
-                        On call
-                      </p>
-                    )}
-                  {callState === "calling" &&
-                    activeCallRecipient?.id === selectedRecipient.id && (
-                      <p className="text-blue-400 text-sm flex items-center">
-                        <span className="w-2 h-2 bg-blue-400 rounded-full mr-2 animate-pulse"></span>
-                        Calling...
-                      </p>
-                    )}
-                  {videoCallState === "active" &&
-                    activeVideoCallRecipient?.id === selectedRecipient.id && (
-                      <p className="text-purple-400 text-sm flex items-center">
-                        <span className="w-2 h-2 bg-purple-400 rounded-full mr-2 animate-pulse"></span>
-                        On video call
-                      </p>
-                    )}
-                  {videoCallState === "calling" &&
-                    activeVideoCallRecipient?.id === selectedRecipient.id && (
-                      <p className="text-blue-400 text-sm flex items-center">
-                        <span className="w-2 h-2 bg-blue-400 rounded-full mr-2 animate-pulse"></span>
-                        Video calling...
-                      </p>
-                    )}
-                </div>
-              </div>
-              <div className="flex items-center space-x-3">
-                <button
-                  className={`p-2 rounded-full transition-all duration-200 ${
-                    callState === "idle"
-                      ? "text-gray-400 hover:text-white hover:bg-gray-700"
-                      : callState === "calling" &&
-                        activeCallRecipient?.id === selectedRecipient.id
-                      ? "text-blue-400 bg-blue-900/20"
-                      : callState === "active" &&
-                        activeCallRecipient?.id === selectedRecipient.id
-                      ? "text-green-400 bg-green-900/20"
-                      : "text-gray-400 hover:text-white hover:bg-gray-700"
-                  }`}
-                  onClick={async () => {
-                    try {
-                      if (callState === "idle") {
-                        // Request microphone permission directly from user interaction
-                        const micGranted = await requestMicrophonePermission();
-                        if (micGranted) {
-                          // Initialize audio context immediately after microphone permission
-                          console.log(
-                            "🔥 CALL BUTTON - Initializing audio context for immediate playback"
-                          );
-                          try {
-                            if (!window.audioContext) {
-                              window.audioContext = new (window.AudioContext ||
-                                window.webkitAudioContext)();
-                            }
-                            if (window.audioContext.state === "suspended") {
-                              await window.audioContext.resume();
-                              console.log(
-                                "🔥 CALL BUTTON - Audio context resumed successfully"
-                              );
-                            }
-                          } catch (audioError) {
-                            console.error(
-                              "🔥 CALL BUTTON - Audio context initialization failed:",
-                              audioError
-                            );
-                          }
-
-                          await initiateCall(selectedRecipient);
-                        }
-                      } else if (
-                        callState === "active" &&
-                        activeCallRecipient?.id === selectedRecipient.id
-                      ) {
-                        handleHangUp();
-                      }
-                    } catch (error) {
-                      console.error("Failed to handle call action:", error);
-                      showCallNotification(
-                        "error",
-                        "Failed to process call action",
-                        3000
-                      );
-                    }
-                  }}
-                  disabled={callState === "calling" || callState === "ringing"}
-                >
-                  <FaPhone className="w-4 h-4" />
-                </button>
-                <button
-                  className="p-2 rounded-full bg-red-500 text-white hover:bg-red-600"
-                  onClick={() => {
-                    console.log("🔥 TEST BUTTON CLICKED!");
-                    alert("TEST BUTTON WORKS!");
-                  }}
-                  title="Test button"
-                >
-                  TEST
-                </button>
-                <button
-                  className={`p-2 rounded-full transition-all duration-200 ${
-                    videoCallState === "calling" ||
-                    videoCallState === "ringing" ||
-                    callState !== "idle"
-                      ? "text-gray-600 cursor-not-allowed bg-gray-800"
-                      : "text-gray-400 hover:text-white hover:bg-gray-700"
-                  }`}
-                  onClick={async () => {
-                    console.log("🔥 VIDEO CALL BUTTON - CLICK DETECTED!");
-                    alert(
-                      "Video call button clicked! Check console for details."
-                    );
-                    console.log("🔥 VIDEO CALL BUTTON - Current states:", {
-                      videoCallState,
-                      callState,
-                      selectedRecipient: selectedRecipient?.username,
-                      wsConnected: ws.current?.readyState === WebSocket.OPEN,
-                    });
-                    try {
-                      await initiateVideoCall(selectedRecipient);
-                    } catch (error) {
-                      console.error("Failed to start video call:", error);
-                      showCallNotification(
-                        "error",
-                        "Failed to start video call",
-                        3000
-                      );
-                    }
-                  }}
-                  disabled={
-                    videoCallState === "calling" ||
-                    videoCallState === "ringing" ||
-                    callState !== "idle"
-                  }
-                  title={
-                    videoCallState === "calling" || videoCallState === "ringing"
-                      ? "Video call in progress"
-                      : callState !== "idle"
-                      ? `Cannot start video call - audio call state: ${callState}`
-                      : "Start video call"
-                  }
-                >
-                  <FaVideo className="w-4 h-4" />
-                </button>
-              </div>
-            </header>
-
-            {/* Messages */}
-            <main className="flex-1 p-4 overflow-y-auto">
-              <div className="space-y-1">
-                {messages.map((msg, index) => {
-                  const isSender =
-                    msg.from_user_id?.toString() === user.id.toString();
-                  const prevMsg = messages[index - 1];
-                  const isFirstInGroup =
-                    !prevMsg || prevMsg.from_user_id !== msg.from_user_id;
-                  return (
-                    <MessageBubble
-                      key={msg.id || index}
-                      msg={msg}
-                      isSender={isSender}
-                      isFirstInGroup={isFirstInGroup}
-                    />
-                  );
-                })}
-                <div ref={chatEndRef} />
-              </div>
-            </main>
-
-            {/* Message Input */}
-            <footer className="p-4 bg-gray-800">
-              <div className="flex items-center bg-gray-700 rounded-lg">
-                <input
-                  type="text"
-                  placeholder={`Message @${selectedRecipient.username}`}
-                  className="w-full bg-transparent p-4 focus:outline-none"
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
-                />
-                <button
-                  className="p-4 text-gray-400 hover:text-white disabled:text-gray-600"
-                  onClick={handleSendMessage}
-                  disabled={!newMessage.trim()}
-                >
-                  <FaPaperPlane />
-                </button>
-              </div>
-            </footer>
-          </>
-        ) : (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center">
-              <FaRocket className="mx-auto h-24 w-24 text-gray-600" />
-              <h3 className="mt-2 text-lg font-medium text-gray-400">
-                Select a user to start chatting
-              </h3>
-            </div>
+                <h1 className="text-xl font-bold text-white">
+                  {selectedRecipient.username}
+                </h1>
+              </>
+            ) : (
+              <h1 className="text-xl font-bold text-gray-400">
+                Select a chat to start messaging
+              </h1>
+            )}
           </div>
-        )}
-      </div>
-
-      {/* Call UI */}
-      {callState === "active" && activeCallRecipient && (
-        <AudioCallHandler
-          ref={audioCallRef}
-          user={user}
-          selectedReceiver={activeCallRecipient}
-          roomId={callRoomId}
-          callState={callState} // Pass callState so component can monitor changes
-          onCallEnd={handleAudioCallEnd} // Use the new handler here
-          sendCallNotification={showCallNotification}
-          onError={(error) => showCallNotification("error", error, 4000)}
-          janusInitialized={janusInitialized}
-        />
-      )}
-
-      {/* Video Call UI */}
-      {(() => {
-        const shouldShowVideoCall =
-          (videoCallState === "active" || videoCallState === "calling") &&
-          !!activeVideoCallRecipient; // Convert to boolean!
-        console.log(
-          "🔥 VIDEO CALL UI RENDER - Should show:",
-          shouldShowVideoCall,
-          {
-            videoCallState,
-            activeVideoCallRecipient: activeVideoCallRecipient?.username,
-            conditions: {
-              isActive: videoCallState === "active",
-              isCalling: videoCallState === "calling",
-              hasRecipient: !!activeVideoCallRecipient,
-            },
-          }
-        );
-        return shouldShowVideoCall;
-      })() && (
-        <div>
-          {/* DEBUG: Bright red banner to confirm video call UI is rendering */}
-          <div className="fixed top-0 left-0 right-0 z-[100] bg-red-500 text-white text-center py-4 text-2xl font-bold">
-            🔥 VIDEO CALL UI CONTAINER IS RENDERING! 🔥
-          </div>
-          <VideoCallInterface
-            ref={videoCallRef}
-            user={user}
-            selectedReceiver={activeVideoCallRecipient}
-            onCallEnd={handleVideoCallEnd}
-            sendCallNotification={showCallNotification}
-            onError={(error) => showCallNotification("error", error, 4000)}
-            callState={videoCallState}
-            roomId={videoCallRoomId}
-            isIncoming={false}
-          />
-        </div>
-      )}
-
-      {/* Incoming Video Call */}
-      {incomingVideoCall &&
-        videoCallState === "ringing" &&
-        (() => {
-          console.log(
-            "🔥 RENDER INCOMING VIDEO CALL - incomingVideoCall:",
-            incomingVideoCall
-          );
-          console.log(
-            "🔥 RENDER INCOMING VIDEO CALL - roomId:",
-            incomingVideoCall.room_id
-          );
-          return true;
-        })() && (
-          <VideoCallInterface
-            ref={videoCallRef}
-            user={user}
-            selectedReceiver={{ username: incomingVideoCall.caller_username }}
-            onCallEnd={handleVideoCallEnd}
-            sendCallNotification={showCallNotification}
-            onError={(error) => showCallNotification("error", error, 4000)}
-            callState={videoCallState}
-            roomId={incomingVideoCall.room_id}
-            isIncoming={true}
-            incomingCallData={incomingVideoCall}
-          />
-        )}
-
-      {/* Active Call Modal */}
-      {(() => {
-        const shouldShow =
-          callState === "active" && activeCallRecipient && !forceHideModal;
-        console.log(
-          "🔥 ACTIVE CALL MODAL - Should show:",
-          shouldShow,
-          "callState:",
-          callState,
-          "activeCallRecipient:",
-          activeCallRecipient?.username,
-          "forceHideModal:",
-          forceHideModal
-        );
-        return shouldShow;
-      })() && (
-        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50">
-          <div className="bg-gradient-to-br from-gray-800 to-gray-900 p-8 rounded-2xl text-center shadow-2xl max-w-md w-full mx-4 border border-gray-700">
-            <div className="mb-6">
-              <div className="relative mx-auto w-32 h-32 mb-4">
-                <div className="w-full h-full rounded-full bg-gradient-to-br from-green-500 to-blue-600 flex items-center justify-center text-4xl font-bold text-white shadow-lg">
-                  {activeCallRecipient.username?.charAt(0).toUpperCase()}
-                </div>
-                <div className="absolute inset-0 rounded-full border-4 border-green-400 opacity-60 animate-pulse"></div>
-                <div className="absolute inset-0 rounded-full border-4 border-green-400 opacity-30 animate-ping animation-delay-1000"></div>
-              </div>
-              <h3 className="text-2xl font-semibold text-white mb-2">
-                Active Call
-              </h3>
-              <p className="text-xl text-gray-300 mb-1">
-                {activeCallRecipient.username}
-              </p>
-              <div className="flex items-center justify-center mb-2">
-                <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse mr-2"></div>
-                <p className="text-sm text-green-400">Secure audio call</p>
-              </div>
-              <div
-                id="call-status-display"
-                className="text-xs text-gray-400 mb-4"
-              >
-                {audioCallStatus}
-              </div>
-            </div>
-
-            {/* Call Controls */}
-            <div className="flex justify-center space-x-8 mb-6">
+          {selectedRecipient && (
+            <div className="flex space-x-2">
               <button
                 onClick={() => {
-                  if (audioCallRef.current) {
-                    try {
-                      audioCallRef.current.toggleMute();
-                    } catch (error) {
-                      console.error("Failed to toggle mute:", error);
-                    }
+                  if (!audioCallRef.current) {
+                    showCallNotification(
+                      "error",
+                      "Audio call handler not ready.",
+                      3000
+                    );
+                    return;
+                  }
+                  if (!janusInitialized) {
+                    showCallNotification(
+                      "error",
+                      "Janus not initialized. Please refresh.",
+                      3000
+                    );
+                    return;
+                  }
+                  if (!activeCallRecipient) {
+                    initiateCall(selectedRecipient);
+                  } else {
+                    handleHangUp();
                   }
                 }}
-                className={`${
-                  audioCallMuted
-                    ? "bg-red-500 hover:bg-red-600 focus:ring-red-500"
-                    : "bg-gray-600 hover:bg-gray-700 focus:ring-gray-500"
-                } text-white p-4 rounded-full shadow-lg transition-all duration-200 transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-offset-2`}
-                aria-label={
-                  audioCallMuted ? "Unmute microphone" : "Mute microphone"
+                className={`p-2 rounded-full text-white transition-colors duration-200 ${
+                  activeCallRecipient
+                    ? "bg-red-500 hover:bg-red-600"
+                    : "bg-green-500 hover:bg-green-600"
+                }`}
+                title={
+                  activeCallRecipient ? "Hang Up Audio Call" : "Audio Call"
                 }
-                title={audioCallMuted ? "Unmute microphone" : "Mute microphone"}
+                disabled={videoCallState !== "idle"} // Disable audio call if video call is active
               >
-                {audioCallMuted ? (
-                  <FaMicrophoneSlash className="w-6 h-6" />
+                {activeCallRecipient ? (
+                  <FaPhoneSlash size={20} />
                 ) : (
-                  <FaMicrophone className="w-6 h-6" />
+                  <FaPhone size={20} />
                 )}
               </button>
               <button
-                onClick={handleHangUp}
-                className="bg-red-500 hover:bg-red-600 text-white p-5 rounded-full shadow-lg transition-all duration-200 transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                aria-label="End call"
-                title="End call"
+                onClick={() => {
+                  if (!janusInitialized) {
+                    showCallNotification(
+                      "error",
+                      "Janus not initialized. Please refresh.",
+                      3000
+                    );
+                    return;
+                  }
+                  if (!activeVideoCallRecipient) {
+                    initiateVideoCall(selectedRecipient);
+                  } else {
+                    handleVideoCallEnd();
+                  }
+                }}
+                className={`p-2 rounded-full text-white transition-colors duration-200 ${
+                  activeVideoCallRecipient
+                    ? "bg-red-500 hover:bg-red-600"
+                    : "bg-blue-500 hover:bg-blue-600"
+                }`}
+                title={
+                  activeVideoCallRecipient ? "Hang Up Video Call" : "Video Call"
+                }
+                disabled={callState !== "idle"} // Disable video call if audio call is active
               >
-                <FaPhoneSlash className="w-7 h-7" />
+                {activeVideoCallRecipient ? (
+                  <FaPhoneSlash size={20} />
+                ) : (
+                  <FaVideo size={20} />
+                )}
               </button>
             </div>
+          )}
+        </header>
 
-            {/* Volume Control */}
-            <div className="mb-4">
-              <label className="block text-xs text-gray-400 mb-2">
-                Volume Control
-              </label>
-              <div className="flex items-center space-x-3">
-                <button
-                  onClick={() => {
-                    if (audioCallRef.current) {
-                      try {
-                        audioCallRef.current.adjustVolume(-0.1);
-                      } catch (error) {
-                        console.error("Failed to decrease volume:", error);
-                      }
-                    }
-                  }}
-                  className="text-gray-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-gray-500 rounded p-1"
-                  aria-label="Decrease volume"
-                >
-                  <svg
-                    className="w-4 h-4"
-                    fill="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z" />
-                  </svg>
-                </button>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.1"
-                  value={audioCallVolume}
-                  onChange={(e) => {
-                    const newVolume = parseFloat(e.target.value);
-                    const delta = newVolume - audioCallVolume;
-                    if (audioCallRef.current) {
-                      try {
-                        audioCallRef.current.adjustVolume(delta);
-                      } catch (error) {
-                        console.error("Failed to adjust volume:", error);
-                      }
-                    }
-                  }}
-                  className="flex-1 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  aria-label="Volume control"
-                />
-                <button
-                  onClick={() => {
-                    if (audioCallRef.current) {
-                      try {
-                        audioCallRef.current.adjustVolume(0.1);
-                      } catch (error) {
-                        console.error("Failed to increase volume:", error);
-                      }
-                    }
-                  }}
-                  className="text-gray-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-gray-500 rounded p-1"
-                  aria-label="Increase volume"
-                >
-                  <svg
-                    className="w-4 h-4"
-                    fill="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
-                  </svg>
-                </button>
-                <span className="text-xs text-gray-400 min-w-[3rem]">
-                  {Math.round(audioCallVolume * 100)}%
-                </span>
-              </div>
-            </div>
+        {/* Message List */}
+        <div className="flex-1 p-4 overflow-y-auto custom-scrollbar">
+          {messages.map((msg, index) => {
+            const isSender = msg.from_user_id === user.id;
+            // Check if this is the first message in a new group (from a different sender than previous, or first message overall)
+            const isFirstInGroup =
+              index === 0 ||
+              messages[index - 1].from_user_id !== msg.from_user_id;
 
-            <div className="text-xs text-gray-500 space-y-1">
-              <div>Encrypted end-to-end audio call</div>
-              <div className="text-gray-600">Press Escape to end call</div>
-            </div>
-          </div>
+            return (
+              <MessageBubble
+                key={msg.id}
+                msg={msg}
+                isSender={isSender}
+                isFirstInGroup={isFirstInGroup}
+              />
+            );
+          })}
         </div>
-      )}
 
-      {/* Outgoing Call UI */}
-      {(() => {
-        console.log(
-          "🔥 UI RENDER - callState:",
-          callState,
-          "activeCallRecipient:",
-          activeCallRecipient?.username
-        );
-        return callState === "calling" && activeCallRecipient;
-      })() && (
-        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50">
-          <div className="bg-gradient-to-br from-gray-800 to-gray-900 p-8 rounded-2xl text-center shadow-2xl max-w-md w-full mx-4 border border-gray-700">
-            <div className="mb-6">
-              <div className="relative mx-auto w-32 h-32 mb-4">
-                <div className="w-full h-full rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-4xl font-bold text-white shadow-lg">
-                  {activeCallRecipient.username?.charAt(0).toUpperCase()}
-                </div>
-                <div className="absolute inset-0 rounded-full border-4 border-white opacity-30 animate-ping"></div>
-              </div>
-              <h3 className="text-2xl font-semibold text-white mb-2">
-                Calling...
-              </h3>
-              <p className="text-xl text-gray-300 mb-1">
-                {activeCallRecipient.username}
-              </p>
-              <div className="flex items-center justify-center mb-2">
-                <div
-                  className={`w-2 h-2 rounded-full mr-2 ${
-                    isUserOnline(activeCallRecipient.username)
-                      ? "bg-green-400 animate-pulse"
-                      : "bg-gray-400"
-                  }`}
-                ></div>
-                <p
-                  className={`text-sm ${
-                    isUserOnline(activeCallRecipient.username)
-                      ? "text-green-400"
-                      : "text-gray-400"
-                  }`}
-                >
-                  {isUserOnline(activeCallRecipient.username)
-                    ? "Online"
-                    : "Offline"}
-                </p>
-              </div>
-              <p className="text-xs text-gray-500 mt-2">
-                Waiting for {activeCallRecipient.username} to answer...
-              </p>
-            </div>
-
-            <div className="flex justify-center space-x-6">
+        {/* Message Input */}
+        {selectedRecipient && (
+          <footer className="p-4 bg-gray-800 border-t border-gray-700">
+            <div className="flex items-center">
+              <input
+                type="text"
+                placeholder="Type your message..."
+                className="flex-1 px-4 py-2 rounded-l-md bg-gray-700 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === "Enter") {
+                    handleSendMessage();
+                  }
+                }}
+              />
               <button
-                onClick={handleHangUp}
-                className="bg-red-500 hover:bg-red-600 text-white p-4 rounded-full shadow-lg transition-all duration-200 transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                aria-label="Cancel call"
-                title="Cancel call"
+                onClick={handleSendMessage}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-r-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
-                <svg
-                  className="w-6 h-6"
-                  fill="currentColor"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                >
-                  <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z" />
-                </svg>
+                <FaPaperPlane />
               </button>
             </div>
-          </div>
-        </div>
-      )}
+          </footer>
+        )}
+      </main>
 
-      {/* Incoming Call UI */}
-      {(() => {
-        const shouldShow = callState === "ringing" && incomingCall;
-        console.log(
-          "🔥 INCOMING MODAL - Should show:",
-          shouldShow,
-          "callState:",
-          callState,
-          "incomingCall:",
-          incomingCall
-        );
-        return shouldShow;
-      })() && (
-        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50">
-          <div className="bg-gradient-to-br from-gray-800 to-gray-900 p-8 rounded-2xl text-center shadow-2xl max-w-md w-full mx-4 border border-gray-700">
-            <div className="mb-8">
-              <div className="relative mx-auto w-32 h-32 mb-4">
-                <div className="w-full h-full rounded-full bg-gradient-to-br from-green-500 to-blue-600 flex items-center justify-center text-4xl font-bold text-white shadow-lg">
-                  {incomingCall.caller_username?.charAt(0).toUpperCase()}
-                </div>
-                <div className="absolute inset-0 rounded-full border-4 border-green-400 opacity-60 animate-pulse"></div>
-                <div className="absolute inset-0 rounded-full border-4 border-green-400 opacity-30 animate-ping animation-delay-1000"></div>
-              </div>
-              <h3 className="text-2xl font-semibold text-white mb-2">
-                Incoming Call
-              </h3>
-              <p className="text-xl text-gray-300 mb-1">
-                {incomingCall.caller_username}
-              </p>
-              <div className="flex items-center justify-center mb-2">
-                <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse mr-2"></div>
-                <p className="text-sm text-green-400">Secure audio call</p>
-              </div>
-              <p className="text-xs text-gray-500">Tap to answer or decline</p>
-            </div>
-
-            <div className="flex justify-center space-x-8">
-              <button
-                onClick={handleRejectCall}
-                className="bg-red-500 hover:bg-red-600 text-white p-5 rounded-full shadow-lg transition-all duration-200 transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                aria-label="Reject call"
-                title="Reject call"
-              >
-                <svg
-                  className="w-7 h-7"
-                  fill="currentColor"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                >
-                  <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z" />
-                </svg>
-              </button>
+      {/* Incoming Call Notification */}
+      {incomingCall && callState === "ringing" && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+          <div className="bg-gray-800 p-8 rounded-lg shadow-xl text-center">
+            <h2 className="text-2xl font-bold mb-4">
+              Incoming {incomingCall.call_type || "Audio"} Call
+            </h2>
+            <p className="text-gray-300 mb-6">
+              from {incomingCall.caller_username}
+            </p>
+            <div className="flex justify-center space-x-4">
               <button
                 onClick={handleAcceptCall}
-                className="bg-green-500 hover:bg-green-600 text-white p-5 rounded-full shadow-lg transition-all duration-200 transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                aria-label="Accept call"
-                title="Accept call"
+                className="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-full flex items-center"
               >
-                <svg
-                  className="w-7 h-7"
-                  fill="currentColor"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                >
-                  <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z" />
-                </svg>
+                <FaPhone className="mr-2" /> Accept
+              </button>
+              <button
+                onClick={handleRejectCall}
+                className="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-full flex items-center"
+              >
+                <FaPhoneSlash className="mr-2" /> Reject
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Call Notification Toast */}
+      {/* Custom Notification Display */}
       {callNotification && (
-        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 animate-fade-in">
-          <div
-            className={`px-6 py-4 rounded-lg shadow-lg border-l-4 max-w-md ${
-              callNotification.type === "success"
-                ? "bg-green-800 border-green-500 text-green-100"
-                : callNotification.type === "error"
-                ? "bg-red-800 border-red-500 text-red-100"
-                : "bg-blue-800 border-blue-500 text-blue-100"
-            }`}
-          >
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                {callNotification.type === "success" && (
-                  <svg
-                    className="w-5 h-5"
-                    fill="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
-                  </svg>
-                )}
-                {callNotification.type === "error" && (
-                  <svg
-                    className="w-5 h-5"
-                    fill="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" />
-                  </svg>
-                )}
-                {callNotification.type === "info" && (
-                  <svg
-                    className="w-5 h-5"
-                    fill="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" />
-                  </svg>
-                )}
-              </div>
-              <div className="ml-3">
-                <p className="text-sm font-medium">
-                  {callNotification.message}
-                </p>
-              </div>
-              <button
-                onClick={() => setCallNotification(null)}
-                className="ml-4 flex-shrink-0 text-current hover:text-white transition-colors duration-200"
-              >
-                <svg
-                  className="w-4 h-4"
-                  fill="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
-                </svg>
-              </button>
-            </div>
-          </div>
+        <div
+          className={`fixed bottom-4 right-4 p-4 rounded-md shadow-lg text-white z-50 ${
+            callNotification.type === "error" ? "bg-red-600" : "bg-blue-600"
+          }`}
+        >
+          {callNotification.message}
         </div>
       )}
 
       {/* Call Ended Modal */}
       {callEndedModal && (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-8 shadow-2xl max-w-md w-full mx-4 text-center">
-            <div className="mb-6">
-              <div
-                className={`mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-4 ${
-                  callEndedModal.type === "declined"
-                    ? "bg-red-100"
-                    : "bg-gray-100"
-                }`}
-              >
-                {callEndedModal.type === "declined" ? (
-                  <svg
-                    className="w-8 h-8 text-red-600"
-                    fill="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" />
-                  </svg>
-                ) : (
-                  <svg
-                    className="w-8 h-8 text-gray-600"
-                    fill="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z" />
-                  </svg>
-                )}
-              </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                {callEndedModal.title}
-              </h3>
-              <p className="text-gray-600">{callEndedModal.message}</p>
-            </div>
+          <div className="bg-gray-800 p-8 rounded-lg shadow-xl text-center">
+            <h2 className="text-2xl font-bold mb-4 text-white">
+              {callEndedModal.title}
+            </h2>
+            <p className="text-gray-300 mb-6">{callEndedModal.message}</p>
             <button
               onClick={() => setCallEndedModal(null)}
-              className={`px-6 py-3 rounded-lg font-medium transition-colors duration-200 ${
-                callEndedModal.type === "declined"
-                  ? "bg-red-600 hover:bg-red-700 text-white"
-                  : "bg-gray-600 hover:bg-gray-700 text-white"
-              }`}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-full"
             >
               OK
             </button>
@@ -2730,20 +1437,45 @@ export default function Home() {
         </div>
       )}
 
-      {/* Hidden audio element for remote streams */}
-      <audio
-        ref={(el) => {
-          if (el && window) {
-            window.remoteAudioElement = el;
-          }
-        }}
-        autoPlay
-        playsInline
-        controls={false}
-        style={{ display: "none" }}
+      {/* AudioCallHandler Component */}
+      <AudioCallHandler
+        ref={audioCallRef}
+        onCallEnd={endCall}
+        callState={callState}
+        setCallState={setCallState}
+        activeCallRecipient={activeCallRecipient}
+        callRoomId={callRoomId}
+        audioCallMuted={audioCallMuted}
+        setAudioCallMuted={setAudioCallMuted}
+        audioCallVolume={audioCallVolume}
+        setAudioCallVolume={setAudioCallVolume}
+        audioCallStatus={audioCallStatus}
+        setAudioCallStatus={setAudioCallStatus}
+        janusInitialized={janusInitialized}
+      />
+
+      {/* VideoCallInterface Component */}
+      <VideoCallInterface
+        videoCallState={videoCallState}
+        setVideoCallState={setVideoCallState}
+        activeVideoCallRecipient={activeVideoCallRecipient}
+        videoCallRoomId={videoCallRoomId}
+        janusInitialized={janusInitialized}
+        onVideoCallEnd={handleVideoCallEnd}
+        janusUrl={envVars ? envVars.NEXT_PUBLIC_JANUS_URL : undefined}
+        janusHttpUrl={envVars ? envVars.NEXT_PUBLIC_JANUS_HTTP_URL : undefined}
       />
     </div>
   );
 
+  if (!envVars) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">
+        Loading configuration...
+      </div>
+    );
+  }
+
+  // Render main app or auth screen
   return isLoggedIn ? renderChat() : renderAuth();
 }
