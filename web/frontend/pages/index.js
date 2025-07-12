@@ -24,7 +24,7 @@ import {
 } from "react-icons/fa";
 
 // --- Configuration ---
-const AUTH_API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+const AUTH_API_BASE_URL = process.env.NEXT_PUBLIC_AUTH_API_URL_NEW;
 const MESSAGE_API_BASE_URL = process.env.NEXT_PUBLIC_MESSAGE_API_URL;
 const WEBSOCKET_URL = process.env.NEXT_PUBLIC_REALTIME_API_URL;
 
