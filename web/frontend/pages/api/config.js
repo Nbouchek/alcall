@@ -1,8 +1,6 @@
 export default function handler(req, res) {
   res.status(200).json({
-    NEXT_PUBLIC_AUTH_API_URL:
-      process.env.NEXT_PUBLIC_AUTH_API_URL_NEW ||
-      process.env.NEXT_PUBLIC_API_URL,
+    NEXT_PUBLIC_AUTH_API_URL: process.env.NEXT_PUBLIC_AUTH_API_URL,
     NEXT_PUBLIC_MESSAGE_API_URL: process.env.NEXT_PUBLIC_MESSAGE_API_URL,
     NEXT_PUBLIC_REALTIME_API_URL: process.env.NEXT_PUBLIC_REALTIME_API_URL,
     NEXT_PUBLIC_JANUS_HTTP_URL: process.env.NEXT_PUBLIC_JANUS_HTTP_URL,
