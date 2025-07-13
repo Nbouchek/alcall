@@ -4,6 +4,7 @@ import React, {
   useRef,
   forwardRef,
   useImperativeHandle,
+  useCallback,
 } from "react";
 import {
   FaMicrophone,
@@ -94,7 +95,7 @@ const AudioCallHandler = forwardRef(
     }, [isInCall]);
 
     // Volume control function
-    const adjustVolume = (delta) => {
+    const adjustVolume = useCallback((delta) => {
       const newVolume = Math.max(0, Math.min(1, volume + delta));
       setVolume(newVolume);
       console.log(`🔥 AUDIO - Volume adjusted to: ${newVolume}`);
@@ -156,7 +157,7 @@ const AudioCallHandler = forwardRef(
         `🔥 AUDIO - Successfully updated volume on ${updatedCount} elements`
       );
       setCallStatus(`🔊 Volume: ${Math.round(newVolume * 100)}%`);
-    };
+    }, [volume]);
 
     // Failsafe: Check every 2 seconds if the call should still be active
     useEffect(() => {
@@ -1153,7 +1154,7 @@ const AudioCallHandler = forwardRef(
       }
     };
 
-    const toggleMute = () => {
+    const toggleMute = useCallback(() => {
       if (pluginHandleRef.current) {
         const newMutedState = !isMuted;
         setIsMuted(newMutedState);
@@ -1161,9 +1162,9 @@ const AudioCallHandler = forwardRef(
         pluginHandleRef.current.send({ message: muteRequest });
         console.log(`Set muted state to: ${newMutedState}`);
       }
-    };
+    }, [isMuted]);
 
-    const endCall = () => {
+    const endCall = useCallback(() => {
       console.log("endCall function called");
       if (callStateRef.current === "idle" || isCleaningUpRef.current) {
         console.log(
@@ -1194,7 +1195,7 @@ const AudioCallHandler = forwardRef(
           "Skipping onCallEnd call - cleanup in progress or invalid state"
         );
       }
-    };
+    }, [onCallEnd]);
 
     const cleanupCall = () => {
       console.log("🔥 CLEANUP - IMMEDIATE AGGRESSIVE CLEANUP STARTING");
@@ -1697,6 +1698,35 @@ const AudioCallHandler = forwardRef(
       };
     }, [isInCall, volume]);
 
+    useEffect(() => {
+      const handleKeyPress = (event) => {
+        if (isInCall) {
+          switch (event.key) {
+            case "ArrowUp":
+              event.preventDefault();
+              adjustVolume(0.1);
+              break;
+            case "ArrowDown":
+              event.preventDefault();
+              adjustVolume(-0.1);
+              break;
+            case "m":
+            case "M":
+              event.preventDefault();
+              toggleMute();
+              break;
+            case "Escape":
+              event.preventDefault();
+              endCall();
+              break;
+          }
+        }
+      };
+
+      document.addEventListener("keydown", handleKeyPress);
+      return () => document.removeEventListener("keydown", handleKeyPress);
+    }, [isInCall, adjustVolume, toggleMute, endCall]);
+
     // Always return only hidden audio elements and status data
     // The parent component handles all UI display
     return (
@@ -1725,5 +1755,7 @@ const AudioCallHandler = forwardRef(
     );
   }
 );
+
+AudioCallHandler.displayName = 'AudioCallHandler';
 
 export default AudioCallHandler;

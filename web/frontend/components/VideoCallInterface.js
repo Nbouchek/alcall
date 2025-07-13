@@ -189,7 +189,7 @@ const VideoCallInterface = forwardRef(
       return () => {
         cleanup();
       };
-    }, []);
+    }, [IS_DEMO_MODE, cleanup, connectToJanus, onError]);
 
     // Monitor call state changes
     useEffect(() => {
@@ -197,7 +197,7 @@ const VideoCallInterface = forwardRef(
         console.log("VideoCallInterface: Parent call state idle, ending call");
         endCall();
       }
-    }, [callState, isInCall]);
+    }, [callState, isInCall, endCall]);
 
     // Attach remote streams to video elements
     useEffect(() => {
@@ -439,7 +439,7 @@ const VideoCallInterface = forwardRef(
           cleanup();
         },
       });
-    }, [JANUS_URL, onError]);
+    }, [JANUS_URL, onError, cleanup]);
 
     // Start video call
     const startVideoCall = useCallback(async () => {
@@ -450,6 +450,11 @@ const VideoCallInterface = forwardRef(
         janusConnected
       );
 
+      if (isInCall) {
+        console.log("VideoCallInterface: Already in a call");
+        return;
+      }
+
       if (IS_DEMO_MODE) {
         console.log("VideoCallInterface: Starting demo video call");
         setIsInCall(true);
@@ -458,21 +463,8 @@ const VideoCallInterface = forwardRef(
         return;
       }
 
-      if (!janusRef.current) {
-        console.error("VideoCallInterface: Janus not connected");
-        setConnectionError("Video server not connected");
-        return;
-      }
-
       try {
-        // Set isInCall to true immediately to show the interface
-        console.log("🔥 VideoCallInterface: Setting isInCall to true");
-        setIsInCall(true);
         setCallStatus("Starting video call...");
-        startCallTimer();
-
-        const targetRoomId = roomId || generateRoomId();
-        setCurrentRoomId(targetRoomId);
 
         // Get user media
         const stream = await getUserMedia();
@@ -482,21 +474,14 @@ const VideoCallInterface = forwardRef(
           localVideoRef.current.srcObject = stream;
         }
 
-        // Send call notification
-        if (sendCallNotification && selectedReceiver) {
-          console.log("VideoCallInterface: Sending call notification");
-          sendCallNotification(
-            "video",
-            `Calling ${selectedReceiver.username}...`,
-            targetRoomId
-          );
-        }
+        // Create or join room
+        const room = roomId || await generateRoomId();
+        await createPublisher(stream);
+        await joinRoom(room, stream);
 
-        // Create publisher
-        await createPublisher(targetRoomId, stream);
-
-        setIsPublishing(true);
+        setIsInCall(true);
         setCallStatus("Video call active");
+        startCallTimer();
         startQualityMonitoring();
       } catch (error) {
         console.error("VideoCallInterface: Failed to start video call:", error);
@@ -505,7 +490,21 @@ const VideoCallInterface = forwardRef(
         onError?.(error.message);
         // Keep isInCall true so user can see the error and end the call
       }
-    }, [IS_DEMO_MODE, roomId, sendCallNotification, selectedReceiver, onError]);
+    }, [
+      IS_DEMO_MODE,
+      roomId,
+      sendCallNotification,
+      selectedReceiver,
+      onError,
+      isInCall,
+      janusConnected,
+      getUserMedia,
+      generateRoomId,
+      createPublisher,
+      joinRoom,
+      startCallTimer,
+      startQualityMonitoring,
+    ]);
 
     // Accept incoming call
     const acceptCall = useCallback(async () => {
@@ -875,8 +874,8 @@ const VideoCallInterface = forwardRef(
     }, [endCall]);
 
     // Janus VideoRoom operations
-    const createPublisher = async (roomId, stream) => {
-      console.log("VideoCallInterface: Creating publisher for room:", roomId);
+    const createPublisher = async (stream) => {
+      console.log("VideoCallInterface: Creating publisher");
 
       if (IS_DEMO_MODE) {
         // Add demo participants for visual testing
@@ -1046,7 +1045,7 @@ const VideoCallInterface = forwardRef(
       }
 
       // First create publisher, then subscribe to existing feeds
-      await createPublisher(roomId, stream);
+      await createPublisher(stream);
 
       // Note: Existing publishers should be found automatically in handlePublisherMessage
       // when the 'joined' event is received with msg.publishers array

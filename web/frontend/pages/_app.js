@@ -20,7 +20,6 @@ export default function App({ Component, pageProps }) {
       {/* Load WebRTC adapter and Janus library */}
       <Script
         src="/adapter.js"
-        strategy="beforeInteractive"
         onLoad={() => {
           console.log("WebRTC adapter loaded successfully");
         }}
@@ -30,7 +29,6 @@ export default function App({ Component, pageProps }) {
       />
       <Script
         src="/janus.js"
-        strategy="beforeInteractive"
         onLoad={() => {
           console.log("Janus library loaded successfully");
           if (typeof window !== "undefined" && window.Janus) {
@@ -45,7 +43,6 @@ export default function App({ Component, pageProps }) {
       {/* Load ringtone functions */}
       <Script
         src="/sounds/ringtone.js"
-        strategy="beforeInteractive"
         onLoad={() => {
           console.log("Ringtone script loaded successfully");
         }}
