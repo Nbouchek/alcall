@@ -15,6 +15,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/joho/godotenv"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
 const (
@@ -744,6 +746,8 @@ func generateID() string {
 	return fmt.Sprintf("%x", b)
 }
 
+var DB *gorm.DB
+
 func main() {
 	// Load environment variables from .env file
 	if err := godotenv.Load("/app/.env"); err != nil {
@@ -777,6 +781,28 @@ func main() {
 	if port == "" {
 		port = "8084" // Default port if not set by environment
 	}
+
+	// Initialize GORM for PostgreSQL
+	dbHost := os.Getenv("DB_HOST")
+	dbPort := os.Getenv("DB_PORT")
+	dbUser := os.Getenv("DB_USER")
+	dbPassword := os.Getenv("DB_PASSWORD")
+	dbName := os.Getenv("DB_NAME")
+
+	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable",
+		dbHost, dbUser, dbPassword, dbName, dbPort)
+
+	// Fallback for local development if environment variables are not fully set
+	if dbHost == "" || dbUser == "" || dbPassword == "" || dbName == "" || dbPort == "" {
+		dsn = "host=postgres user=unifiedchat password=password123 dbname=unifiedchat port=5432 sslmode=disable"
+	}
+
+	var errDB error
+	DB, errDB = gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	if errDB != nil {
+		log.Fatalf("Failed to connect to database: %v", errDB)
+	}
+	log.Println("Database connection established for Realtime Service")
 
 	log.Printf("Realtime service starting on :%s", port)
 	if err := router.Run(":" + port); err != nil {

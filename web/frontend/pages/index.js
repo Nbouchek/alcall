@@ -760,27 +760,43 @@ export default function Home() {
   };
 
   const selectChatUser = async (userToSelect) => {
+    if (!userToSelect?.id || !user?.id) {
+      console.error("Invalid user selection");
+      return;
+    }
+
     setSelectedRecipient(userToSelect);
-    setSearchQuery(""); // Clear search when a user is selected
+    setSearchQuery("");
     setSearchResults([]);
     setSidebarOpen(false);
-    // Fetch messages for the selected recipient
+    
     try {
       const token = localStorage.getItem("token");
+      if (!token) {
+        throw new Error("No authentication token found");
+      }
+
+      console.log(`Fetching messages between ${user.id} and ${userToSelect.id}`);
       const response = await axios.get(
         `${MESSAGE_API_BASE_URL}/between/${user.id}/${userToSelect.id}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
           },
+          validateStatus: (status) => status < 500 // Don't throw for 404
         }
       );
-      setMessages(response.data); // Replace current messages with fetched ones
-      console.log("Fetched messages:", response.data);
+
+      if (response.status === 404) {
+        console.log("No messages found, starting fresh conversation");
+        setMessages([]);
+      } else if (response.status === 200) {
+        setMessages(response.data);
+      }
     } catch (error) {
       console.error("Error fetching messages:", error);
       showCallNotification("error", "Failed to load messages.");
-      setMessages([]); // Clear messages on error
+      setMessages([]);
     }
   };
 

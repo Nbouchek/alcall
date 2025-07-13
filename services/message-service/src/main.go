@@ -34,7 +34,7 @@ func main() {
 
 	// Fallback for local development or if environment variables are not fully set
 	if dbHost == "" || dbUser == "" || dbPassword == "" || dbName == "" || dbPort == "" {
-		dsn = "host=localhost user=unifiedchat password=password123 dbname=unifiedchat port=5432 sslmode=disable"
+		dsn = "host=postgres user=unifiedchat password=password123 dbname=unifiedchat port=5432 sslmode=disable"
 	}
 
 	var err error

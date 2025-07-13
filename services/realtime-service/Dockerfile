@@ -5,6 +5,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
+RUN go mod vendor
 RUN go build -mod=vendor -o main ./src
 
 FROM alpine:latest
