@@ -597,7 +597,7 @@ func main() {
 	// Start server
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "8084"
+		port = "10000"
 	}
 	log.Printf("Realtime service listening on port %s...", port)
 	router.Run(fmt.Sprintf(":%s", port))
