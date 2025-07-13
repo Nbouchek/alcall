@@ -868,10 +868,37 @@ export default function Home() {
             isOnline: newOnlineIds.has(u.id),
           }))
         );
-      } else if (message.type === "message") {
-        // Correctly placed condition for new chat messages
-        setMessages((prevMessages) => [...prevMessages, message.message]);
-        // If the message is for the currently selected chat, mark it as read
+      } else if (message.type === "new_message") {
+        // This is a new message, either sent by the current user from another device
+        // or an incoming message from another user. It also serves as the server's confirmation
+        // of an optimistically sent message.
+        setMessages((prevMessages) => {
+          const existingMessageIndex = prevMessages.findIndex(
+            (m) => m.id === message.message.local_id
+          );
+
+          if (existingMessageIndex > -1) {
+            // If an optimistically sent message exists, update it with the server's ID and status
+            const updatedMessages = [...prevMessages];
+            updatedMessages[existingMessageIndex] = {
+              ...updatedMessages[existingMessageIndex],
+              id: message.message.id,
+              status: message.message.status || "sent", // Use status from server or default to 'sent'
+            };
+            console.log(
+              "Updated optimistic message:",
+              updatedMessages[existingMessageIndex]
+            );
+            return updatedMessages;
+          } else {
+            // Otherwise, it's a new incoming message or from another device of the sender
+            console.log("Adding new incoming message:", message.message);
+            return [...prevMessages, message.message];
+          }
+        });
+
+        // If the message is for the currently selected chat and the tab is visible,
+        // send a read receipt.
         if (
           message.message.from_user_id === selectedRecipient?.id &&
           document.visibilityState === "visible"
@@ -880,15 +907,23 @@ export default function Home() {
           setTimeout(() => {
             sendWebSocketMessage({
               type: "message_read",
-              message_id: message.message.id,
-              reader_id: user.id,
+              id: message.message.id, // Use the actual message ID from the server
+              local_id: message.message.local_id, // Pass local_id for potential debugging
+              from_user_id: user.id, // The current user is the reader
+              to_user_id: message.message.from_user_id, // The sender of the original message
             });
+            console.log("Sent message_read for message:", message.message.id);
           }, 500);
         }
       } else if (message.type === "message_status_update") {
+        console.log("Received message_status_update:", message);
         setMessages((prev) =>
           prev.map((m) =>
-            m.id === message.message_id ? { ...m, status: message.status } : m
+            // Match by actual ID first, then by local_id if actual ID isn't set yet (for 'sending' state)
+            m.id === message.id ||
+            (m.status === "sending" && m.id === message.local_id)
+              ? { ...m, status: message.status } // Update status
+              : m
           )
         );
       } else if (message.type === "call_event") {
@@ -1086,10 +1121,22 @@ export default function Home() {
             {isSender && msg.status && (
               <span
                 className={`ml-2 text-xs ${
-                  msg.status === "sending" ? "text-gray-300" : "text-white"
+                  msg.status === "sending"
+                    ? "text-gray-300"
+                    : msg.status === "delivered"
+                    ? "text-green-400"
+                    : msg.status === "read"
+                    ? "text-green-500"
+                    : "text-white"
                 }`}
               >
-                {msg.status === "sending" ? "(sending)" : "(sent)"}
+                {msg.status === "sending"
+                  ? "⏳ Sending"
+                  : msg.status === "delivered"
+                  ? "✓ Delivered"
+                  : msg.status === "read"
+                  ? "✓✓ Read"
+                  : ""}
               </span>
             )}
           </div>

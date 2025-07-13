@@ -48,6 +48,25 @@ type Client struct {
 	Send     chan []byte
 }
 
+// Notification struct for incoming messages from other services (e.g., message-service).
+type Notification struct {
+	Type        string      `json:"type"`
+	FromUserID  string      `json:"from_user_id"`
+	ToUserID    string      `json:"to_user_id"`
+	Content     string      `json:"content"`
+	Timestamp   int64       `json:"timestamp"`
+	MessageID   string      `json:"id"`        // Corresponds to the database ID of the message
+	LocalID     string      `json:"local_id"`  // Corresponds to the optimistic UI ID
+	Status      string      `json:"status"`    // For status updates (e.g., "delivered", "read")
+	RoomID      string      `json:"room_id,omitempty"`
+	CallID      string      `json:"call_id,omitempty"`
+	Call        *CallPayload `json:"call,omitempty"`
+	// Deprecated fields, kept for backward compatibility
+	From        string `json:"from"` // DEPRECATED
+	To          string `json:"to"`   // DEPRECATED
+}
+
+// Message struct for WebSocket communication
 type Message struct {
 	Type         string      `json:"type"`
 	FromUserID   interface{} `json:"from_user_id,omitempty"`
@@ -61,9 +80,10 @@ type Message struct {
 	Call         *CallPayload `json:"call,omitempty"`
 	ID           string      `json:"id,omitempty"`           // Corresponds to the database ID of the message
 	LocalID      string      `json:"local_id,omitempty"`     // Corresponds to the optimistic UI ID
-	Status       string      `json:"status,omitempty"`
+	Status       string      `json:"status,omitempty"`       // Status of the message (e.g., "sending", "sent", "delivered", "read")
 }
 
+// CallPayload defines the structure for call-related data.
 type CallPayload struct {
 	ToUserID       interface{} `json:"to_user_id"`
 	FromUserID     interface{} `json:"from_user_id"`
@@ -72,28 +92,68 @@ type CallPayload struct {
 	CallType       string      `json:"call_type"`
 }
 
-type Notification struct {
-	Type      string `json:"type"`
-	FromUserID string `json:"from_user_id"`
-	ToUserID   string `json:"to_user_id"`
-	Content   string `json:"content"`
-	Timestamp int64  `json:"timestamp"`
-	MessageID string `json:"id"` // Match the field from message-service
-	LocalID   string `json:"local_id,omitempty"`
-}
-
-// Hub maintains the set of active clients and broadcasts messages to the clients.
+// Hub maintains the set of active clients and broadcasts messages.
 type Hub struct {
-	mu                 sync.RWMutex
-	clients            map[string]*Client
+	mu             sync.RWMutex
+	clients        map[string]*Client
+	userIDToClientID map[string]string
 	usernameToClientID map[string]string
-	userIDToClientID   map[string]string
+	onlineUsers    map[string]bool // Added for tracking online usernames
 }
 
-var hub = &Hub{
-	clients:            make(map[string]*Client),
-	usernameToClientID: make(map[string]string),
-	userIDToClientID:   make(map[string]string),
+var hub *Hub // Global hub instance
+
+// NewHub creates and returns a new Hub instance.
+func NewHub() *Hub {
+	return &Hub{
+		clients:        make(map[string]*Client),
+		userIDToClientID: make(map[string]string),
+		usernameToClientID: make(map[string]string),
+		onlineUsers:    make(map[string]bool), // Initialize the map
+	}
+}
+
+// addOnlineUser adds a username to the set of online users.
+func (h *Hub) addOnlineUser(username string) {
+	h.onlineUsers[username] = true
+}
+
+// removeOnlineUser removes a username from the set of online users.
+func (h *Hub) removeOnlineUser(username string) {
+	delete(h.onlineUsers, username)
+}
+
+// getOnlineUserList returns a slice of currently online usernames.
+func (h *Hub) getOnlineUserList() []string {
+	users := make([]string, 0, len(h.onlineUsers))
+	for username := range h.onlineUsers {
+		users = append(users, username)
+	}
+	return users
+}
+
+// broadcastPresenceUpdate sends an updated list of online users to all connected clients.
+func (h *Hub) broadcastPresenceUpdate() {
+	onlineUsers := h.getOnlineUserList()
+	message := Message{
+		Type:        "presence_update",
+		OnlineUsers: onlineUsers,
+		Timestamp:   time.Now().Unix(),
+	}
+	messageBytes, err := json.Marshal(message)
+	if err != nil {
+		log.Printf("[ERROR] Failed to marshal presence update message: %v", err)
+		return
+	}
+
+	for _, client := range h.clients {
+		select {
+		case client.Send <- messageBytes:
+		default:
+			close(client.Send)
+			h.unregisterClient(client)
+		}
+	}
 }
 
 func (h *Hub) registerClient(client *Client) {
@@ -153,36 +213,6 @@ func (h *Hub) unregisterClient(client *Client) {
 	}
 }
 
-// broadcastPresenceUpdate sends a presence update to all clients.
-// It MUST be called with the Hub's mutex already locked.
-func (h *Hub) broadcastPresenceUpdate() {
-	onlineUsers := make([]string, 0, len(h.usernameToClientID))
-	for username := range h.usernameToClientID {
-		onlineUsers = append(onlineUsers, username)
-	}
-	log.Printf("Broadcasting presence. Online users: %v", onlineUsers)
-
-	update := Message{
-		Type:        "presence_update",
-		OnlineUsers: onlineUsers,
-		Timestamp:   time.Now().Unix(),
-	}
-
-	updateBytes, err := json.Marshal(update)
-	if err != nil {
-		log.Printf("Error marshaling presence update: %v", err)
-		return
-	}
-
-	for _, c := range h.clients {
-		select {
-		case c.Send <- updateBytes:
-		default:
-			// Don't block. If the channel is full, the client will be cleaned up eventually.
-		}
-	}
-}
-
 func (h *Hub) sendToUser(targetUserID string, message []byte) bool {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -232,10 +262,17 @@ func handleWebSocket(c *gin.Context) {
 	hub.registerClient(client)
 	log.Printf("WebSocket client %s connected. UserID: %s, Username: %s", client.ID, client.UserID, client.Username)
 
+	// Broadcast presence update when a user connects
+	hub.mu.Lock()
+	hub.addOnlineUser(username)
+	hub.mu.Unlock()
+	hub.broadcastPresenceUpdate()
+
 	go client.writePump()
 	go client.readPump()
 }
 
+// handleNotification handles incoming notifications from other services (e.g., message-service).
 func handleNotification(c *gin.Context) {
 	var notification Notification
 	if err := c.ShouldBindJSON(&notification); err != nil {
@@ -265,9 +302,132 @@ func handleNotification(c *gin.Context) {
 			return
 		}
 		// Send to recipient
-		hub.sendToUser(notification.ToUserID, messageBytes)
-		// Also send back to sender for UI sync
+		if hub.sendToUser(notification.ToUserID, messageBytes) {
+			log.Printf("[INFO] Successfully sent new_message to recipient %s", notification.ToUserID)
+			// If delivered to recipient, send status update to sender
+			statusUpdate := Message{
+				Type:        "message_status_update",
+				ID:          notification.MessageID,
+				LocalID:     notification.LocalID,
+				FromUserID:  notification.FromUserID,
+				ToUserID:    notification.ToUserID,
+				Status:      "delivered",
+				Timestamp:   time.Now().Unix(),
+			}
+			statusUpdateBytes, err := json.Marshal(statusUpdate)
+			if err != nil {
+				log.Printf("[ERROR] Failed to marshal status_update: %v", err)
+			} else {
+				hub.sendToUser(notification.FromUserID, statusUpdateBytes)
+				log.Printf("[INFO] Sent message_status_update to sender %s for message ID %s", notification.FromUserID, notification.MessageID)
+			}
+		} else {
+			log.Printf("[WARNING] Failed to send new_message to recipient %s. User not online?", notification.ToUserID)
+			// Optionally send a "not delivered" status back to sender
+			statusUpdate := Message{
+				Type:        "message_status_update",
+				ID:          notification.MessageID,
+				LocalID:     notification.LocalID,
+				FromUserID:  notification.FromUserID,
+				ToUserID:    notification.ToUserID,
+				Status:      "not_delivered",
+				Timestamp:   time.Now().Unix(),
+			}
+			statusUpdateBytes, err := json.Marshal(statusUpdate)
+			if err != nil {
+				log.Printf("[ERROR] Failed to marshal status_update for not_delivered: %v", err)
+			} else {
+				hub.sendToUser(notification.FromUserID, statusUpdateBytes)
+				log.Printf("[INFO] Sent message_status_update 'not_delivered' to sender %s for message ID %s", notification.FromUserID, notification.MessageID)
+			}
+		}
+		// Always send to sender for UI sync (even if recipient is offline)
+		// This ensures the sender's UI updates with the message they just sent.
+		// The status update above handles the *delivery* status.
 		hub.sendToUser(notification.FromUserID, messageBytes)
+		log.Printf("[INFO] Sent new_message to sender %s for UI sync", notification.FromUserID)
+
+	case "call_request", "call_accept", "call_reject", "call_end", "call_initiate", "call_accepted", "call_rejected", "call_ended", "video_call_initiate", "video_call_accepted", "video_call_rejected", "video_call_ended":
+		// Handle call-related messages by relaying them directly
+		msg := Message{
+			Type:         notification.Type,
+			FromUserID:   notification.FromUserID,
+			FromUsername: getUsernameFromID(notification.FromUserID),
+			ToUserID:     notification.ToUserID,
+			RoomID:       notification.RoomID,
+			CallID:       notification.CallID,
+			Content:      notification.Content,
+			Timestamp:    notification.Timestamp,
+			Call:         notification.Call,
+			ID:           notification.MessageID,
+			LocalID:      notification.LocalID,
+			Status:       notification.Status,
+		}
+		messageBytes, err := json.Marshal(msg)
+		if err != nil {
+			log.Printf("[ERROR] Failed to marshal call-related message: %v", err)
+			return
+		}
+		if msg.ToUserID != nil {
+			targetUserIDStr := fmt.Sprintf("%v", msg.ToUserID)
+			if hub.sendToUser(targetUserIDStr, messageBytes) {
+				log.Printf("[INFO] Successfully relayed %s to user %s", msg.Type, targetUserIDStr)
+			} else {
+				log.Printf("[WARNING] Failed to relay %s to user %s. User not online?", msg.Type, targetUserIDStr)
+			}
+		} else {
+			log.Printf("[WARNING] Call-related message of type %s missing ToUserID. Not relaying.", msg.Type)
+		}
+
+	case "message_read":
+		// Handle read receipt: update status for the sender
+		statusUpdate := Message{
+			Type:       "message_status_update",
+			ID:         notification.MessageID,
+			LocalID:    notification.LocalID,
+			FromUserID: notification.FromUserID, // The reader is the recipient of the original message
+			ToUserID:   notification.ToUserID,   // The original sender
+			Status:     "read",
+			Timestamp:  time.Now().Unix(),
+		}
+		statusUpdateBytes, err := json.Marshal(statusUpdate)
+		if err != nil {
+			log.Printf("[ERROR] Failed to marshal read receipt status update: %v", err)
+		} else {
+			hub.sendToUser(notification.ToUserID, statusUpdateBytes) // Send to the original sender
+			log.Printf("[INFO] Sent message_status_update 'read' to sender %s for message ID %s", notification.ToUserID, notification.MessageID)
+		}
+
+	case "presence_update":
+		// This notification comes from auth-service/user-service via REST call, triggered by login/logout.
+		// It broadcasts the online status of a user to all connected clients.
+		onlineStatus := notification.Content // "online" or "offline"
+		userID := notification.FromUserID
+		username := getUsernameFromID(userID)
+		log.Printf("[INFO] Received presence_update for user %s (%s): %s", username, userID, onlineStatus)
+
+		// Update internal hub state
+		hub.mu.Lock()
+		if onlineStatus == "online" {
+			// Find client by UserID and update its status
+			if clientID, exists := hub.userIDToClientID[userID]; exists {
+				if client, ok := hub.clients[clientID]; ok {
+					client.Username = username // Ensure username is up-to-date
+					client.UserID = userID
+					log.Printf("[INFO] Updated client %s to online: UserID=%s, Username=%s", clientID, userID, username)
+				}
+			} else {
+				log.Printf("[WARNING] No active client found for online user %s (%s). This might be a stale update or a new connection is expected.", username, userID)
+			}
+			hub.addOnlineUser(username)
+		} else if onlineStatus == "offline" {
+			hub.removeOnlineUser(username)
+		}
+		hub.mu.Unlock()
+
+		// Broadcast presence update to all connected clients
+		hub.broadcastPresenceUpdate()
+
 	default:
 		log.Printf("[WARNING] Unknown notification type: %s", notification.Type)
 	}
@@ -290,54 +450,57 @@ func getOnlineUsers(c *gin.Context) {
 	hub.mu.RLock()
 	defer hub.mu.RUnlock()
 
-	onlineUsers := make([]string, 0, len(hub.usernameToClientID))
-	for username := range hub.usernameToClientID {
-		onlineUsers = append(onlineUsers, username)
-	}
+	onlineUsers := hub.getOnlineUserList() // Use the helper method
 
 	c.JSON(http.StatusOK, gin.H{"online_users": onlineUsers})
 }
 
+// readPump pumps messages from the websocket connection to the hub.
+//
+// The application runs readPump in a goroutine for each individual websocket connection.
+// The application ensures that there is at most one reader on a connection by invoking
+// ws.ReadMessage synchronously in this goroutine.
 func (c *Client) readPump() {
 	defer func() {
 		hub.unregisterClient(c)
 		c.Conn.Close()
 	}()
-
 	c.Conn.SetReadLimit(maxMessageSize)
 	c.Conn.SetReadDeadline(time.Now().Add(pongWait))
-	c.Conn.SetPongHandler(func(string) error {
-		c.Conn.SetReadDeadline(time.Now().Add(pongWait))
-		return nil
-	})
-
+	c.Conn.SetPongHandler(func(string) error { c.Conn.SetReadDeadline(time.Now().Add(pongWait)); return nil })
 	for {
-		_, messageBytes, err := c.Conn.ReadMessage()
+		_, message, err := c.Conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("WebSocket read error for client %s (user: %s): %v", c.ID, c.Username, err)
+				log.Printf("error: %v", err)
 			}
 			break
 		}
-
 		var msg Message
-		if err := json.Unmarshal(messageBytes, &msg); err != nil {
-			log.Printf("Error unmarshaling message from client %s (user: %s): %v", c.ID, c.Username, err)
+		if err := json.Unmarshal(message, &msg); err != nil {
+			log.Printf("Error unmarshaling message from client %s: %v", c.ID, err)
 			continue
 		}
 
-		// Set sender information
+		// Set FromUserID and FromUsername based on the client sending the message
 		msg.FromUserID = c.UserID
 		msg.FromUsername = c.Username
-		msg.Timestamp = time.Now().Unix()
 
-		// Handle different message types
+		log.Printf("Received message from client %s (user: %s): %+v", c.ID, c.Username, msg)
+
+		// Marshal the message once for relaying/broadcasting
+		messageBytes, err := json.Marshal(msg)
+		if err != nil {
+			log.Printf("[ERROR] Failed to marshal message for relay: %v", err)
+			continue
+		}
+
+		// Handle different message types received from WebSocket clients
 		switch msg.Type {
 		case "call_request", "call_accept", "call_reject", "call_end":
 			// Handle call-related messages
 			if msg.ToUserID != nil {
 				targetUserIDStr := fmt.Sprintf("%v", msg.ToUserID)
-				messageBytes, _ = json.Marshal(msg)
 				hub.sendToUser(targetUserIDStr, messageBytes)
 			}
 		case "private_message":
@@ -383,6 +546,57 @@ func (c *Client) readPump() {
 				log.Printf("Sent heartbeat ack to client %s", c.ID)
 			default:
 				log.Printf("Failed to send heartbeat ack to client %s", c.ID)
+			}
+		case "message_read":
+			// Send a notification to the message service to update the status
+			go func(readMsg Message) {
+				notificationPayload := map[string]interface{}{
+					"type":       "message_read",
+					"id":         readMsg.ID,
+					"local_id":   readMsg.LocalID,
+					"from_user_id": readMsg.FromUserID, // The reader
+					"to_user_id":   readMsg.ToUserID,   // The sender of the original message
+				}
+				jsonData, err := json.Marshal(notificationPayload)
+				if err != nil {
+					log.Printf("[ERROR] Failed to marshal message_read notification: %v", err)
+					return
+				}
+
+				messageServiceURL := os.Getenv("REALTIME_SERVICE_MESSAGE_SERVICE_URL")
+				if messageServiceURL == "" {
+					messageServiceURL = "http://alcall-message-service:8083"
+				}
+
+				resp, err := http.Post(messageServiceURL+"/notify-status", "application/json", bytes.NewBuffer(jsonData))
+				if err != nil {
+					log.Printf("[ERROR] Failed to send message_read notification to message service: %v", err)
+				} else {
+					defer resp.Body.Close()
+					if resp.StatusCode != http.StatusOK {
+						log.Printf("[WARNING] Message service returned non-OK status for message_read: %d", resp.StatusCode)
+					} else {
+						log.Printf("[INFO] Successfully sent message_read notification to message service for message ID %s", readMsg.ID)
+					}
+				}
+			}(msg)
+
+			// Also, immediately send a status update back to the sender via WebSocket
+			statusUpdate := Message{
+				Type:        "message_status_update",
+				ID:          msg.ID,
+				LocalID:     msg.LocalID,
+				FromUserID:  msg.FromUserID,
+				ToUserID:    msg.ToUserID,
+				Status:      "read",
+				Timestamp:   time.Now().Unix(),
+			}
+			statusUpdateBytes, err := json.Marshal(statusUpdate)
+			if err != nil {
+				log.Printf("[ERROR] Failed to marshal read receipt status update for WebSocket: %v", err)
+			} else {
+				hub.sendToUser(fmt.Sprintf("%v", msg.ToUserID), statusUpdateBytes) // Send to the original sender
+				log.Printf("[INFO] Sent message_status_update 'read' to sender %v via WebSocket for message ID %s", msg.ToUserID, msg.ID)
 			}
 		default:
 			log.Printf("Unknown message type: %s from client %s (user: %s)", msg.Type, c.ID, c.Username)
@@ -441,36 +655,22 @@ func handlePrivateMessage(c *Client, msg Message, messageBytes []byte) {
 	// Store message in database
 	go persistMessage(msg)
 
-	// Send delivery confirmation to sender
-	confirmation := Message{
-		Type:      "message_status",
-		Content:   "delivered",
-		Timestamp: time.Now().Unix(),
-		CallID:    msg.CallID, // Include CallID for call notifications
-	}
-
-	confirmationBytes, err := json.Marshal(confirmation)
-	if err != nil {
-		log.Printf("Error marshaling confirmation: %v", err)
-		return
-	}
-
-	select {
-	case c.Send <- confirmationBytes:
-		log.Printf("Sent delivery confirmation to sender")
-	default:
-		log.Printf("Failed to send delivery confirmation")
-	}
+	// Send delivery confirmation to sender (this will now be handled by handleNotification)
+	// The frontend will optimistically show "sending" and then update based on the "message_status_update"
+	// from the realtime service.
 }
 
 func persistMessage(msg Message) {
 	// Prepare message data
 	data := map[string]interface{}{
-		"from_user_id": msg.FromUserID,
-		"to_user_id":   msg.ToUserID,
+		"id":           msg.ID, // Pass the ID for consistent tracking
+		"local_id":     msg.LocalID,
+		"from_user_id": fmt.Sprintf("%v", msg.FromUserID),
+		"to_user_id":   fmt.Sprintf("%v", msg.ToUserID),
 		"content":      msg.Content,
 		"timestamp":    msg.Timestamp,
 		"type":         msg.Type,
+		"status":       "sent", // Initial status when saving
 	}
 
 	// Convert to JSON
@@ -505,7 +705,7 @@ func persistMessage(msg Message) {
 		return
 	}
 
-	log.Printf("Message successfully persisted")
+	log.Printf("Message successfully persisted to message service")
 }
 
 func (c *Client) writePump() {
@@ -538,14 +738,10 @@ func (c *Client) writePump() {
 	}
 }
 
-// generateID creates a random string for client IDs.
 func generateID() string {
-	const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	b := make([]byte, 16)
-	for i := range b {
-		b[i] = letterBytes[rand.Intn(len(letterBytes))]
-	}
-	return string(b)
+	rand.Read(b)
+	return fmt.Sprintf("%x", b)
 }
 
 func main() {
@@ -554,75 +750,37 @@ func main() {
 		log.Printf("Error loading .env file: %v", err)
 	}
 
-	// Redirect log output to stderr to avoid interfering with stdout for WebSocket data
-	log.SetOutput(os.Stderr)
+	// Initialize the hub
+	hub = NewHub()
 
-	// Create a Gin router
 	router := gin.Default()
 
-	// Add CORS middleware with WebSocket support
+	// Configure CORS
 	config := cors.DefaultConfig()
-	config.AllowAllOrigins = true
-	config.AllowCredentials = true
+	config.AllowOrigins = []string{"https://alcall-frontend.onrender.com", "http://localhost:3000"}
 	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
-	config.AllowHeaders = []string{
-		"Origin",
-		"Content-Type",
-		"Authorization",
-		"Accept",
-		"X-Requested-With",
-		"Upgrade",
-		"Connection",
-		"Sec-WebSocket-Key",
-		"Sec-WebSocket-Version",
-		"Sec-WebSocket-Extensions",
-		"Sec-WebSocket-Protocol",
-	}
-	config.ExposeHeaders = []string{
-		"Content-Length",
-		"Access-Control-Allow-Origin",
-		"Access-Control-Allow-Headers",
-		"Access-Control-Allow-Methods",
-		"Access-Control-Allow-Credentials",
-	}
+	config.AllowHeaders = []string{"Origin", "Content-Type", "Authorization", "Accept", "X-Requested-With"}
+	config.ExposeHeaders = []string{"Content-Length"}
+	config.AllowCredentials = true
 	router.Use(cors.New(config))
 
-	// Add logging and recovery middleware for better debugging
-	router.Use(gin.Logger())
-	router.Use(gin.Recovery())
-
-	// Define routes
+	// WebSocket endpoint
 	router.GET("/ws", handleWebSocket)
+
+	// Notification endpoint for internal service communication
 	router.POST("/notify", handleNotification)
-	router.GET("/health", func(c *gin.Context) {
-		// Provide more detailed health check
-		c.JSON(http.StatusOK, gin.H{
-			"status": "healthy",
-			"service": "realtime",
-			"timestamp": time.Now().Unix(),
-			"online_clients": len(hub.clients), // Use clients, not just usernameToClientID for accurate count
-		})
-	})
+
+	// REST endpoint to get online users
 	router.GET("/online-users", getOnlineUsers)
 
-	// Start server
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "10000" // Default port if not set by environment
+		port = "8084" // Default port if not set by environment
 	}
 
-	// Bind to 0.0.0.0 for container environments like Render
-	host := "0.0.0.0"
-
-	log.Printf("Realtime service starting on %s:%s...", host, port)
-	log.Printf("Environment: PORT=%s", port) // Removed HOST from env log as we set it explicitly
-
-	if err := router.Run(fmt.Sprintf("%s:%s", host, port)); err != nil {
+	log.Printf("Realtime service starting on :%s", port)
+	if err := router.Run(":" + port); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
-}
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
 }
 
