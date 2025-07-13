@@ -885,7 +885,7 @@ export default function Home() {
         ws.current.close(); // Close existing connection if any
       }
 
-      ws.current = new WebSocket(envVars.NEXT_PUBLIC_REALTIME_API_URL);
+      ws.current = new WebSocket(`${envVars.NEXT_PUBLIC_REALTIME_API_URL}/ws?user_id=${user.id}&username=${user.username}`);
 
       ws.current.onopen = () => {
         console.log("WebSocket connected");
