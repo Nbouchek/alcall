@@ -11,6 +11,7 @@ RUN echo 'general: {' > /usr/local/etc/janus/janus.transport.http.jcfg && \
     echo '}' >> /usr/local/etc/janus/janus.transport.http.jcfg && \
     echo 'admin: {' >> /usr/local/etc/janus/janus.transport.http.jcfg && \
     echo '  admin_base_path = "/admin"' >> /usr/local/etc/janus/janus.transport.http.jcfg && \
+    echo '  admin_ws = true' >> /usr/local/etc/janus/janus.transport.http.jcfg && \
     echo '}' >> /usr/local/etc/janus/janus.transport.http.jcfg && \
     echo 'cors: {' >> /usr/local/etc/janus/janus.transport.http.jcfg && \
     echo '  allow_origin = "*"' >> /usr/local/etc/janus/janus.transport.http.jcfg && \
@@ -39,7 +40,7 @@ RUN echo 'general: {' > /usr/local/etc/janus/janus.transport.websockets.jcfg && 
     cp /usr/local/etc/janus/janus.transport.websockets.jcfg /usr/local/etc/janus/janus.transport.websockets.cfg
 
 # Expose the ports that Janus will use
-EXPOSE 8088 8188
+EXPOSE 8088 8188 7088
 
 # Override any existing configuration to ensure proper startup
 CMD ["/usr/local/bin/janus", "--interface=0.0.0.0", "--debug-level=4"]
