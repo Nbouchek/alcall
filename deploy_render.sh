@@ -31,7 +31,7 @@ services:
       - key: NEXT_PUBLIC_MESSAGE_API_URL
         value: "https://unifiedchat-message-service.onrender.com"
       - key: NEXT_PUBLIC_REALTIME_API_URL
-        value: "https://unifiedchat-realtime-service.onrender.com"
+        value: "wss://alcall-realtime.onrender.com"
       - key: NEXT_PUBLIC_JANUS_URL
         value: "wss://unifiedchat-janus-service.onrender.com/janus"
       - key: NEXT_PUBLIC_JANUS_HTTP_URL
