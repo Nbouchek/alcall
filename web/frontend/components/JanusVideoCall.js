@@ -4,6 +4,7 @@ import {
   useRef,
   forwardRef,
   useImperativeHandle,
+  useCallback,
 } from "react";
 import {
   FaVideo,
@@ -102,47 +103,15 @@ const JanusVideoCall = forwardRef(
         return;
       }
 
-      const initializeJanus = () => {
-        if (
-          typeof window !== "undefined" &&
-          window.Janus &&
-          window.adapterLoaded
-        ) {
-          console.log(
-            "JanusVideoCall: Both adapter and Janus loaded, initializing..."
-          );
-
-          window.Janus.init({
-            debug: "all",
-            callback: () => {
-              console.log("JanusVideoCall: Janus initialized");
-              connectToJanus();
-            },
-            error: (error) => {
-              console.error(
-                "JanusVideoCall: Janus initialization failed:",
-                error
-              );
-              setConnectionError("Failed to initialize Janus library");
-            },
-          });
-        } else {
-          console.log("JanusVideoCall: Waiting for libraries to load...", {
-            janus: !!window.Janus,
-            adapter: !!window.adapterLoaded,
-          });
-          setTimeout(initializeJanus, 1000);
-        }
-      };
-
       initializeJanus();
 
       return () => {
         cleanup();
       };
-    }, []);
+    }, [IS_DEMO_MODE, cleanup, connectToJanus]);
 
-    const connectToJanus = () => {
+    // Connect to Janus server
+    const connectToJanus = useCallback(() => {
       if (janusRef.current) {
         console.log("JanusVideoCall: Already connected to Janus");
         return;
@@ -162,9 +131,42 @@ const JanusVideoCall = forwardRef(
         },
         destroyed: () => {
           console.log("JanusVideoCall: Janus connection destroyed");
-          setJanusConnected(false);
+          janusRef.current = null;
         },
       });
+    }, [JANUS_URL]);
+
+    const initializeJanus = () => {
+      if (
+        typeof window !== "undefined" &&
+        window.Janus &&
+        window.adapterLoaded
+      ) {
+        console.log(
+          "JanusVideoCall: Both adapter and Janus loaded, initializing..."
+        );
+
+        window.Janus.init({
+          debug: "all",
+          callback: () => {
+            console.log("JanusVideoCall: Janus initialized");
+            connectToJanus();
+          },
+          error: (error) => {
+            console.error(
+              "JanusVideoCall: Janus initialization failed:",
+              error
+            );
+            setConnectionError("Failed to initialize Janus library");
+          },
+        });
+      } else {
+        console.log("JanusVideoCall: Waiting for libraries to load...", {
+          janus: !!window.Janus,
+          adapter: !!window.adapterLoaded,
+        });
+        setTimeout(initializeJanus, 1000);
+      }
     };
 
     const startVideoCall = async () => {

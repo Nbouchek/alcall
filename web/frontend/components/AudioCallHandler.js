@@ -92,72 +92,7 @@ const AudioCallHandler = forwardRef(
 
       document.addEventListener("keydown", handleKeyPress);
       return () => document.removeEventListener("keydown", handleKeyPress);
-    }, [isInCall]);
-
-    // Volume control function
-    const adjustVolume = useCallback((delta) => {
-      const newVolume = Math.max(0, Math.min(1, volume + delta));
-      setVolume(newVolume);
-      console.log(`🔥 AUDIO - Volume adjusted to: ${newVolume}`);
-
-      // Use the getAllAudioElements function if available, otherwise fallback to manual list
-      let audioElements;
-      if (
-        window.getAllAudioElements &&
-        typeof window.getAllAudioElements === "function"
-      ) {
-        console.log(
-          `🔥 AUDIO - Using getAllAudioElements function for volume control`
-        );
-        audioElements = window.getAllAudioElements();
-      } else {
-        console.log(
-          `🔥 AUDIO - Using fallback audio element list for volume control`
-        );
-        audioElements = [
-          window.remoteAudioElement,
-          audioRef.current,
-          document.getElementById("remote-audio"),
-          document.getElementById("call-audio-element"),
-          document.getElementById("emergency-remote-audio"),
-          document.getElementById("emergency-remote-audio-0"),
-          document.getElementById("emergency-remote-audio-1"),
-          document.getElementById("emergency-remote-audio-2"),
-          document.getElementById("dedicated-remote-audio"), // Our new dedicated element
-          document.querySelector("audio[autoplay]"),
-          ...document.querySelectorAll("audio"), // Get ALL audio elements
-        ].filter(Boolean);
-      }
-
-      console.log(
-        `🔥 AUDIO - Updating volume on ${audioElements.length} audio elements`
-      );
-
-      let updatedCount = 0;
-      audioElements.forEach((audioElement, index) => {
-        if (audioElement && typeof audioElement.volume !== "undefined") {
-          const oldVolume = audioElement.volume;
-          audioElement.volume = newVolume;
-          audioElement.muted = newVolume === 0; // Mute if volume is 0
-          console.log(
-            `🔥 AUDIO - Element ${index}: ${oldVolume} → ${newVolume} (muted: ${audioElement.muted})`
-          );
-          updatedCount++;
-
-          // Force play if paused
-          if (audioElement.paused && audioElement.srcObject) {
-            audioElement.play().catch((e) => {
-              console.log(`🔥 AUDIO - Failed to resume element ${index}:`, e);
-            });
-          }
-        }
-      });
-
-      console.log(
-        `🔥 AUDIO - Successfully updated volume on ${updatedCount} elements`
-      );
-      setCallStatus(`🔊 Volume: ${Math.round(newVolume * 100)}%`);
-    }, [volume]);
+    }, [isInCall, toggleMute, endCall, adjustVolume]);
 
     // Failsafe: Check every 2 seconds if the call should still be active
     useEffect(() => {
@@ -551,7 +486,9 @@ const AudioCallHandler = forwardRef(
             dedicatedAudio.onloadeddata = () =>
               console.log("🔥 AUDIO - DEDICATED: Data loaded");
             dedicatedAudio.oncanplay = () => {
-              console.log("🔥 AUDIO - DEDICATED: Can play - FORCING PLAY");
+              console.log(
+                "🔥 AUDIO - DEDICATED: Can play - FORCING PLAY"
+              );
               dedicatedAudio
                 .play()
                 .then(() => {
