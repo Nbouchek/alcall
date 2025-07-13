@@ -812,6 +812,12 @@ export default function Home() {
 
   const isUserOnline = (username) => onlineUserIds.has(allUsers.find(u => u.username === username).id);
 
+  // Compute allUsersWithStatus by adding an isOnline property to each user
+  const allUsersWithStatus = allUsers.map(user => ({
+    ...user,
+    isOnline: onlineUserIds.has(user.id),
+  }));
+
   // Fetch env vars on component mount
   useEffect(() => {
     async function fetchEnvVars() {
