@@ -5,6 +5,7 @@ import axios from "axios";
 import UserPopover from "../components/UserPopover";
 import AudioCallHandler from "../components/AudioCallHandler";
 import VideoCallInterface from "../components/VideoCallInterface";
+import OnlineUsersList from '../components/OnlineUsersList';
 import {
   FaPhone,
   FaPhoneSlash,
@@ -30,7 +31,7 @@ let WEBSOCKET_URL;
 let JANUS_HTTP_URL;
 let JANUS_URL;
 let REALTIME_HTTP_API_URL;
-let USER_API_BASE_URL; // Add this line
+let USER_API_BASE_URL;
 
 export default function Home() {
   console.log(
@@ -721,13 +722,13 @@ export default function Home() {
         headers: { Authorization: `Bearer ${token}` }
       });
       const usersData = response.data || [];
-      
+
       // Initialize with isOnline status
       const usersWithStatus = usersData.map(user => ({
         ...user,
         isOnline: onlineUserIds.has(user.id)
       }));
-      
+
       setAllUsers(usersWithStatus);
     } catch (error) {
       console.error('Failed to fetch users', error);
@@ -831,7 +832,7 @@ export default function Home() {
         JANUS_URL = fetchedEnvVars.NEXT_PUBLIC_JANUS_URL;
         REALTIME_HTTP_API_URL =
           fetchedEnvVars.NEXT_PUBLIC_REALTIME_HTTP_API_URL;
-        USER_API_BASE_URL = fetchedEnvVars.NEXT_PUBLIC_USER_API_URL; // Add this line
+        USER_API_BASE_URL = fetchedEnvVars.NEXT_PUBLIC_USER_API_URL;
 
         // After fetching env vars, check for existing session
         const token = localStorage.getItem("token");
@@ -899,24 +900,24 @@ export default function Home() {
         if (message.type === "presence_update") {
           console.log('FULL PRESENCE UPDATE:', JSON.stringify(message, null, 2));
           console.log('Current user ID:', user?.id);
-          
+
           // Convert usernames to user objects
           const onlineUsers = message.online_users.map(username => {
             const userObj = allUsers.find(u => u.username === username);
             return userObj || { username, id: username }; // Fallback if user not found
           });
-          
+
           const newOnlineIds = new Set(onlineUsers.map(u => u.id));
           setOnlineUserIds(newOnlineIds);
-          
+
           // Update online status in allUsers
-          setAllUsers(prevUsers => 
+          setAllUsers(prevUsers =>
             prevUsers.map(user => ({
               ...user,
               isOnline: newOnlineIds.has(user.id)
             }))
           );
-        } else if (message.type === "message") {
+        } else if (message.type === "message") { // Correctly placed condition for new chat messages
           setMessages((prevMessages) => [...prevMessages, message.message]);
           // If the message is for the currently selected chat, mark it as read
           if (
@@ -1152,384 +1153,188 @@ export default function Home() {
   };
 
   const renderChat = () => (
-    <div className="flex h-screen bg-gray-900 text-white">
-      {/* Sidebar */}
-      <aside
-        className={`fixed inset-y-0 left-0 z-40 w-64 bg-gray-800 p-4 transform ${
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        } transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0`}
-      >
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold">Alvis</h2>
-          <button
-            className="lg:hidden text-gray-400 hover:text-white"
-            onClick={() => setSidebarOpen(false)}
-          >
-            <FaTimes size={20} />
-          </button>
-        </div>
-        <div className="mb-6 relative">
-          <input
-            type="text"
-            placeholder="Search users..."
-            className="w-full px-3 py-2 pr-10 bg-gray-700 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-            onChange={(e) => handleSearch(e.target.value)}
-          />
-          <FaSearch className="absolute right-3 top-3 text-gray-400" />
-          {searchResults.length > 0 && (
-            <div className="absolute z-10 w-full bg-gray-700 border border-gray-600 rounded-md mt-1 shadow-lg max-h-60 overflow-y-auto">
-              {searchResults.map((user) => (
-                <div
-                  key={user.id}
-                  className="flex items-center p-3 hover:bg-gray-600 cursor-pointer"
-                  onClick={() => {
-                    setSelectedRecipient(user);
-                    setSearchResults([]); // Clear search results on selection
-                  }}
-                >
-                  <FaUser className="h-8 w-8 text-gray-400 rounded-full bg-gray-600 p-1 mr-3" />
-                  <div>
-                    <div className="font-semibold text-white">
-                      {user.username}
-                    </div>
-                    <div className="text-sm text-gray-400">
-                      {isUserOnline(user.username) ? "Online" : "Offline"}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+    <div className="min-h-screen bg-gray-900 text-white">
+      <Head>
+        <title>Alcall - Modern Chat</title>
+        <meta name="description" content="Modern chat and calling application" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+      </Head>
 
-        {/* User List */}
-        <nav>
-          <ul>
-            <ul className="space-y-2">
-              {allUsers
-                .filter(u => u.id !== user?.id) // Exclude current user
-                .map(user => (
-                  <li 
+      <OnlineUsersList users={allUsersWithStatus} />
+
+      <div className="flex">
+        {/* Sidebar */}
+        <div className="w-64 bg-gray-800 h-screen p-4">
+          <div className="flex items-center justify-between mb-6">
+            <h1 className="text-xl font-bold">Alcall</h1>
+            <button 
+              onClick={handleLogout}
+              className="text-gray-400 hover:text-white"
+              title="Logout"
+            >
+              <FaSignOutAlt className="text-xl" />
+            </button>
+          </div>
+
+          <div className="relative mb-4">
+            <input
+              type="text"
+              placeholder="Search users..."
+              className="w-full pl-10 py-2 bg-gray-700 rounded-md text-white"
+              onChange={(e) => handleSearch(e.target.value)}
+            />
+            <FaSearch className="absolute left-3 top-3 text-gray-400" />
+          </div>
+
+          <div className="space-y-2">
+            {searchResults.length > 0
+              ? searchResults.map((user) => (
+                  <div
                     key={user.id}
-                    className={`flex items-center p-2 rounded-lg cursor-pointer hover:bg-gray-700 ${selectedRecipient?.id === user.id ? 'bg-gray-600' : ''}`}
+                    className={`flex items-center p-3 rounded-lg cursor-pointer ${highlightedUser === user.id ? 'bg-indigo-900' : 'hover:bg-gray-700'}`}
                     onClick={() => selectChatUser(user)}
                   >
-                    <div className="relative mr-3">
-                      <FaUser className={`h-8 w-8 rounded-full p-1 ${user.isOnline ? 'text-green-400 bg-green-900' : 'text-gray-400 bg-gray-600'}`} />
+                    <div className="relative">
+                      <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center">
+                        <FaUser className="text-white" />
+                      </div>
                       {user.isOnline && (
-                        <span className="absolute bottom-0 right-0 block h-3 w-3 rounded-full ring-2 ring-gray-800 bg-green-400"></span>
+                        <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-gray-800"></div>
                       )}
                     </div>
-                    <div>
-                      <p className="font-medium">{user.username}</p>
-                      <p className="text-xs text-gray-400">
-                        {user.isOnline ? 'Online' : 'Offline'}
-                      </p>
+                    <div className="ml-3">
+                      <div className="font-medium">{user.username}</div>
                     </div>
-                  </li>
+                  </div>
                 ))
-              }
-            </ul>
-          </ul>
-        </nav>
-        <div className="absolute bottom-4 left-4">
-          <button
-            onClick={handleLogout}
-            className="flex items-center px-4 py-2 text-sm font-medium text-gray-300 bg-gray-700 rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-          >
-            <FaSignOutAlt className="mr-2" />
-            Logout
-          </button>
+              : allUsersWithStatus.map((user) => (
+                  <div
+                    key={user.id}
+                    className={`flex items-center p-3 rounded-lg cursor-pointer ${highlightedUser === user.id ? 'bg-indigo-900' : 'hover:bg-gray-700'}`}
+                    onClick={() => selectChatUser(user)}
+                  >
+                    <div className="relative">
+                      <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center">
+                        <FaUser className="text-white" />
+                      </div>
+                      {user.isOnline && (
+                        <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-gray-800"></div>
+                      )}
+                    </div>
+                    <div className="ml-3">
+                      <div className="font-medium">{user.username}</div>
+                    </div>
+                  </div>
+                ))}
+          </div>
         </div>
-      </aside>
 
-      {/* Main Chat Area */}
-      <main className="flex-1 flex flex-col bg-gray-900 lg:ml-64">
-        {/* Header */}
-        <header className="flex items-center justify-between p-4 bg-gray-800 shadow-md">
-          <div className="flex items-center">
-            <button
-              className="lg:hidden mr-4 text-gray-400 hover:text-white"
-              onClick={() => setSidebarOpen(true)}
-            >
-              <FaBars size={20} />
-            </button>
-            {selectedRecipient ? (
-              <>
+        {/* Main Chat Area */}
+        {!selectedRecipient ? (
+          <div className="flex-1 flex flex-col items-center justify-center">
+            <div className="text-center">
+              <h2 className="text-2xl font-bold mb-4">Welcome to Alcall</h2>
+              <p className="text-gray-400 mb-6">Select a user to start chatting</p>
+              <div className="bg-gray-800 p-6 rounded-lg">
+                <h3 className="text-lg font-bold mb-2">Quick Tips</h3>
+                <ul className="text-gray-400 text-left space-y-2">
+                  <li className="flex items-start">
+                    <FaRocket className="text-indigo-500 mt-1 mr-2" />
+                    <span>Click on a user to start chatting</span>
+                  </li>
+                  <li className="flex items-start">
+                    <FaPhone className="text-green-500 mt-1 mr-2" />
+                    <span>Make audio calls with the phone button</span>
+                  </li>
+                  <li className="flex items-start">
+                    <FaVideo className="text-blue-500 mt-1 mr-2" />
+                    <span>Start video calls with the video button</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 flex flex-col">
+            {/* Chat Header */}
+            <div className="p-4 border-b border-gray-700 flex items-center justify-between">
+              <div className="flex items-center">
                 <div className="relative">
-                  <FaUser className="h-10 w-10 text-indigo-400 rounded-full bg-indigo-800 p-1 mr-3" />
-                  {selectedRecipient.isOnline && (
-                    <span className="absolute bottom-0 right-2 block h-3.5 w-3.5 rounded-full ring-2 ring-gray-800 bg-green-400"></span>
+                  <div className="w-12 h-12 rounded-full bg-indigo-600 flex items-center justify-center">
+                    <FaUser className="text-xl text-white" />
+                  </div>
+                  {isUserOnline(selectedRecipient.username) && (
+                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-gray-900"></div>
                   )}
                 </div>
-                <h1 className="text-xl font-bold text-white">
-                  {selectedRecipient.username}
-                </h1>
-              </>
-            ) : (
-              <h1 className="text-xl font-bold text-gray-400">
-                Select a chat to start messaging
-              </h1>
-            )}
+                <div className="ml-3">
+                  <div className="font-bold text-lg">{selectedRecipient.username}</div>
+                  <div className="text-sm text-gray-400">
+                    {isUserOnline(selectedRecipient.username) ? 'Online now' : 'Offline'}
+                  </div>
+                </div>
+              </div>
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => initiateCall(selectedRecipient)}
+                  className="p-2 bg-green-600 rounded-full text-white hover:bg-green-700"
+                >
+                  <FaPhone />
+                </button>
+                <button
+                  onClick={() => initiateVideoCall(selectedRecipient)}
+                  className="p-2 bg-blue-600 rounded-full text-white hover:bg-blue-700"
+                >
+                  <FaVideo />
+                </button>
+              </div>
+            </div>
+
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {messages
+                .filter(
+                  (msg) =>
+                    (msg.sender === user?.username && msg.recipient === selectedRecipient?.username) ||
+                    (msg.sender === selectedRecipient?.username && msg.recipient === user?.username)
+                )
+                .map((msg, index, arr) => {
+                  const isSender = msg.sender === user?.username;
+                  const isFirstInGroup = index === 0 || arr[index - 1].sender !== msg.sender;
+                  return (
+                    <div key={msg.id} className={`flex ${isSender ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`p-3 rounded-lg max-w-xs ${isSender ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-gray-700 text-gray-100 rounded-bl-none'}`}>
+                        {msg.content}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+
+            {/* Message Input */}
+            <div className="p-4 border-t border-gray-700">
+              <div className="flex">
+                <input
+                  type="text"
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  placeholder="Type a message..."
+                  className="flex-1 p-2 bg-gray-700 rounded-l-md text-white focus:outline-none"
+                  onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                />
+                <button
+                  onClick={handleSendMessage}
+                  className="bg-indigo-600 text-white p-2 rounded-r-md hover:bg-indigo-700"
+                >
+                  <FaPaperPlane />
+                </button>
+              </div>
+            </div>
           </div>
-          {selectedRecipient && (
-            <div className="flex space-x-2">
-              <button
-                onClick={() => {
-                  if (!audioCallRef.current) {
-                    showCallNotification(
-                      "error",
-                      "Audio call handler not ready.",
-                      3000
-                    );
-                    return;
-                  }
-                  if (!janusInitialized) {
-                    showCallNotification(
-                      "error",
-                      "Janus not initialized. Please refresh.",
-                      3000
-                    );
-                    return;
-                  }
-                  if (!activeCallRecipient) {
-                    initiateCall(selectedRecipient);
-                  } else {
-                    handleHangUp();
-                  }
-                }}
-                className={`p-2 rounded-full text-white transition-colors duration-200 ${
-                  activeCallRecipient
-                    ? "bg-red-500 hover:bg-red-600"
-                    : "bg-green-500 hover:bg-green-600"
-                }`}
-                title={
-                  activeCallRecipient ? "Hang Up Audio Call" : "Audio Call"
-                }
-                disabled={videoCallState !== "idle"} // Disable audio call if video call is active
-              >
-                {activeCallRecipient ? (
-                  <FaPhoneSlash size={20} />
-                ) : (
-                  <FaPhone size={20} />
-                )}
-              </button>
-              <button
-                onClick={() => {
-                  if (!janusInitialized) {
-                    showCallNotification(
-                      "error",
-                      "Janus not initialized. Please refresh.",
-                      3000
-                    );
-                    return;
-                  }
-                  if (!activeVideoCallRecipient) {
-                    initiateVideoCall(selectedRecipient);
-                  } else {
-                    handleVideoCallEnd();
-                  }
-                }}
-                className={`p-2 rounded-full text-white transition-colors duration-200 ${
-                  activeVideoCallRecipient
-                    ? "bg-red-500 hover:bg-red-600"
-                    : "bg-blue-500 hover:bg-blue-600"
-                }`}
-                title={
-                  activeVideoCallRecipient ? "Hang Up Video Call" : "Video Call"
-                }
-                disabled={callState !== "idle"} // Disable video call if audio call is active
-              >
-                {activeVideoCallRecipient ? (
-                  <FaPhoneSlash size={20} />
-                ) : (
-                  <FaVideo size={20} />
-                )}
-              </button>
-            </div>
-          )}
-        </header>
-
-        {/* Message List */}
-        <div className="flex-1 p-4 overflow-y-auto custom-scrollbar">
-          {messages.map((msg, index) => {
-            const isSender = msg.from_user_id === user.id;
-            // Check if this is the first message in a new group (from a different sender than previous, or first message overall)
-            const isFirstInGroup =
-              index === 0 ||
-              messages[index - 1].from_user_id !== msg.from_user_id;
-
-            return (
-              <MessageBubble
-                key={msg.id}
-                msg={msg}
-                isSender={isSender}
-                isFirstInGroup={isFirstInGroup}
-              />
-            );
-          })}
-        </div>
-
-        {/* Message Input */}
-        {selectedRecipient && (
-          <footer className="p-4 bg-gray-800 border-t border-gray-700">
-            <div className="flex items-center">
-              <input
-                type="text"
-                placeholder="Type your message..."
-                className="flex-1 px-4 py-2 rounded-l-md bg-gray-700 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                onKeyPress={(e) => {
-                  if (e.key === "Enter") {
-                    handleSendMessage();
-                  }
-                }}
-              />
-              <button
-                onClick={handleSendMessage}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-r-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                <FaPaperPlane />
-              </button>
-            </div>
-          </footer>
         )}
-      </main>
-
-      {/* Online Users List */}
-      {isLoggedIn && <OnlineUsersList users={allUsers} />}
-      {/* Incoming Call Notification */}
-      {incomingCall && callState === "ringing" && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-          <div className="bg-gray-800 p-8 rounded-lg shadow-xl text-center">
-            <h2 className="text-2xl font-bold mb-4">
-              Incoming {incomingCall.call_type || "Audio"} Call
-            </h2>
-            <p className="text-gray-300 mb-6">
-              from {incomingCall.caller_username}
-            </p>
-            <div className="flex justify-center space-x-4">
-              <button
-                onClick={handleAcceptCall}
-                className="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-full flex items-center"
-              >
-                <FaPhone className="mr-2" /> Accept
-              </button>
-              <button
-                onClick={handleRejectCall}
-                className="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-full flex items-center"
-              >
-                <FaPhoneSlash className="mr-2" /> Reject
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Custom Notification Display */}
-      {callNotification && (
-        <div
-          className={`fixed bottom-4 right-4 p-4 rounded-md shadow-lg text-white z-50 ${
-            callNotification.type === "error" ? "bg-red-600" : "bg-blue-600"
-          }`}
-        >
-          {callNotification.message}
-        </div>
-      )}
-
-      {/* Call Ended Modal */}
-      {callEndedModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-          <div className="bg-gray-800 p-8 rounded-lg shadow-xl text-center">
-            <h2 className="text-2xl font-bold mb-4 text-white">
-              {callEndedModal.title}
-            </h2>
-            <p className="text-gray-300 mb-6">{callEndedModal.message}</p>
-            <button
-              onClick={() => setCallEndedModal(null)}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-full"
-            >
-              OK
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* AudioCallHandler Component */}
-      <AudioCallHandler
-        ref={audioCallRef}
-        onCallEnd={endCall}
-        callState={callState}
-        setCallState={setCallState}
-        activeCallRecipient={activeCallRecipient}
-        callRoomId={callRoomId}
-        audioCallMuted={audioCallMuted}
-        setAudioCallMuted={setAudioCallMuted}
-        audioCallVolume={audioCallVolume}
-        setAudioCallVolume={setAudioCallVolume}
-        audioCallStatus={audioCallStatus}
-        setAudioCallStatus={setAudioCallStatus}
-        janusInitialized={janusInitialized}
-      />
-
-      {/* VideoCallInterface Component */}
-      <VideoCallInterface
-        user={user}  // Make sure this is passed from parent
-        selectedReceiver={selectedRecipient}
-        callState={callState}
-        videoCallState={videoCallState}
-        setVideoCallState={setVideoCallState}
-        activeVideoCallRecipient={activeVideoCallRecipient}
-        videoCallRoomId={videoCallRoomId}
-        janusInitialized={janusInitialized}
-        onVideoCallEnd={handleVideoCallEnd}
-        janusUrl={envVars ? envVars.NEXT_PUBLIC_JANUS_URL : undefined}
-        janusHttpUrl={envVars ? envVars.NEXT_PUBLIC_JANUS_HTTP_URL : undefined}
-      />
-    </div>
-  );
-
-  const OnlineUsersList = ({ users }) => (
-    <div style={{
-      position: 'fixed',
-      right: '20px',
-      top: '20px',
-      background: '#2d3748',
-      color: 'white',
-      padding: '15px',
-      borderRadius: '8px',
-      boxShadow: '0 2px 10px rgba(0,0,0,0.3)',
-      zIndex: 100,
-      maxHeight: '60vh',
-      overflowY: 'auto',
-      minWidth: '200px'
-    }}>
-      <h3 style={{ marginTop: 0, marginBottom: '10px' }}>Online ({users.filter(u => u.isOnline).length})</h3>
-      {users.length > 0 ? (
-        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-          {users.map(user => (
-            <li key={user.id} style={{ 
-              padding: '8px 0',
-              borderBottom: '1px solid #4a5568',
-              display: 'flex',
-              alignItems: 'center'
-            }}>
-              <span style={{
-                display: 'inline-block',
-                width: '10px',
-                height: '10px',
-                borderRadius: '50%',
-                background: user.isOnline ? '#48bb78' : '#ccc',
-                marginRight: '8px'
-              }}></span>
-              {user.username}
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p style={{ margin: 0 }}>No users online</p>
-      )}
+      </div>
     </div>
   );
 
@@ -1542,5 +1347,241 @@ export default function Home() {
   }
 
   // Render main app or auth screen
-  return isLoggedIn ? renderChat() : renderAuth();
+  return isLoggedIn ? (
+    <div className="min-h-screen bg-gray-900 text-white">
+      <Head>
+        <title>Alcall - Modern Chat</title>
+        <meta name="description" content="Modern chat and calling application" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+      </Head>
+
+      <OnlineUsersList users={allUsersWithStatus} />
+
+      <div className="flex">
+        {/* Sidebar */}
+        <div className="w-64 bg-gray-800 h-screen p-4">
+          <div className="flex items-center justify-between mb-6">
+            <h1 className="text-xl font-bold">Alcall</h1>
+            <button 
+              onClick={handleLogout}
+              className="text-gray-400 hover:text-white"
+              title="Logout"
+            >
+              <FaSignOutAlt className="text-xl" />
+            </button>
+          </div>
+
+          <div className="relative mb-4">
+            <input
+              type="text"
+              placeholder="Search users..."
+              className="w-full pl-10 py-2 bg-gray-700 rounded-md text-white"
+              onChange={(e) => handleSearch(e.target.value)}
+            />
+            <FaSearch className="absolute left-3 top-3 text-gray-400" />
+          </div>
+
+          <div className="space-y-2">
+            {searchResults.length > 0
+              ? searchResults.map((user) => (
+                  <div
+                    key={user.id}
+                    className={`flex items-center p-3 rounded-lg cursor-pointer ${highlightedUser === user.id ? 'bg-indigo-900' : 'hover:bg-gray-700'}`}
+                    onClick={() => selectChatUser(user)}
+                  >
+                    <div className="relative">
+                      <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center">
+                        <FaUser className="text-white" />
+                      </div>
+                      {user.isOnline && (
+                        <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-gray-800"></div>
+                      )}
+                    </div>
+                    <div className="ml-3">
+                      <div className="font-medium">{user.username}</div>
+                    </div>
+                  </div>
+                ))
+              : allUsersWithStatus.map((user) => (
+                  <div
+                    key={user.id}
+                    className={`flex items-center p-3 rounded-lg cursor-pointer ${highlightedUser === user.id ? 'bg-indigo-900' : 'hover:bg-gray-700'}`}
+                    onClick={() => selectChatUser(user)}
+                  >
+                    <div className="relative">
+                      <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center">
+                        <FaUser className="text-white" />
+                      </div>
+                      {user.isOnline && (
+                        <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-gray-800"></div>
+                      )}
+                    </div>
+                    <div className="ml-3">
+                      <div className="font-medium">{user.username}</div>
+                    </div>
+                  </div>
+                ))}
+          </div>
+        </div>
+
+        {/* Main Chat Area */}
+        {!selectedRecipient ? (
+          <div className="flex-1 flex flex-col items-center justify-center">
+            <div className="text-center">
+              <h2 className="text-2xl font-bold mb-4">Welcome to Alcall</h2>
+              <p className="text-gray-400 mb-6">Select a user to start chatting</p>
+              <div className="bg-gray-800 p-6 rounded-lg">
+                <h3 className="text-lg font-bold mb-2">Quick Tips</h3>
+                <ul className="text-gray-400 text-left space-y-2">
+                  <li className="flex items-start">
+                    <FaRocket className="text-indigo-500 mt-1 mr-2" />
+                    <span>Click on a user to start chatting</span>
+                  </li>
+                  <li className="flex items-start">
+                    <FaPhone className="text-green-500 mt-1 mr-2" />
+                    <span>Make audio calls with the phone button</span>
+                  </li>
+                  <li className="flex items-start">
+                    <FaVideo className="text-blue-500 mt-1 mr-2" />
+                    <span>Start video calls with the video button</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 flex flex-col">
+            {/* Chat Header */}
+            <div className="p-4 border-b border-gray-700 flex items-center justify-between">
+              <div className="flex items-center">
+                <div className="relative">
+                  <div className="w-12 h-12 rounded-full bg-indigo-600 flex items-center justify-center">
+                    <FaUser className="text-xl text-white" />
+                  </div>
+                  {isUserOnline(selectedRecipient.username) && (
+                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-gray-900"></div>
+                  )}
+                </div>
+                <div className="ml-3">
+                  <div className="font-bold text-lg">{selectedRecipient.username}</div>
+                  <div className="text-sm text-gray-400">
+                    {isUserOnline(selectedRecipient.username) ? 'Online now' : 'Offline'}
+                  </div>
+                </div>
+              </div>
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => initiateCall(selectedRecipient)}
+                  className="p-2 bg-green-600 rounded-full text-white hover:bg-green-700"
+                >
+                  <FaPhone />
+                </button>
+                <button
+                  onClick={() => initiateVideoCall(selectedRecipient)}
+                  className="p-2 bg-blue-600 rounded-full text-white hover:bg-blue-700"
+                >
+                  <FaVideo />
+                </button>
+              </div>
+            </div>
+
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {messages
+                .filter(
+                  (msg) =>
+                    (msg.sender === user?.username && msg.recipient === selectedRecipient?.username) ||
+                    (msg.sender === selectedRecipient?.username && msg.recipient === user?.username)
+                )
+                .map((msg, index, arr) => {
+                  const isSender = msg.sender === user?.username;
+                  const isFirstInGroup = index === 0 || arr[index - 1].sender !== msg.sender;
+                  return (
+                    <div key={msg.id} className={`flex ${isSender ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`p-3 rounded-lg max-w-xs ${isSender ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-gray-700 text-gray-100 rounded-bl-none'}`}>
+                        {msg.content}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+
+            {/* Message Input */}
+            <div className="p-4 border-t border-gray-700">
+              <div className="flex">
+                <input
+                  type="text"
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  placeholder="Type a message..."
+                  className="flex-1 p-2 bg-gray-700 rounded-l-md text-white focus:outline-none"
+                  onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                />
+                <button
+                  onClick={handleSendMessage}
+                  className="bg-indigo-600 text-white p-2 rounded-r-md hover:bg-indigo-700"
+                >
+                  <FaPaperPlane />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  ) : (
+    <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">
+      <div className="w-full max-w-md p-8 space-y-8 bg-gray-800 rounded-lg shadow-lg">
+        <div className="text-center">
+          <FaRocket className="mx-auto h-12 w-auto text-indigo-500" />
+          <h2 className="mt-6 text-3xl font-extrabold">Welcome to Alvis</h2>
+          <p className="mt-2 text-sm text-gray-400">Sign in to your account</p>
+        </div>
+        <form
+          className="space-y-6"
+          onSubmit={(e) => handleLoginOrRegister(e, "/auth/login")}
+        >
+          <div className="rounded-md shadow-sm -space-y-px">
+            <input
+              type="text"
+              placeholder="Username"
+              className="w-full px-3 py-2 border border-gray-700 bg-gray-900 placeholder-gray-500 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              value={loginForm.username}
+              onChange={(e) =>
+                setLoginForm({ ...loginForm, username: e.target.value })
+              }
+            />
+            <input
+              type="password"
+              placeholder="Password"
+              className="w-full px-3 py-2 border border-gray-700 bg-gray-900 placeholder-gray-500 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              value={loginForm.password}
+              onChange={(e) =>
+                setLoginForm({ ...loginForm, password: e.target.value })
+              }
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <button
+              type="submit"
+              className="w-full py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              Sign In
+            </button>
+          </div>
+          <div className="text-center">
+            <button
+              type="button"
+              onClick={(e) => handleLoginOrRegister(e, "/auth/register")}
+              className="font-medium text-indigo-400 hover:text-indigo-300"
+            >
+              Don't have an account? Register
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
 }

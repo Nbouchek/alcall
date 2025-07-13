@@ -222,6 +222,91 @@
   }
 }
 
+:root {
+  --color-primary: #2563eb;
+  --color-primary-light: #3b82f6;
+  --color-primary-dark: #1d4ed8;
+  --color-secondary: #7c3aed;
+  --color-secondary-light: #8b5cf6;
+  --color-secondary-dark: #6d28d9;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+  --color-gray-100: #f3f4f6;
+  --color-gray-200: #e5e7eb;
+  --color-gray-300: #d1d5db;
+  --color-gray-400: #9ca3af;
+  --color-gray-500: #6b7280;
+  --color-gray-600: #4b5563;
+  --color-gray-700: #374151;
+  --color-gray-800: #1f2937;
+  --color-gray-900: #111827;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  @apply bg-gray-900 text-gray-100;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Chat layout */
+.chat-container {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  grid-template-rows: 1fr;
+  height: 100vh;
+}
+
+.sidebar {
+  @apply bg-gray-800 border-r border-gray-700;
+}
+
+.chat-area {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  @apply bg-gray-900;
+}
+
+/* Message bubbles */
+.message-bubble {
+  @apply rounded-2xl px-4 py-2 max-w-[75%];
+  transition: all 0.2s ease;
+}
+
+.message-bubble.sender {
+  @apply bg-indigo-600 text-white rounded-br-none;
+}
+
+.message-bubble.recipient {
+  @apply bg-gray-700 text-gray-100 rounded-bl-none;
+}
+
+/* Input field */
+.message-input {
+  @apply bg-gray-800 border border-gray-700 rounded-full px-4 py-3 text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary;
+}
+
+/* Call buttons */
+.call-button {
+  @apply rounded-full p-4 shadow-lg transition-all duration-300;
+}
+
+.call-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Responsive layout */
+@media (max-width: 768px) {
+  .chat-container {
+    grid-template-columns: 1fr;
+  }
+  .sidebar {
+    display: none;
+  }
+}
+
 html,
 body {
   padding: 0;
