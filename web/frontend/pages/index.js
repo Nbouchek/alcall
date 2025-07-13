@@ -6,6 +6,9 @@ import UserPopover from "../components/UserPopover";
 import AudioCallHandler from "../components/AudioCallHandler";
 import VideoCallInterface from "../components/VideoCallInterface";
 import OnlineUsersList from '../components/OnlineUsersList';
+import MessageList from '../components/MessageList';
+import MessageInput from '../components/MessageInput';
+import ChatHeader from '../components/ChatHeader';
 import {
   FaPhone,
   FaPhoneSlash,
@@ -22,6 +25,7 @@ import {
   FaSearch,
   FaVideo,
   FaCog,
+  FaArrowLeft,
 } from "react-icons/fa";
 
 // --- Configuration (will be populated at runtime) ---
@@ -1100,99 +1104,79 @@ export default function Home() {
         </form>
       </div>
     </div>
-  );
-
-  const MessageBubble = ({ msg, isSender, isFirstInGroup }) => {
-    // Get sender's username from the map, fallback to an empty string
-    const senderUsername = userMap.get(msg.from_user_id?.toString()) || "";
-
-    return (
-      <div
-        className={`flex ${isSender ? "justify-end" : "justify-start"} mb-1.5 ${
-          isFirstInGroup ? "mt-3" : ""
-        }`}
-      >
-        {!isSender && (
-          <div className="flex-shrink-0 mr-2">
-            {/* User Avatar */}
-            <FaUser className="h-8 w-8 text-gray-400 rounded-full bg-gray-700 p-1" />
-          </div>
-        )}
-        <div
-          className={`relative max-w-xs lg:max-w-md px-4 py-2 rounded-lg shadow ${
-            isSender
-              ? "bg-indigo-600 text-white rounded-br-none"
-              : "bg-gray-700 text-gray-100 rounded-bl-none"
-          }`}
+    <form
+      className="space-y-6"
+      onSubmit={(e) => handleLoginOrRegister(e, "/auth/login")}
+    >
+      <div className="rounded-md shadow-sm -space-y-px">
+        <input
+          type="text"
+          placeholder="Username"
+          className="w-full px-3 py-2 border border-gray-700 bg-gray-900 placeholder-gray-500 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+          value={loginForm.username}
+          onChange={(e) =>
+            setLoginForm({ ...loginForm, username: e.target.value })
+          }
+        />
+        <input
+          type="password"
+          placeholder="Password"
+          className="w-full px-3 py-2 border border-gray-700 bg-gray-900 placeholder-gray-500 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+          value={loginForm.password}
+          onChange={(e) =>
+            setLoginForm({ ...loginForm, password: e.target.value })
+          }
+        />
+      </div>
+      <div className="flex items-center justify-between">
+        <button
+          type="submit"
+          className="w-full py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
         >
-          {!isSender && (
-            <div className="text-xs font-semibold mb-1 text-gray-300">
-              {senderUsername}
-            </div>
-          )}
-          <p className="text-sm">{msg.content}</p>
-          <div
-            className={`text-xs mt-1 ${
-              isSender ? "text-indigo-200" : "text-gray-400"
-            } text-right`}
-          >
-            {new Date(msg.timestamp).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </div>
-          {isSender && msg.status === "sending" && (
-            <div className="text-xs text-indigo-300 text-right">Sending...</div>
-          )}
-          {isSender && msg.status === "failed" && (
-            <div className="text-xs text-red-400 text-right">Failed</div>
-          )}
-        </div>
-        {isSender && (
-          <div className="flex-shrink-0 ml-2">
-            {/* User Avatar */}
-            <FaUser className="h-8 w-8 text-indigo-300 rounded-full bg-indigo-800 p-1" />
+          Sign In
+        </button>
+      </div>
+      <div className="text-center">
+        <button
+          type="button"
+          onClick={(e) => handleLoginOrRegister(e, "/auth/register")}
+          className="font-medium text-indigo-400 hover:text-indigo-300"
+        >
+          Don't have an account? Register
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+);
+
+const MessageBubble = ({ msg, isSender, isFirstInGroup }) => {
+return (
+  <div className={`flex ${isSender ? 'justify-end' : 'justify-start'} mb-2`}>
+    {!isSender && (
+      <div className="flex-shrink-0 mr-2">
+        {isFirstInGroup && (
+          <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center">
+            <FaUser className="text-white text-sm" />
           </div>
         )}
       </div>
-    );
-  };
-
-  const renderChat = () => (
-    <div className="min-h-screen bg-gray-900 text-white">
-      <Head>
-        <title>Alcall - Modern Chat</title>
-        <meta name="description" content="Modern chat and calling application" />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
-      </Head>
-
-      <OnlineUsersList users={allUsersWithStatus} />
-
-      <div className="flex">
-        {/* Sidebar */}
-        <div className="w-64 bg-gray-800 h-screen p-4">
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-xl font-bold">Alcall</h1>
-            <button 
-              onClick={handleLogout}
-              className="text-gray-400 hover:text-white"
-              title="Logout"
-            >
-              <FaSignOutAlt className="text-xl" />
-            </button>
-          </div>
-
-          <div className="relative mb-4">
-            <input
-              type="text"
-              placeholder="Search users..."
-              className="w-full pl-10 py-2 bg-gray-700 rounded-md text-white"
-              onChange={(e) => handleSearch(e.target.value)}
-            />
-            <FaSearch className="absolute left-3 top-3 text-gray-400" />
-          </div>
+    )}
+    <div 
+      className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+        isSender 
+          ? 'bg-indigo-600 text-white rounded-br-none' 
+          : 'bg-gray-700 text-white rounded-bl-none'
+      }`}
+    >
+      <div className="text-sm">{msg.content}</div>
+      <div className={`text-xs mt-1 ${
+        isSender ? 'text-indigo-200' : 'text-gray-400'
+      }`}>
+        {new Date(msg.timestamp).toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit'
+        })}
 
           <div className="space-y-2">
             {searchResults.length > 0
