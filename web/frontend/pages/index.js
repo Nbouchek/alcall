@@ -674,9 +674,14 @@ export default function Home() {
   };
 
   const handleLogout = () => {
+    // Close WebSocket connection first
+    closeWebSocket();
+    
+    // Clear local storage
     localStorage.removeItem("token");
     localStorage.removeItem("user");
-    closeWebSocket();
+    
+    // Reset all state
     setUser(null);
     setIsLoggedIn(false);
     setMessages([]);
@@ -684,6 +689,10 @@ export default function Home() {
     setAllUsers([]);
     setSelectedRecipient(null);
     setLoginForm({ username: "", password: "" });
+    
+    // Force page reload to ensure clean state
+    window.location.reload();
+    
     showCallNotification("info", "Logged out successfully!");
   };
 
