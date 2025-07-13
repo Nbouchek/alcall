@@ -35,7 +35,7 @@
     "postcss": "^8.5.6",
     "stylelint": "^15.10.1",
     "stylelint-config-standard": "^34.0.0",
-    "stylelint-config-tailwindcss": "^3.3.0",
+    "stylelint-config-tailwindcss": "^1.0.0",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.0.0"
   }
