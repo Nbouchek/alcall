@@ -142,6 +142,9 @@ func main() {
 			auth.POST("/register", register)
 			auth.GET("/verify", verifyToken)
 		}
+
+		// User routes
+		api.GET("/users", getAllUsers)
 	}
 
 	port := os.Getenv("AUTH_SERVICE_PORT")
@@ -285,4 +288,25 @@ func verifyToken(c *gin.Context) {
 	} else {
 		c.JSON(401, gin.H{"error": "Invalid token claims"})
 	}
+}
+
+// GetAllUsers retrieves all users from the database and returns a simplified list
+func getAllUsers(c *gin.Context) {
+	var users []User
+	if result := DB.Find(&users); result.Error != nil {
+		log.Printf("Error fetching all users: %v", result.Error)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve users"})
+		return
+	}
+
+	// Prepare a slice of simplified user objects (ID and Username)
+	var simplifiedUsers []map[string]interface{}
+	for _, user := range users {
+		simplifiedUsers = append(simplifiedUsers, map[string]interface{}{
+			"id":       user.ID,
+			"username": user.Username,
+		})
+	}
+
+	c.JSON(http.StatusOK, simplifiedUsers)
 }
