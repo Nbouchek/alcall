@@ -15,3 +15,12 @@ services:
         value: "8088"
     autoDeploy: true
     numInstances: 1
+  - type: web
+    name: alcall-realtime-service
+    runtime: docker
+    region: frankfurt
+    plan: starter
+    dockerfilePath: ./services/realtime-service/Dockerfile  # Correct path to Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true
+    numInstances: 1
