@@ -1,6 +1,7 @@
 general: {
-  enabled = true
-  port = 8188
-  interface = "0.0.0.0"
-  ws_path = "/"
+    enabled = true
+    ws = true               ; This enables the WebSocket API endpoint
+    wsport = 8188           ; This sets the WebSocket port
+    bind = 0.0.0.0          ; This tells Janus to bind to all available network interfaces
+    ws_path = "/"           ; Your desired WebSocket path
 }

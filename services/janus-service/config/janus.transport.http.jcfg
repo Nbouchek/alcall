@@ -1,7 +1,11 @@
 general: {
-  enabled = true
-  port = 8088
-  interface = "0.0.0.0"
-  admin_enabled = true
-  admin_port = 7088
+    enabled = true
+    http = true             ; This enables the HTTP API endpoint
+    httpport = 8088         ; This sets the HTTP port
+    bind = 0.0.0.0          ; This tells Janus to bind to all available network interfaces
+
+    # If you also want to enable the Admin API over HTTP (optional)
+    admin_http = true
+    admin_httpport = 7088
+    admin_bind = 0.0.0.0
 }
