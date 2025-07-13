@@ -1,6 +1,4 @@
-FROM elice/janus-gateway:0.14.0
-
-
+FROM canyan/janus-gateway:master
 
 COPY config/*.jcfg /usr/local/etc/janus/
 COPY config/turnserver.conf /usr/local/etc/janus/
