@@ -998,19 +998,6 @@ export default function Home() {
     }
   }, [callState, activeCallRecipient, showCallNotification, user]);
 
-  // WebSocket initialization and message handling
-  useEffect(() => {
-    if (user && isLoggedIn && WEBSOCKET_URL) {
-      initializeWebSocket(
-        `${WEBSOCKET_URL}/ws?user_id=${user.id}&username=${user.username}`
-      );
-    }
-    // Clean up WebSocket on component unmount or user logout
-    return () => {
-      closeWebSocket(); // Call the imported closeWebSocket function
-    };
-  }, [user, isLoggedIn, WEBSOCKET_URL, initializeWebSocket, closeWebSocket]);
-
   // --- UI Components ---
   const styles = {
     onlineUsersContainer: {
