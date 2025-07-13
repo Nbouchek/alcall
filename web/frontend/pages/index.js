@@ -769,21 +769,23 @@ export default function Home() {
     setSearchQuery("");
     setSearchResults([]);
     setSidebarOpen(false);
-    
+
     try {
       const token = localStorage.getItem("token");
       if (!token) {
         throw new Error("No authentication token found");
       }
 
-      console.log(`Fetching messages between ${user.id} and ${userToSelect.id}`);
+      console.log(
+        `Fetching messages between ${user.id} and ${userToSelect.id}`
+      );
       const response = await axios.get(
         `${MESSAGE_API_BASE_URL}/between/${user.id}/${userToSelect.id}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
           },
-          validateStatus: (status) => status < 500 // Don't throw for 404
+          validateStatus: (status) => status < 500, // Don't throw for 404
         }
       );
 
@@ -847,9 +849,7 @@ export default function Home() {
           setIsLoggedIn(true);
           // Initialize WebSocket here after user and envVars are set
           initializeWebSocket(
-            `${fetchedEnvVars.NEXT_PUBLIC_REALTIME_API_URL}/ws?user_id=${parsedUser.id}&username=${parsedUser.username}`,
-            parsedUser.id,
-            parsedUser.username
+            `${fetchedEnvVars.NEXT_PUBLIC_REALTIME_API_URL}/ws?user_id=${parsedUser.id}&username=${parsedUser.username}`
           );
         }
       } catch (error) {
@@ -985,15 +985,18 @@ export default function Home() {
     }
   }, [callState, activeCallRecipient, showCallNotification, user]);
 
+  // WebSocket initialization and message handling
   useEffect(() => {
     if (user && isLoggedIn && WEBSOCKET_URL) {
-      initializeWebSocket(user.id, user.username, handleWebSocketMessage);
+      initializeWebSocket(
+        `${WEBSOCKET_URL}/ws?user_id=${user.id}&username=${user.username}`
+      );
     }
     // Clean up WebSocket on component unmount or user logout
     return () => {
       closeWebSocket(); // Call the imported closeWebSocket function
     };
-  }, [user, isLoggedIn, WEBSOCKET_URL, handleWebSocketMessage]);
+  }, [user, isLoggedIn, WEBSOCKET_URL, initializeWebSocket, closeWebSocket]);
 
   // --- UI Components ---
   const styles = {

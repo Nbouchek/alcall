@@ -13,38 +13,38 @@ render services delete srv-d1cqq0emcj7s73b903jg   # unifiedchat-message
 
 # Janus Service
 render services create web \
-  --name unifiedchat-janus-service \
+  --name alcall-janus-service \
   --root services/janus-service \
   --env PORT=8088 \
   --env JANUS_LOG_LEVEL=4 \
   --env JANUS_LOG_TIMESTAMPS=true \
   --branch repo-setup-fixes \
   --plan starter \
-  --region oregon
+  --region frankfurt
 
 # Realtime Service
 render services create web \
-  --name unifiedchat-realtime-service \
+  --name alcall-realtime-service \
   --root services/realtime-service \
   --env PORT=8084 \
-  --env MESSAGE_SERVICE_URL=https://unifiedchat-message-service.onrender.com \
+  --env MESSAGE_SERVICE_URL=https://alcall-message-service.onrender.com \
   --branch repo-setup-fixes \
   --plan starter \
-  --region oregon
+  --region frankfurt
 
 # Auth Service
 render services create web \
-  --name unifiedchat-auth-service \
+  --name alcall-auth-service \
   --root services/auth-service \
   --env PORT=8082 \
   --env JWT_SECRET=your-super-secret-jwt-key-change-in-production \
   --branch repo-setup-fixes \
   --plan starter \
-  --region oregon
+  --region frankfurt
 
 # User Service
 render services create web \
-  --name unifiedchat-user-service \
+  --name alcall-user-service \
   --root services/user-service \
   --env PORT=8081 \
   --env DB_HOST=localhost \
@@ -54,11 +54,11 @@ render services create web \
   --env DB_PASSWORD=password123 \
   --branch repo-setup-fixes \
   --plan starter \
-  --region oregon
+  --region frankfurt
 
 # Message Service
 render services create web \
-  --name unifiedchat-message-service \
+  --name alcall-message-service \
   --root services/message-service \
   --env PORT=8083 \
   --env DB_HOST=localhost \
@@ -68,23 +68,23 @@ render services create web \
   --env DB_PASSWORD=password123 \
   --branch repo-setup-fixes \
   --plan starter \
-  --region oregon
+  --region frankfurt
 
 # Gateway Service
 render services create web \
-  --name unifiedchat-gateway-service \
+  --name alcall-gateway-service \
   --root services/gateway-service \
   --env PORT=8080 \
-  --env AUTH_SERVICE_URL=https://unifiedchat-auth-service.onrender.com \
-  --env USER_SERVICE_URL=https://unifiedchat-user-service.onrender.com \
-  --env MESSAGE_SERVICE_URL=https://unifiedchat-message-service.onrender.com \
+  --env AUTH_SERVICE_URL=https://alcall-auth-service.onrender.com \
+  --env USER_SERVICE_URL=https://alcall-user-service.onrender.com \
+  --env MESSAGE_SERVICE_URL=https://alcall-message-service.onrender.com \
   --branch repo-setup-fixes \
   --plan starter \
-  --region oregon
+  --region frankfurt
 
 # Frontend
 render services create web \
-  --name unifiedchat-frontend \
+  --name alcall-frontend \
   --root web/frontend \
   --env PORT=3000 \
   --env NEXT_PUBLIC_AUTH_API_URL=https://alcall-auth.onrender.com/api/v1 \
@@ -95,6 +95,6 @@ render services create web \
   --env NEXT_PUBLIC_FORCE_NORMAL_MODE=false \
   --branch repo-setup-fixes \
   --plan starter \
-  --region oregon
+  --region frankfurt
 
 echo "✅ All services deleted and recreated with standardized names!"
