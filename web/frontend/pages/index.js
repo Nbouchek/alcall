@@ -4,9 +4,9 @@ import Script from "next/script";
 import axios from "axios";
 import AudioCallHandler from "../components/AudioCallHandler";
 import VideoCallInterface from "../components/VideoCallInterface";
-import OnlineUsersList from '../components/OnlineUsersList';
-import ChatInterface from '../components/ChatInterface';
-import Sidebar from '../components/Sidebar';
+import OnlineUsersList from "../components/OnlineUsersList";
+import ChatInterface from "../components/ChatInterface";
+import Sidebar from "../components/Sidebar";
 import {
   FaPhone,
   FaPhoneSlash,
@@ -39,7 +39,7 @@ export default function Home() {
   console.log(
     "🔥 FRONTEND CACHE BUSTER v2.4.0 - DIRECT HANGUP CLEANUP FIX LOADED 🔥"
   );
-  
+
   // --- State ---
   const [envVars, setEnvVars] = useState(null); // New state to hold runtime env vars
   const [user, setUser] = useState(null);
@@ -721,21 +721,21 @@ export default function Home() {
 
   const fetchAllUsers = async (userApiUrl) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
       const response = await axios.get(userApiUrl, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
       const usersData = response.data || [];
 
       // Initialize with isOnline status
-      const usersWithStatus = usersData.map(user => ({
+      const usersWithStatus = usersData.map((user) => ({
         ...user,
-        isOnline: onlineUserIds.has(user.id)
+        isOnline: onlineUserIds.has(user.id),
       }));
 
       setAllUsers(usersWithStatus);
     } catch (error) {
-      console.error('Failed to fetch users', error);
+      console.error("Failed to fetch users", error);
     }
   };
 
@@ -815,10 +815,11 @@ export default function Home() {
     setSearchResults(results);
   };
 
-  const isUserOnline = (username) => onlineUserIds.has(allUsers.find(u => u.username === username).id);
+  const isUserOnline = (username) =>
+    onlineUserIds.has(allUsers.find((u) => u.username === username).id);
 
   // Compute allUsersWithStatus by adding an isOnline property to each user
-  const allUsersWithStatus = allUsers.map(user => ({
+  const allUsersWithStatus = allUsers.map((user) => ({
     ...user,
     isOnline: onlineUserIds.has(user.id),
   }));
@@ -897,11 +898,11 @@ export default function Home() {
       }
 
       const wsUrl = `${envVars.NEXT_PUBLIC_REALTIME_API_URL}/ws?user_id=${user.id}&username=${user.username}`;
-      console.log('Connecting to WebSocket:', wsUrl);
+      console.log("Connecting to WebSocket:", wsUrl);
       ws.current = new WebSocket(wsUrl);
 
       ws.current.onopen = () => {
-        console.log('WebSocket connected successfully');
+        console.log("WebSocket connected successfully");
       };
 
       ws.current.onmessage = (event) => {
@@ -909,26 +910,30 @@ export default function Home() {
         console.log("WebSocket message received:", message);
 
         if (message.type === "presence_update") {
-          console.log('FULL PRESENCE UPDATE:', JSON.stringify(message, null, 2));
-          console.log('Current user ID:', user?.id);
+          console.log(
+            "FULL PRESENCE UPDATE:",
+            JSON.stringify(message, null, 2)
+          );
+          console.log("Current user ID:", user?.id);
 
           // Convert usernames to user objects
-          const onlineUsers = message.online_users.map(username => {
-            const userObj = allUsers.find(u => u.username === username);
+          const onlineUsers = message.online_users.map((username) => {
+            const userObj = allUsers.find((u) => u.username === username);
             return userObj || { username, id: username }; // Fallback if user not found
           });
 
-          const newOnlineIds = new Set(onlineUsers.map(u => u.id));
+          const newOnlineIds = new Set(onlineUsers.map((u) => u.id));
           setOnlineUserIds(newOnlineIds);
 
           // Update online status in allUsers
-          setAllUsers(prevUsers =>
-            prevUsers.map(user => ({
+          setAllUsers((prevUsers) =>
+            prevUsers.map((user) => ({
               ...user,
-              isOnline: newOnlineIds.has(user.id)
+              isOnline: newOnlineIds.has(user.id),
             }))
           );
-        } else if (message.type === "message") { // Correctly placed condition for new chat messages
+        } else if (message.type === "message") {
+          // Correctly placed condition for new chat messages
           setMessages((prevMessages) => [...prevMessages, message.message]);
           // If the message is for the currently selected chat, mark it as read
           if (
@@ -958,7 +963,7 @@ export default function Home() {
       };
 
       ws.current.onerror = (error) => {
-        console.error('WebSocket error:', error);
+        console.error("WebSocket error:", error);
       };
 
       ws.current.onclose = () => {
@@ -987,12 +992,12 @@ export default function Home() {
   }, [isLoggedIn, user, envVars]);
 
   useEffect(() => {
-    console.log('CURRENT ONLINE USERS STATE:', onlineUserIds);
+    console.log("CURRENT ONLINE USERS STATE:", onlineUserIds);
   }, [onlineUserIds]);
 
   useEffect(() => {
-    console.log('Current allUsers state:', allUsers);
-    console.log('Current onlineUserIds:', Array.from(onlineUserIds));
+    console.log("Current allUsers state:", allUsers);
+    console.log("Current onlineUserIds:", Array.from(onlineUserIds));
   }, [allUsers, onlineUserIds]);
 
   useEffect(() => {
@@ -1038,19 +1043,19 @@ export default function Home() {
   // --- UI Components ---
   const styles = {
     onlineUsersContainer: {
-      position: 'fixed',
-      right: '20px',
-      top: '20px',
-      background: 'white',
-      padding: '15px',
-      borderRadius: '8px',
-      boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
-      zIndex: 100
+      position: "fixed",
+      right: "20px",
+      top: "20px",
+      background: "white",
+      padding: "15px",
+      borderRadius: "8px",
+      boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
+      zIndex: 100,
     },
     onlineStatus: {
-      color: 'green',
-      fontWeight: 'bold'
-    }
+      color: "green",
+      fontWeight: "bold",
+    },
   };
 
   const renderAuth = () => {
@@ -1059,8 +1064,10 @@ export default function Home() {
         <div className="w-full max-w-md p-8 space-y-8 bg-gray-800 rounded-lg shadow-lg">
           <div className="text-center">
             <FaRocket className="mx-auto h-12 w-auto text-indigo-500" />
-            <h2 className="mt-6 text-3xl font-extrabold">Welcome to Alvis</h2>
-            <p className="mt-2 text-sm text-gray-400">Sign in to your account</p>
+            <h2 className="mt-6 text-3xl font-extrabold">Welcome to Alcall</h2>
+            <p className="mt-2 text-sm text-gray-400">
+              Sign in to your account
+            </p>
           </div>
           <form
             className="space-y-6"
@@ -1077,7 +1084,7 @@ export default function Home() {
                   className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-700 bg-gray-900 text-white placeholder-gray-500 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
                   placeholder="Username"
                   value={loginForm.username}
-                  onChange={(e) => 
+                  onChange={(e) =>
                     setLoginForm({ ...loginForm, username: e.target.value })
                   }
                 />
@@ -1123,7 +1130,9 @@ export default function Home() {
 
   const MessageBubble = ({ msg, isSender, isFirstInGroup }) => {
     return (
-      <div className={`flex ${isSender ? 'justify-end' : 'justify-start'} mb-2`}>
+      <div
+        className={`flex ${isSender ? "justify-end" : "justify-start"} mb-2`}
+      >
         {!isSender && (
           <div className="flex-shrink-0 mr-2">
             {isFirstInGroup && (
@@ -1133,26 +1142,28 @@ export default function Home() {
             )}
           </div>
         )}
-        <div 
+        <div
           className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-            isSender 
-              ? 'bg-indigo-600 text-white rounded-br-none' 
-              : 'bg-gray-700 text-white rounded-bl-none'
+            isSender
+              ? "bg-indigo-600 text-white rounded-br-none"
+              : "bg-gray-700 text-white rounded-bl-none"
           }`}
         >
           <div className="text-sm">{msg.content}</div>
-          <div className={`text-xs mt-1 ${
-            isSender ? 'text-indigo-200' : 'text-gray-400'
-          }`}>
+          <div
+            className={`text-xs mt-1 ${
+              isSender ? "text-indigo-200" : "text-gray-400"
+            }`}
+          >
             {new Date(msg.timestamp).toLocaleTimeString([], {
-              hour: '2-digit',
-              minute: '2-digit'
+              hour: "2-digit",
+              minute: "2-digit",
             })}
           </div>
-          {isSender && msg.status === 'sending' && (
+          {isSender && msg.status === "sending" && (
             <div className="text-xs text-indigo-300 text-right">Sending...</div>
           )}
-          {isSender && msg.status === 'failed' && (
+          {isSender && msg.status === "failed" && (
             <div className="text-xs text-red-400 text-right">Failed</div>
           )}
         </div>
@@ -1168,14 +1179,16 @@ export default function Home() {
   // Render search results - consolidated implementation
   const renderSearchResults = () => {
     if (!searchQuery) return null;
-    
+
     return (
       <div className="mt-4">
-        <h3 className="text-sm font-medium text-gray-400 mb-2">Search Results</h3>
+        <h3 className="text-sm font-medium text-gray-400 mb-2">
+          Search Results
+        </h3>
         {filteredUsers.length > 0 ? (
           <ul className="space-y-2">
             {filteredUsers.map((user) => (
-              <li 
+              <li
                 key={user.id}
                 className="p-2 hover:bg-gray-700 rounded-md cursor-pointer flex items-center"
                 onClick={() => setSelectedRecipient(user)}
@@ -1195,8 +1208,8 @@ export default function Home() {
   };
 
   // Filter users based on search query
-  const filteredUsers = searchQuery 
-    ? allUsers.filter(user => 
+  const filteredUsers = searchQuery
+    ? allUsers.filter((user) =>
         user.username.toLowerCase().includes(searchQuery.toLowerCase())
       )
     : [];
@@ -1206,15 +1219,25 @@ export default function Home() {
     <div className="min-h-screen bg-gray-900 text-white">
       <Head>
         <title>Alcall - Modern Chat</title>
-        <meta name="description" content="Modern chat and calling application" />
+        <meta
+          name="description"
+          content="Modern chat and calling application"
+        />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="true" />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+        <link
+          rel="preconnect"
+          href="https://fonts.gstatic.com"
+          crossOrigin="true"
+        />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+          rel="stylesheet"
+        />
       </Head>
 
       <OnlineUsersList users={allUsersWithStatus} />
       <div className="flex h-screen">
-        <Sidebar 
+        <Sidebar
           handleLogout={handleLogout}
           handleSearch={handleSearch}
           renderSearchResults={renderSearchResults}
@@ -1235,11 +1258,7 @@ export default function Home() {
     </div>
   ) : (
     <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">
-      {!envVars ? (
-        <div>Loading configuration...</div>
-      ) : (
-        renderAuth()
-      )}
+      {!envVars ? <div>Loading configuration...</div> : renderAuth()}
     </div>
   );
 }
