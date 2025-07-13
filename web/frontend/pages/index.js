@@ -721,9 +721,11 @@ export default function Home() {
     }
     try {
       const token = localStorage.getItem("token");
+      console.log('Fetching users from:', userApiUrl);
       const response = await axios.get(`${userApiUrl}/users`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      console.log('Users API Response:', response.data);
       const usersData = response.data || [];
       setAllUsers(usersData);
       // Populate the userMap for easy username lookup
@@ -885,11 +887,12 @@ export default function Home() {
         ws.current.close(); // Close existing connection if any
       }
 
-      ws.current = new WebSocket(`${envVars.NEXT_PUBLIC_REALTIME_API_URL}/ws?user_id=${user.id}&username=${user.username}`);
+      const wsUrl = `${envVars.NEXT_PUBLIC_REALTIME_API_URL}/ws?user_id=${user.id}&username=${user.username}`;
+      console.log('Connecting to WebSocket:', wsUrl);
+      ws.current = new WebSocket(wsUrl);
 
       ws.current.onopen = () => {
-        console.log("WebSocket connected");
-        ws.current.send(JSON.stringify({ type: "presence", user_id: user.id }));
+        console.log('WebSocket connected successfully');
       };
 
       ws.current.onmessage = (event) => {
@@ -939,6 +942,10 @@ export default function Home() {
         }
       };
 
+      ws.current.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+
       ws.current.onclose = () => {
         console.log("WebSocket disconnected");
         setOnlineUserIds(new Set());
@@ -954,10 +961,6 @@ export default function Home() {
           ); // Reconnect after 3 seconds
         }
       };
-
-      ws.current.onerror = (error) => {
-        console.error("WebSocket error:", error);
-      };
     }
   }, [isLoggedIn, user, envVars, selectedRecipient]);
 
@@ -971,6 +974,11 @@ export default function Home() {
   useEffect(() => {
     console.log('CURRENT ONLINE USERS STATE:', onlineUserIds);
   }, [onlineUserIds]);
+
+  useEffect(() => {
+    console.log('Current allUsers state:', allUsers);
+    console.log('Current onlineUserIds:', Array.from(onlineUserIds));
+  }, [allUsers, onlineUserIds]);
 
   useEffect(() => {
     // Only run this effect if `user` is defined (i.e., user is logged in)
