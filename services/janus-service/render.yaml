@@ -4,7 +4,10 @@ services:
     runtime: docker
     region: frankfurt
     plan: starter
-
+    healthCheck:
+      path: /janus/info
+      port: 8088
+    dockerfilePath: ./Dockerfile
     autoDeploy: true
     numInstances: 1
 # Note: Render will route HTTPS/WSS traffic to port 443 automatically
