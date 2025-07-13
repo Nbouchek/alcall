@@ -676,11 +676,11 @@ export default function Home() {
   const handleLogout = () => {
     // Close WebSocket connection first
     closeWebSocket();
-    
+
     // Clear local storage
     localStorage.removeItem("token");
     localStorage.removeItem("user");
-    
+
     // Reset all state
     setUser(null);
     setIsLoggedIn(false);
@@ -689,10 +689,10 @@ export default function Home() {
     setAllUsers([]);
     setSelectedRecipient(null);
     setLoginForm({ username: "", password: "" });
-    
+
     // Force page reload to ensure clean state
     window.location.reload();
-    
+
     showCallNotification("info", "Logged out successfully!");
   };
 
@@ -1125,7 +1125,7 @@ export default function Home() {
     );
   };
 
-  return (
+  return isLoggedIn ? (
     <div className="flex h-screen bg-gray-900 text-white overflow-hidden">
       <Head>
         <title>UnifiedChat</title>
@@ -1223,6 +1223,10 @@ export default function Home() {
             showCallNotification={showCallNotification}
           />
         )}
+    </div>
+  ) : (
+    <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">
+      {!envVars ? <div>Loading configuration...</div> : renderAuth()}
     </div>
   );
 }
