@@ -936,7 +936,7 @@ export default function Home() {
           setTimeout(
             () =>
               (ws.current = new WebSocket(
-                envVars.NEXT_PUBLIC_REALTIME_API_URL
+                `${envVars.NEXT_PUBLIC_REALTIME_API_URL}/ws?user_id=${user.id}&username=${user.username}`
               )),
             3000
           ); // Reconnect after 3 seconds
