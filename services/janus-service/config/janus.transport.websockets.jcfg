@@ -1,7 +1,5 @@
 general: {
-    enabled = true
-    ws = true
-    wsport = 8188
-    bind = 0.0.0.0
-    ws_path = "/"
+  enabled = true
+  port = 8188
+  interface = "0.0.0.0"
 }
