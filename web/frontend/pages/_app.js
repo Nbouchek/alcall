@@ -1,6 +1,8 @@
 import "../styles/globals.css";
 import Head from "next/head";
 import Script from "next/script";
+import { initializeWebSocket, closeWebSocket } from "../utils/realtime"; // Adjust path if different
+import { useEffect } from "react";
 
 export default function App({ Component, pageProps }) {
   return (

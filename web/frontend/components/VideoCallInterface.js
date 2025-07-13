@@ -1990,6 +1990,23 @@ const VideoCallInterface = forwardRef(
   }
 );
 
+VideoCallInterface.defaultProps = {
+  user: null, // Should be an object if available, otherwise null. Component should handle null check.
+  selectedReceiver: null,
+  callState: "idle",
+  roomId: null,
+  isIncoming: false,
+  // Add other props here if they are passed to VideoCallInterface and might be undefined
+  // For example:
+  // janus: null,
+  // remoteFeeds: [],
+  // localStream: null,
+  // onHangup: () => {},
+  // onAccept: () => {},
+  // onReject: () => {},
+  // onCall: () => {},
+};
+
 VideoCallInterface.displayName = "VideoCallInterface";
 
 export default VideoCallInterface;
