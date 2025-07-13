@@ -1052,173 +1052,195 @@ export default function Home() {
     }
   };
 
-  const renderAuth = () => (
-    <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">
-      <div className="w-full max-w-md p-8 space-y-8 bg-gray-800 rounded-lg shadow-lg">
-        <div className="text-center">
-          <FaRocket className="mx-auto h-12 w-auto text-indigo-500" />
-          <h2 className="mt-6 text-3xl font-extrabold">Welcome to Alvis</h2>
-          <p className="mt-2 text-sm text-gray-400">Sign in to your account</p>
-        </div>
-        <form
-          className="space-y-6"
-          onSubmit={(e) => handleLoginOrRegister(e, "/auth/login")}
-        >
-          <div className="rounded-md shadow-sm -space-y-px">
-            <input
-              type="text"
-              placeholder="Username"
-              className="w-full px-3 py-2 border border-gray-700 bg-gray-900 placeholder-gray-500 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-              value={loginForm.username}
-              onChange={(e) =>
-                setLoginForm({ ...loginForm, username: e.target.value })
-              }
-            />
-            <input
-              type="password"
-              placeholder="Password"
-              className="w-full px-3 py-2 border border-gray-700 bg-gray-900 placeholder-gray-500 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-              value={loginForm.password}
-              onChange={(e) =>
-                setLoginForm({ ...loginForm, password: e.target.value })
-              }
-            />
-          </div>
-          <div className="flex items-center justify-between">
-            <button
-              type="submit"
-              className="w-full py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              Sign In
-            </button>
-          </div>
+  const renderAuth = () => {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">
+        <div className="w-full max-w-md p-8 space-y-8 bg-gray-800 rounded-lg shadow-lg">
           <div className="text-center">
-            <button
-              type="button"
-              onClick={(e) => handleLoginOrRegister(e, "/auth/register")}
-              className="font-medium text-indigo-400 hover:text-indigo-300"
-            >
-              Don't have an account? Register
-            </button>
+            <FaRocket className="mx-auto h-12 w-auto text-indigo-500" />
+            <h2 className="mt-6 text-3xl font-extrabold">Welcome to Alvis</h2>
+            <p className="mt-2 text-sm text-gray-400">Sign in to your account</p>
           </div>
-        </form>
+          <form
+            className="space-y-6"
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleLoginOrRegister(e, "/auth/login");
+            }}
+          >
+            <div className="rounded-md shadow-sm -space-y-px">
+              <div>
+                <input
+                  type="text"
+                  required
+                  className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-700 bg-gray-900 text-white placeholder-gray-500 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                  placeholder="Username"
+                  value={loginForm.username}
+                  onChange={(e) => 
+                    setLoginForm({ ...loginForm, username: e.target.value })
+                  }
+                />
+              </div>
+              <div>
+                <input
+                  type="password"
+                  required
+                  className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-700 bg-gray-900 text-white placeholder-gray-500 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                  placeholder="Password"
+                  value={loginForm.password}
+                  onChange={(e) =>
+                    setLoginForm({ ...loginForm, password: e.target.value })
+                  }
+                />
+              </div>
+            </div>
+            <div>
+              <button
+                type="submit"
+                className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                Sign in
+              </button>
+            </div>
+            <div className="text-center">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleLoginOrRegister(e, "/auth/register");
+                }}
+                className="font-medium text-indigo-400 hover:text-indigo-300"
+              >
+                Don't have an account? Register
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
-    </div>
-    <form
-      className="space-y-6"
-      onSubmit={(e) => handleLoginOrRegister(e, "/auth/login")}
-    >
-      <div className="rounded-md shadow-sm -space-y-px">
-        <input
-          type="text"
-          placeholder="Username"
-          className="w-full px-3 py-2 border border-gray-700 bg-gray-900 placeholder-gray-500 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-          value={loginForm.username}
-          onChange={(e) =>
-            setLoginForm({ ...loginForm, username: e.target.value })
-          }
-        />
-        <input
-          type="password"
-          placeholder="Password"
-          className="w-full px-3 py-2 border border-gray-700 bg-gray-900 placeholder-gray-500 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-          value={loginForm.password}
-          onChange={(e) =>
-            setLoginForm({ ...loginForm, password: e.target.value })
-          }
-        />
-      </div>
-      <div className="flex items-center justify-between">
-        <button
-          type="submit"
-          className="w-full py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-        >
-          Sign In
-        </button>
-      </div>
-      <div className="text-center">
-        <button
-          type="button"
-          onClick={(e) => handleLoginOrRegister(e, "/auth/register")}
-          className="font-medium text-indigo-400 hover:text-indigo-300"
-        >
-          Don't have an account? Register
-        </button>
-      </div>
-    </form>
-  </div>
-</div>
-);
+    );
+  };
 
-const MessageBubble = ({ msg, isSender, isFirstInGroup }) => {
-return (
-  <div className={`flex ${isSender ? 'justify-end' : 'justify-start'} mb-2`}>
-    {!isSender && (
-      <div className="flex-shrink-0 mr-2">
-        {isFirstInGroup && (
-          <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center">
-            <FaUser className="text-white text-sm" />
+  const MessageBubble = ({ msg, isSender, isFirstInGroup }) => {
+    return (
+      <div className={`flex ${isSender ? 'justify-end' : 'justify-start'} mb-2`}>
+        {!isSender && (
+          <div className="flex-shrink-0 mr-2">
+            {isFirstInGroup && (
+              <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center">
+                <FaUser className="text-white text-sm" />
+              </div>
+            )}
+          </div>
+        )}
+        <div 
+          className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+            isSender 
+              ? 'bg-indigo-600 text-white rounded-br-none' 
+              : 'bg-gray-700 text-white rounded-bl-none'
+          }`}
+        >
+          <div className="text-sm">{msg.content}</div>
+          <div className={`text-xs mt-1 ${
+            isSender ? 'text-indigo-200' : 'text-gray-400'
+          }`}>
+            {new Date(msg.timestamp).toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit'
+            })}
+          </div>
+          {isSender && msg.status === 'sending' && (
+            <div className="text-xs text-indigo-300 text-right">Sending...</div>
+          )}
+          {isSender && msg.status === 'failed' && (
+            <div className="text-xs text-red-400 text-right">Failed</div>
+          )}
+        </div>
+        {isSender && (
+          <div className="flex-shrink-0 ml-2">
+            <FaUser className="h-8 w-8 text-indigo-300 rounded-full bg-indigo-800 p-1" />
           </div>
         )}
       </div>
-    )}
-    <div 
-      className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-        isSender 
-          ? 'bg-indigo-600 text-white rounded-br-none' 
-          : 'bg-gray-700 text-white rounded-bl-none'
-      }`}
-    >
-      <div className="text-sm">{msg.content}</div>
-      <div className={`text-xs mt-1 ${
-        isSender ? 'text-indigo-200' : 'text-gray-400'
-      }`}>
-        {new Date(msg.timestamp).toLocaleTimeString([], {
-          hour: '2-digit',
-          minute: '2-digit'
-        })}
+    );
+  };
 
-          <div className="space-y-2">
-            {searchResults.length > 0
-              ? searchResults.map((user) => (
-                  <div
-                    key={user.id}
-                    className={`flex items-center p-3 rounded-lg cursor-pointer ${highlightedUser === user.id ? 'bg-indigo-900' : 'hover:bg-gray-700'}`}
-                    onClick={() => selectChatUser(user)}
-                  >
-                    <div className="relative">
-                      <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center">
-                        <FaUser className="text-white" />
-                      </div>
-                      {user.isOnline && (
-                        <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-gray-800"></div>
-                      )}
-                    </div>
-                    <div className="ml-3">
-                      <div className="font-medium">{user.username}</div>
-                    </div>
-                  </div>
-                ))
-              : allUsersWithStatus.map((user) => (
-                  <div
-                    key={user.id}
-                    className={`flex items-center p-3 rounded-lg cursor-pointer ${highlightedUser === user.id ? 'bg-indigo-900' : 'hover:bg-gray-700'}`}
-                    onClick={() => selectChatUser(user)}
-                  >
-                    <div className="relative">
-                      <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center">
-                        <FaUser className="text-white" />
-                      </div>
-                      {user.isOnline && (
-                        <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-gray-800"></div>
-                      )}
-                    </div>
-                    <div className="ml-3">
-                      <div className="font-medium">{user.username}</div>
-                    </div>
-                  </div>
-                ))}
+  // Search results component
+  const renderSearchResults = () => {
+    const usersToShow = searchResults.length > 0 ? searchResults : allUsersWithStatus;
+    
+    return (
+      <div className="space-y-2 mt-2">
+        {usersToShow.map((user) => (
+          <div
+            key={user.id}
+            className={`flex items-center p-3 rounded-lg cursor-pointer ${
+              highlightedUser === user.id ? 'bg-indigo-900' : 'hover:bg-gray-700'
+            }`}
+            onClick={() => selectChatUser(user)}
+          >
+            <div className="relative">
+              <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center">
+                <FaUser className="text-white" />
+              </div>
+              {user.isOnline && (
+                <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-gray-800"></div>
+              )}
+            </div>
+            <div className="ml-3">
+              <div className="font-medium">{user.username}</div>
+            </div>
           </div>
+        ))}
+      </div>
+    );
+  };
+
+  // Main component return
+  if (!isLoggedIn) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+        {renderAuth()}
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-900 text-white">
+      <Head>
+        <title>Alcall - Modern Chat</title>
+        <meta name="description" content="Modern chat and calling application" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="true" />
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+      </Head>
+
+      <OnlineUsersList users={allUsersWithStatus} />
+
+      <div className="flex h-screen">
+        {/* Sidebar */}
+        <div className="w-64 bg-gray-800 h-screen p-4">
+          <div className="flex items-center justify-between mb-6">
+            <h1 className="text-xl font-bold">Alcall</h1>
+            <button 
+              onClick={handleLogout}
+              className="text-gray-400 hover:text-white"
+              title="Logout"
+            >
+              <FaSignOutAlt className="text-xl" />
+            </button>
+          </div>
+
+          <div className="relative mb-4">
+            <input
+              type="text"
+              placeholder="Search users..."
+              className="w-full pl-10 py-2 bg-gray-700 rounded-md text-white"
+              onChange={(e) => handleSearch(e.target.value)}
+            />
+            <FaSearch className="absolute left-3 top-3 text-gray-400" />
+          </div>
+
+          {renderSearchResults()}
         </div>
 
         {/* Main Chat Area */}
@@ -1519,58 +1541,6 @@ return (
             </div>
           </div>
         )}
-      </div>
-    </div>
-  ) : (
-    <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">
-      <div className="w-full max-w-md p-8 space-y-8 bg-gray-800 rounded-lg shadow-lg">
-        <div className="text-center">
-          <FaRocket className="mx-auto h-12 w-auto text-indigo-500" />
-          <h2 className="mt-6 text-3xl font-extrabold">Welcome to Alvis</h2>
-          <p className="mt-2 text-sm text-gray-400">Sign in to your account</p>
-        </div>
-        <form
-          className="space-y-6"
-          onSubmit={(e) => handleLoginOrRegister(e, "/auth/login")}
-        >
-          <div className="rounded-md shadow-sm -space-y-px">
-            <input
-              type="text"
-              placeholder="Username"
-              className="w-full px-3 py-2 border border-gray-700 bg-gray-900 placeholder-gray-500 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-              value={loginForm.username}
-              onChange={(e) =>
-                setLoginForm({ ...loginForm, username: e.target.value })
-              }
-            />
-            <input
-              type="password"
-              placeholder="Password"
-              className="w-full px-3 py-2 border border-gray-700 bg-gray-900 placeholder-gray-500 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-              value={loginForm.password}
-              onChange={(e) =>
-                setLoginForm({ ...loginForm, password: e.target.value })
-              }
-            />
-          </div>
-          <div className="flex items-center justify-between">
-            <button
-              type="submit"
-              className="w-full py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              Sign In
-            </button>
-          </div>
-          <div className="text-center">
-            <button
-              type="button"
-              onClick={(e) => handleLoginOrRegister(e, "/auth/register")}
-              className="font-medium text-indigo-400 hover:text-indigo-300"
-            >
-              Don't have an account? Register
-            </button>
-          </div>
-        </form>
       </div>
     </div>
   );
