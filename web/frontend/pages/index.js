@@ -60,6 +60,9 @@ export default function Home() {
   const [janusInitialized, setJanusInitialized] = useState(false);
   const [callEndedModal, setCallEndedModal] = useState(null);
 
+  // Add this line to fix ReferenceError
+  const [incomingCallDetails, setIncomingCallDetails] = useState(null);
+
   // Video call state
   const [videoCallState, setVideoCallState] = useState("idle"); // "idle" | "calling" | "ringing" | "active"
   const [activeVideoCallRecipient, setActiveVideoCallRecipient] =
