@@ -847,10 +847,11 @@ export default function Home() {
           const parsedUser = JSON.parse(storedUser);
           setUser(parsedUser);
           setIsLoggedIn(true);
-          // Initialize WebSocket here after user and envVars are set
-          initializeWebSocket(
-            `${fetchedEnvVars.NEXT_PUBLIC_REALTIME_API_URL}/ws?user_id=${parsedUser.id}&username=${parsedUser.username}`
-          );
+          // Remove WebSocket initialization from here. It will be handled by the dedicated WebSocket useEffect.
+          // initializeWebSocket(
+          //   `${fetchedEnvVars.NEXT_PUBLIC_REALTIME_API_URL}/ws?user_id=${parsedUser.id}&username=${parsedUser.username}`
+          // );
+          // setOnMessage(handleWebSocketMessage); // Remove this as well
         }
       } catch (error) {
         console.error("Error fetching environment variables:", error);
@@ -871,37 +872,31 @@ export default function Home() {
         console.log("Current user ID:", user?.id);
 
         // Convert usernames to user objects
-        const onlineUsers = message.online_users.map((username) => {
-          const userObj = allUsers.find((u) => u.username === username);
-          return userObj || { username, id: username }; // Fallback if user not found
+        setAllUsers((prevAllUsers) => {
+          const onlineUsernames = new Set(message.online_users);
+          const newOnlineIds = new Set();
+          const updatedAllUsers = prevAllUsers.map((u) => {
+            const isOnline = onlineUsernames.has(u.username);
+            if (isOnline) {
+              newOnlineIds.add(u.id);
+            }
+            return { ...u, isOnline };
+          });
+          setOnlineUserIds(newOnlineIds); // Update onlineUserIds based on current online users
+          return updatedAllUsers;
         });
-
-        const newOnlineIds = new Set(onlineUsers.map((u) => u.id));
-        setOnlineUserIds(newOnlineIds);
-
-        // Update online status in allUsers
-        setAllUsers((prevUsers) =>
-          prevUsers.map((u) => ({
-            ...u,
-            isOnline: newOnlineIds.has(u.id),
-          }))
-        );
       } else if (message.type === "new_message") {
-        // This is a new message, either sent by the current user from another device
-        // or an incoming message from another user. It also serves as the server's confirmation
-        // of an optimistically sent message.
         setMessages((prevMessages) => {
           const existingMessageIndex = prevMessages.findIndex(
             (m) => m.id === message.message.local_id
           );
 
           if (existingMessageIndex > -1) {
-            // If an optimistically sent message exists, update it with the server's ID and status
             const updatedMessages = [...prevMessages];
             updatedMessages[existingMessageIndex] = {
               ...updatedMessages[existingMessageIndex],
               id: message.message.id,
-              status: message.message.status || "sent", // Use status from server or default to 'sent'
+              status: message.message.status || "sent",
             };
             console.log(
               "Updated optimistic message:",
@@ -909,26 +904,22 @@ export default function Home() {
             );
             return updatedMessages;
           } else {
-            // Otherwise, it's a new incoming message or from another device of the sender
             console.log("Adding new incoming message:", message.message);
             return [...prevMessages, message.message];
           }
         });
 
-        // If the message is for the currently selected chat and the tab is visible,
-        // send a read receipt.
         if (
           message.message.from_user_id === selectedRecipient?.id &&
           document.visibilityState === "visible"
         ) {
-          // Delay marking as read to allow message to render
           setTimeout(() => {
             sendWebSocketMessage({
               type: "message_read",
-              id: message.message.id, // Use the actual message ID from the server
-              local_id: message.message.local_id, // Pass local_id for potential debugging
-              from_user_id: user.id, // The current user is the reader
-              to_user_id: message.message.from_user_id, // The sender of the original message
+              id: message.message.id,
+              local_id: message.message.local_id,
+              from_user_id: user.id,
+              to_user_id: message.message.from_user_id,
             });
             console.log("Sent message_read for message:", message.message.id);
           }, 500);
@@ -937,10 +928,9 @@ export default function Home() {
         console.log("Received message_status_update:", message);
         setMessages((prev) =>
           prev.map((m) =>
-            // Match by actual ID first, then by local_id if actual ID isn't set yet (for 'sending' state)
             m.id === message.id ||
             (m.status === "sending" && m.id === message.local_id)
-              ? { ...m, status: message.status } // Update status
+              ? { ...m, status: message.status }
               : m
           )
         );
@@ -948,13 +938,36 @@ export default function Home() {
         handleCallEvent(message.payload);
       }
     },
-    [allUsers, user, selectedRecipient, sendWebSocketMessage]
+    [
+      user,
+      selectedRecipient,
+      sendWebSocketMessage,
+      setMessages,
+      setOnlineUserIds,
+      setAllUsers,
+      handleCallEvent,
+    ] // Include all dependencies
   );
 
-  // Set the onMessage callback for the WebSocket hook
+  // Effect for WebSocket connection lifecycle
   useEffect(() => {
-    // onMessage is not needed if we are managing WebSocket directly
-  }, []);
+    if (user && isLoggedIn && WEBSOCKET_URL) {
+      const socketUrl = `${WEBSOCKET_URL}/ws?user_id=${user.id}&username=${user.username}`;
+      initializeWebSocket(socketUrl);
+    }
+    // Clean up WebSocket on component unmount or user logout
+    return () => {
+      closeWebSocket();
+    };
+  }, [user, isLoggedIn, WEBSOCKET_URL, initializeWebSocket, closeWebSocket]); // Stable dependencies
+
+  // Effect for setting the WebSocket message handler
+  useEffect(() => {
+    if (user && isLoggedIn) {
+      // Only set handler if WebSocket is likely initialized
+      setOnMessage(handleWebSocketMessage);
+    }
+  }, [setOnMessage, handleWebSocketMessage, user, isLoggedIn]); // Dependencies for setting the handler
 
   // Top-level useEffect to fetch all users when envVars and user are ready
   useEffect(() => {
