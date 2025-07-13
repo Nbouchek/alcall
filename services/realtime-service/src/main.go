@@ -483,7 +483,8 @@ func persistMessage(msg Message) {
 	// Get message service URL from environment or use default
 	messageServiceURL := os.Getenv("REALTIME_SERVICE_MESSAGE_SERVICE_URL")
 	if messageServiceURL == "" {
-		messageServiceURL = "http://unifiedchat-message-service:8083"
+		// Use the likely internal Render service name and port for message service
+		messageServiceURL = "http://alcall-message-service:8083"
 	}
 
 	// Send to message service
@@ -586,21 +587,39 @@ func main() {
 	}
 	router.Use(cors.New(config))
 
+	// Add logging and recovery middleware for better debugging
+	router.Use(gin.Logger())
+	router.Use(gin.Recovery())
+
 	// Define routes
 	router.GET("/ws", handleWebSocket)
 	router.POST("/notify", handleNotification)
 	router.GET("/health", func(c *gin.Context) {
-		c.String(http.StatusOK, "OK")
+		// Provide more detailed health check
+		c.JSON(http.StatusOK, gin.H{
+			"status": "healthy",
+			"service": "realtime",
+			"timestamp": time.Now().Unix(),
+			"online_clients": len(hub.clients), // Use clients, not just usernameToClientID for accurate count
+		})
 	})
 	router.GET("/online-users", getOnlineUsers)
 
 	// Start server
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "10000"
+		port = "10000" // Default port if not set by environment
 	}
-	log.Printf("Realtime service listening on port %s...", port)
-	router.Run(fmt.Sprintf(":%s", port))
+
+	// Bind to 0.0.0.0 for container environments like Render
+	host := "0.0.0.0"
+
+	log.Printf("Realtime service starting on %s:%s...", host, port)
+	log.Printf("Environment: PORT=%s", port) // Removed HOST from env log as we set it explicitly
+
+	if err := router.Run(fmt.Sprintf("%s:%s", host, port)); err != nil {
+		log.Fatalf("Failed to start server: %v", err)
+	}
 }
 
 func init() {

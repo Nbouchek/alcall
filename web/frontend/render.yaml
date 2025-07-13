@@ -2,7 +2,7 @@ services:
   - type: web
     name: unifiedchat-frontend
     runtime: node
-    region: oregon
+    region: frankfurt # Changed from oregon to frankfurt
     plan: starter
     buildCommand: npm install && npm run build
     startCommand: next start
