@@ -69,12 +69,16 @@ func main() {
 		c.JSON(200, gin.H{"status": "healthy"})
 	})
 
-	// RESTful endpoints
-	r.POST("/messages", handlers.SendMessageGin)
-	r.GET("/messages/:userID", handlers.GetMessagesGin)
-	// NEW SECURE ENDPOINT: Get messages between two specific users only
-	r.GET("/messages/between/:currentUserID/:selectedUserID", handlers.GetMessagesBetweenUsersGin)
-	r.PUT("/messages/:id/status", handlers.UpdateMessageStatusGin)
+	// API v1 routes
+	api := r.Group("/api/v1")
+	{
+		// RESTful endpoints
+		api.POST("/messages", handlers.SendMessageGin)
+		api.GET("/messages/:userID", handlers.GetMessagesGin)
+		// NEW SECURE ENDPOINT: Get messages between two specific users only
+		api.GET("/messages/between/:currentUserID/:selectedUserID", handlers.GetMessagesBetweenUsersGin)
+		api.PUT("/messages/:id/status", handlers.UpdateMessageStatusGin)
+	}
 
 	port := os.Getenv("PORT")
 	if port == "" {
