@@ -81,6 +81,7 @@ func main() {
 		log.Println("No users found, seeding initial users...")
 		initialUsers := []User{
 			{Username: "nacer", Email: "nacer@example.com", Password: "password123"},
+			{Username: "ahmed", Email: "ahmed@example.com", Password: "password123"},
 			{Username: "hamid", Email: "hamid@example.com", Password: "password123"},
 		}
 		for _, user := range initialUsers {
