@@ -691,7 +691,7 @@ export default function Home() {
         setIsLoggedIn(true);
         localStorage.setItem("token", token);
         localStorage.setItem("user", JSON.stringify(userData));
-        await fetchAllUsers(); // This will now also populate the userMap
+        // fetchAllUsers will now be called by the useEffect hook once envVars are set
       }
     } catch (error) {
       console.error(`${endpoint} failed`, error);
@@ -711,19 +711,16 @@ export default function Home() {
     ws.current?.close();
   };
 
-  const fetchAllUsers = async () => {
-    if (!envVars) {
-      console.error("Environment variables not loaded yet for fetching users.");
+  const fetchAllUsers = async (userApiUrl) => {
+    if (!userApiUrl) {
+      console.error("User API URL not provided for fetching users.");
       return;
     }
     try {
       const token = localStorage.getItem("token");
-      const response = await axios.get(
-        `${envVars.NEXT_PUBLIC_USER_API_URL}/users`, // Corrected to USER_API_URL
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      const response = await axios.get(`${userApiUrl}/users`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       const usersData = response.data || [];
       setUsers(usersData);
       // Populate the userMap for easy username lookup
@@ -841,14 +838,15 @@ export default function Home() {
           setUser(JSON.parse(storedUser));
           setIsLoggedIn(true);
           // fetchAllUsers() relies on envVars, so call it here
-          if (fetchedEnvVars.NEXT_PUBLIC_USER_API_URL) {
-            // Changed condition
-            fetchAllUsers();
-          } else {
-            console.error(
-              "User API URL not available after fetching env vars."
-            );
-          }
+          // Moved to a separate useEffect to ensure envVars are loaded first
+          // if (fetchedEnvVars.NEXT_PUBLIC_USER_API_URL) {
+          //   // Changed condition
+          //   fetchAllUsers(fetchedEnvVars.NEXT_PUBLIC_USER_API_URL);
+          // } else {
+          //   console.error(
+          //     "User API URL not available after fetching env vars."
+          //   );
+          // }
         }
       } catch (error) {
         console.error(
@@ -901,103 +899,83 @@ export default function Home() {
           setMessages((prevMessages) => [...prevMessages, message.message]);
           // If the message is for the currently selected chat, mark it as read
           if (
-            selectedRecipient &&
-            message.message.from_user_id === selectedRecipient.id &&
-            message.message.status !== "read"
+            message.message.from_user_id === selectedRecipient?.id &&
+            document.visibilityState === "visible"
           ) {
-            const token = localStorage.getItem("token");
-            if (token && envVars.NEXT_PUBLIC_MESSAGE_API_URL) {
-              axios
-                .put(
-                  `${envVars.NEXT_PUBLIC_MESSAGE_API_URL}/${message.message.id}/status`,
-                  { status: "read" },
-                  {
-                    headers: { Authorization: `Bearer ${token}` },
-                  }
-                )
-                .catch((err) =>
-                  console.error("Failed to mark message as read:", err)
-                );
-            }
+            // Delay marking as read to allow message to render
+            setTimeout(() => {
+              ws.current?.send(
+                JSON.stringify({
+                  type: "message_read",
+                  message_id: message.message.id,
+                  reader_id: user.id,
+                })
+              );
+            }, 500);
           }
-        } else if (message.type === "call_initiate") {
-          console.log("Incoming call:", message.call);
-          setIncomingCall({
-            ...message.call,
-            caller_user: userMap.get(message.call.from_user_id.toString()), // Populate full user object if needed
-          });
-          setCallState("ringing");
-          setCallType(message.call.call_type || "audio"); // Set call type based on incoming call
-          playIncomingCallRingtone();
-        } else if (message.type === "call_accepted") {
-          stopRingbackTone();
-          setCallState("active");
-          showCallNotification(
-            "success",
-            `${userMap.get(
-              message.from_user_id.toString()
-            )} accepted your call.`,
-            3000
+        } else if (message.type === "message_status_update") {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === message.message_id ? { ...m, status: message.status } : m
+            )
           );
-          if (callType === "video" && videoCallState === "calling") {
-            setVideoCallState("active");
-          }
-        } else if (message.type === "call_rejected") {
-          stopRingbackTone();
-          setCallState("idle");
-          setIncomingCall(null);
-          setActiveCallRecipient(null);
-          setCallRoomId(null);
-          setCallType("audio"); // Reset to default
-          showCallNotification(
-            "info",
-            `${userMap.get(
-              message.from_user_id.toString()
-            )} rejected your call.`,
-            3000
-          );
-        } else if (message.type === "call_ended") {
-          console.log("Call ended by:", message.from_user_id);
-          // If it's an active audio call, trigger cleanup
-          if (callType === "audio" && callState === "active") {
-            handleAudioCallEnd();
-          } else if (callType === "video" && videoCallState === "active") {
-            handleVideoCallEnd();
-          }
-          showCallEndedModal("info", "Call Ended", "The call has ended.", 3000);
+        } else if (message.type === "call_event") {
+          handleCallEvent(message.payload);
         }
       };
 
       ws.current.onclose = () => {
         console.log("WebSocket disconnected");
-        setOnlineUsers([]); // Clear online users on disconnect
-        // Attempt to reconnect if disconnected unexpectedly
-        if (isLoggedIn) {
-          setTimeout(() => {
-            console.log("Attempting to reconnect WebSocket...");
-            // Ensure envVars are still available for reconnect attempt
-            if (envVars && envVars.NEXT_PUBLIC_REALTIME_API_URL) {
-              ws.current = new WebSocket(envVars.NEXT_PUBLIC_REALTIME_API_URL);
-            } else {
-              console.error("Cannot reconnect: envVars or URL missing.");
-            }
-          }, 3000); // Reconnect after 3 seconds
+        setOnlineUsers([]);
+        // Attempt to reconnect if previously connected
+        if (isLoggedIn && user) {
+          console.log("Attempting to reconnect WebSocket...");
+          setTimeout(
+            () =>
+              (ws.current = new WebSocket(
+                envVars.NEXT_PUBLIC_REALTIME_API_URL
+              )),
+            3000
+          ); // Reconnect after 3 seconds
         }
       };
 
       ws.current.onerror = (error) => {
         console.error("WebSocket error:", error);
-        showCallNotification("error", "WebSocket connection error.", 5000);
-      };
-
-      return () => {
-        console.log("Cleaning up WebSocket connection.");
-        if (ws.current) {
-          ws.current.close();
-        }
       };
     }
-  }, [isLoggedIn, user, envVars]); // Reconnect when login status or user changes
+
+    // This ensures fetchAllUsers is called once environment variables are loaded and user is logged in.
+    useEffect(() => {
+      if (isLoggedIn && user && envVars && envVars.NEXT_PUBLIC_USER_API_URL) {
+        fetchAllUsers(envVars.NEXT_PUBLIC_USER_API_URL);
+      }
+    }, [isLoggedIn, user, envVars]);
+  }, [isLoggedIn, user, envVars, selectedRecipient]);
+
+  useEffect(() => {
+    // Only run this effect if `user` is defined (i.e., user is logged in)
+    if (user && callState !== "idle") {
+      // Logic for handling call state changes
+      if (callState === "in-call") {
+        console.log("Handling 'in-call' state change...");
+        // Additional actions for 'in-call' state if needed
+      } else if (callState === "ringing" && incomingCallDetails) {
+        playIncomingCallRingtone();
+      } else if (callState === "ringing" && !incomingCallDetails) {
+        // This case indicates an outgoing call that is ringing
+        playRingbackTone();
+      }
+    }
+    // Cleanup function for when callState or incomingCallDetails change
+    return () => {
+      // This will run when the component unmounts or before the effect runs again
+      if (callState === "idle") {
+        stopIncomingCallRingtone();
+        stopRingbackTone();
+      }
+    };
+  }, [callState, incomingCallDetails, user]); // Added user to dependencies
 
   const ws = useRef(null);
 
