@@ -40,8 +40,8 @@ export default function Home() {
   const [envVars, setEnvVars] = useState(null); // New state to hold runtime env vars
   const [user, setUser] = useState(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [users, setUsers] = useState([]);
-  const [onlineUsers, setOnlineUsers] = useState([]);
+  const [allUsers, setAllUsers] = useState([]); // All registered users
+  const [onlineUserIds, setOnlineUserIds] = useState(new Set()); // Just IDs of online users
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const [selectedRecipient, setSelectedRecipient] = useState(null);
@@ -725,7 +725,7 @@ export default function Home() {
         headers: { Authorization: `Bearer ${token}` },
       });
       const usersData = response.data || [];
-      setUsers(usersData);
+      setAllUsers(usersData);
       // Populate the userMap for easy username lookup
       const newMap = new Map();
       usersData.forEach((u) => newMap.set(u.id.toString(), u.username));
@@ -802,7 +802,7 @@ export default function Home() {
       setSearchResults([]);
       return;
     }
-    const results = users.filter(
+    const results = allUsers.filter(
       (u) =>
         u.username.toLowerCase().includes(term.toLowerCase()) &&
         u.id !== user.id
@@ -810,7 +810,7 @@ export default function Home() {
     setSearchResults(results);
   };
 
-  const isUserOnline = (username) => onlineUsers.includes(username);
+  const isUserOnline = (username) => onlineUserIds.has(allUsers.find(u => u.username === username).id);
 
   // Fetch env vars on component mount
   useEffect(() => {
@@ -897,16 +897,19 @@ export default function Home() {
         console.log("WebSocket message received:", message);
 
         if (message.type === "presence_update") {
-          console.log("RAW PRESENCE DATA:", message);
-          const validUsers = message.online_users
-            .filter((u) => u && u.id && u.username)
-            .map((u) => ({
-              id: u.id,
-              username: u.username,
-              // Add other required user properties
-            }));
-          console.log("PROCESSED USERS:", validUsers);
-          setOnlineUsers(validUsers);
+          console.log('FULL PRESENCE UPDATE:', JSON.stringify(message, null, 2));
+          console.log('Current user ID:', user?.id);
+          
+          const newOnlineIds = new Set(message.online_users.map(u => u.id));
+          setOnlineUserIds(newOnlineIds);
+          
+          // Mark online status in allUsers
+          setAllUsers(prevUsers => 
+            prevUsers.map(user => ({
+              ...user,
+              isOnline: newOnlineIds.has(user.id)
+            }))
+          );
         } else if (message.type === "message") {
           setMessages((prevMessages) => [...prevMessages, message.message]);
           // If the message is for the currently selected chat, mark it as read
@@ -938,7 +941,7 @@ export default function Home() {
 
       ws.current.onclose = () => {
         console.log("WebSocket disconnected");
-        setOnlineUsers([]);
+        setOnlineUserIds(new Set());
         // Attempt to reconnect if previously connected
         if (isLoggedIn && user) {
           console.log("Attempting to reconnect WebSocket...");
@@ -966,8 +969,8 @@ export default function Home() {
   }, [isLoggedIn, user, envVars]);
 
   useEffect(() => {
-    console.log('CURRENT ONLINE USERS STATE:', onlineUsers);
-  }, [onlineUsers]);
+    console.log('CURRENT ONLINE USERS STATE:', onlineUserIds);
+  }, [onlineUserIds]);
 
   useEffect(() => {
     // Only run this effect if `user` is defined (i.e., user is logged in)
@@ -1191,42 +1194,31 @@ export default function Home() {
         {/* User List */}
         <nav>
           <ul>
-            {users.map((u) => (
-              <li
-                key={u.id}
-                onClick={() => selectChatUser(u)}
-                className={`flex items-center p-3 mb-2 rounded-md cursor-pointer transition-colors duration-200 ${
-                  selectedRecipient?.id === u.id
-                    ? "bg-gray-700"
-                    : "hover:bg-gray-700"
-                }`}
-              >
-                <div className="relative">
-                  <FaUser
-                    className={`h-9 w-9 rounded-full p-1 mr-3 ${
-                      selectedRecipient?.id === u.id
-                        ? "text-indigo-400 bg-indigo-800"
-                        : "text-gray-400 bg-gray-600"
-                    }`}
-                  />
-                  {isUserOnline(u.username) && (
-                    <span className="absolute bottom-0 right-2 block h-3 w-3 rounded-full ring-2 ring-gray-800 bg-green-400"></span>
-                  )}
-                </div>
-                <span
-                  className={`font-medium ${
-                    selectedRecipient?.id === u.id
-                      ? "text-white"
-                      : "text-gray-300"
-                  }`}
-                >
-                  {u.username}
-                </span>
-                {highlightedUser === u.id && (
-                  <FaBell className="ml-auto text-yellow-400" />
-                )}
-              </li>
-            ))}
+            <ul className="space-y-2">
+              {allUsers
+                .filter(u => u.id !== user?.id) // Exclude current user
+                .map(user => (
+                  <li 
+                    key={user.id}
+                    className={`flex items-center p-2 rounded-lg cursor-pointer hover:bg-gray-700 ${selectedRecipient?.id === user.id ? 'bg-gray-600' : ''}`}
+                    onClick={() => selectChatUser(user)}
+                  >
+                    <div className="relative mr-3">
+                      <FaUser className={`h-8 w-8 rounded-full p-1 ${user.isOnline ? 'text-green-400 bg-green-900' : 'text-gray-400 bg-gray-600'}`} />
+                      {user.isOnline && (
+                        <span className="absolute bottom-0 right-0 block h-3 w-3 rounded-full ring-2 ring-gray-800 bg-green-400"></span>
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-medium">{user.username}</p>
+                      <p className="text-xs text-gray-400">
+                        {user.isOnline ? 'Online' : 'Offline'}
+                      </p>
+                    </div>
+                  </li>
+                ))
+              }
+            </ul>
           </ul>
         </nav>
         <div className="absolute bottom-4 left-4">
@@ -1255,7 +1247,7 @@ export default function Home() {
               <>
                 <div className="relative">
                   <FaUser className="h-10 w-10 text-indigo-400 rounded-full bg-indigo-800 p-1 mr-3" />
-                  {isUserOnline(selectedRecipient.username) && (
+                  {selectedRecipient.isOnline && (
                     <span className="absolute bottom-0 right-2 block h-3.5 w-3.5 rounded-full ring-2 ring-gray-800 bg-green-400"></span>
                   )}
                 </div>
@@ -1395,7 +1387,7 @@ export default function Home() {
       </main>
 
       {/* Online Users List */}
-      {isLoggedIn && <OnlineUsersList users={onlineUsers} />}
+      {isLoggedIn && <OnlineUsersList users={allUsers} />}
       {/* Incoming Call Notification */}
       {incomingCall && callState === "ringing" && (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
@@ -1502,7 +1494,7 @@ export default function Home() {
       overflowY: 'auto',
       minWidth: '200px'
     }}>
-      <h3 style={{ marginTop: 0, marginBottom: '10px' }}>Online ({users.length})</h3>
+      <h3 style={{ marginTop: 0, marginBottom: '10px' }}>Online ({users.filter(u => u.isOnline).length})</h3>
       {users.length > 0 ? (
         <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
           {users.map(user => (
@@ -1517,7 +1509,7 @@ export default function Home() {
                 width: '10px',
                 height: '10px',
                 borderRadius: '50%',
-                background: '#48bb78',
+                background: user.isOnline ? '#48bb78' : '#ccc',
                 marginRight: '8px'
               }}></span>
               {user.username}
