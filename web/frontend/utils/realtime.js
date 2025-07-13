@@ -19,27 +19,17 @@ export const initializeWebSocket = (userId, username, onMessage) => {
     return;
   }
 
-  // Start with the environment variable value
-  let baseWsUrl = process.env.NEXT_PUBLIC_REALTIME_API_URL;
-
-  // Ensure it starts with 'wss://' (Render handles SSL)
-  if (!baseWsUrl.startsWith("wss://")) {
-    baseWsUrl = `wss://${baseWsUrl
-      .replace("http://", "")
-      .replace("https://", "")}`;
-  }
-
-  // Ensure there is exactly one '/ws' at the end of the base path before query params
-  // Remove any trailing slashes or existing '/ws' before adding it back cleanly.
-  baseWsUrl = baseWsUrl.replace(/\/+$/, ""); // Remove trailing slashes
-  if (baseWsUrl.endsWith("/ws")) {
-    // If it already ends with /ws, remove it for reconstruction
-    baseWsUrl = baseWsUrl.slice(0, -3);
-  }
-  const socketUrl = `${baseWsUrl}/ws?user_id=${userId}&username=${username}`;
+  // Use the environment variable value as the complete WebSocket URL
+  const baseWsUrl = process.env.NEXT_PUBLIC_REALTIME_API_URL;
+  const socketUrl = `${baseWsUrl}?user_id=${userId}&username=${username}`;
 
   console.log(`Attempting WebSocket connection to: ${socketUrl}`);
-  socket = new WebSocket(socketUrl);
+  try {
+    socket = new WebSocket(socketUrl);
+  } catch (error) {
+    console.error("WebSocket initialization error:", error);
+    return;
+  }
 
   socket.onopen = () => {
     console.log("WebSocket connected!");
