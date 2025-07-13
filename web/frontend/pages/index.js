@@ -39,6 +39,7 @@ export default function Home() {
   console.log(
     "🔥 FRONTEND CACHE BUSTER v2.4.0 - DIRECT HANGUP CLEANUP FIX LOADED 🔥"
   );
+  
   // --- State ---
   const [envVars, setEnvVars] = useState(null); // New state to hold runtime env vars
   const [user, setUser] = useState(null);
@@ -48,6 +49,7 @@ export default function Home() {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const [selectedRecipient, setSelectedRecipient] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const [loginForm, setLoginForm] = useState({ username: "", password: "" });
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
@@ -1162,46 +1164,56 @@ export default function Home() {
     );
   };
 
-  // Search results component
+  // Render search results - consolidated implementation
   const renderSearchResults = () => {
-    const usersToShow = searchResults.length > 0 ? searchResults : allUsersWithStatus;
+    if (!searchQuery) return null;
     
     return (
-      <div className="space-y-2 mt-2">
-        {usersToShow.map((user) => (
-          <div
-            key={user.id}
-            className={`flex items-center p-3 rounded-lg cursor-pointer ${
-              highlightedUser === user.id ? 'bg-indigo-900' : 'hover:bg-gray-700'
-            }`}
-            onClick={() => selectChatUser(user)}
-          >
-            <div className="relative">
-              <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center">
-                <FaUser className="text-white" />
-              </div>
-              {user.isOnline && (
-                <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-gray-800"></div>
-              )}
-            </div>
-            <div className="ml-3">
-              <div className="font-medium">{user.username}</div>
-            </div>
-          </div>
-        ))}
+      <div className="mt-4">
+        <h3 className="text-sm font-medium text-gray-400 mb-2">Search Results</h3>
+        {filteredUsers.length > 0 ? (
+          <ul className="space-y-2">
+            {filteredUsers.map((user) => (
+              <li 
+                key={user.id}
+                className="p-2 hover:bg-gray-700 rounded-md cursor-pointer flex items-center"
+                onClick={() => setSelectedRecipient(user)}
+              >
+                <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center mr-2">
+                  <FaUser className="text-sm text-white" />
+                </div>
+                <span>{user.username}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-gray-400 text-sm">No users found</p>
+        )}
       </div>
     );
   };
 
-  // Main component return
-  if (!isLoggedIn) {
-    return (
-      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
-        {renderAuth()}
-      </div>
+  // Handle search functionality - consolidated implementation
+  const handleSearch = (term) => {
+    setSearchQuery(term);
+    if (!term) {
+      setSearchResults([]);
+      return;
+    }
+    const results = allUsers.filter((user) =>
+      user.username.toLowerCase().includes(term.toLowerCase())
     );
-  }
+    setSearchResults(results);
+  };
 
+  // Filter users based on search query
+  const filteredUsers = searchQuery 
+    ? allUsers.filter(user => 
+        user.username.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : [];
+
+  // Single return statement for the component
   return (
     <div className="min-h-screen bg-gray-900 text-white">
       <Head>
@@ -1212,29 +1224,37 @@ export default function Home() {
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
       </Head>
 
-      <OnlineUsersList users={allUsersWithStatus} />
+      {!isLoggedIn ? (
+        <div className="min-h-screen flex items-center justify-center">
+          {renderAuth()}
+        </div>
+      ) : (
+        <>
+          <OnlineUsersList users={allUsersWithStatus} />
+          <div className="flex h-screen">
+            <Sidebar 
+              handleLogout={handleLogout}
+              handleSearch={handleSearch}
+              renderSearchResults={renderSearchResults}
+            />
 
-      <div className="flex h-screen">
-        <Sidebar 
-          handleLogout={handleLogout}
-          handleSearch={handleSearch}
-          renderSearchResults={renderSearchResults}
-        />
-
-        <ChatInterface
-          selectedRecipient={selectedRecipient}
-          isUserOnline={isUserOnline}
-          messages={messages}
-          newMessage={newMessage}
-          setNewMessage={setNewMessage}
-          handleSendMessage={handleSendMessage}
-          user={user}
-          initiateCall={initiateCall}
-          initiateVideoCall={initiateVideoCall}
-        />
-      </div>
+            <ChatInterface
+              selectedRecipient={selectedRecipient}
+              isUserOnline={isUserOnline}
+              messages={messages}
+              newMessage={newMessage}
+              setNewMessage={setNewMessage}
+              handleSendMessage={handleSendMessage}
+              user={user}
+              initiateCall={initiateCall}
+              initiateVideoCall={initiateVideoCall}
+            />
+          </div>
+        </>
+      )}
     </div>
   );
+}
 
   if (!envVars) {
     return (
