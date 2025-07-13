@@ -1,4 +1,5 @@
-FROM jeffchenglilee/janus-gateway:0.11.3
+FROM elice/janus-gateway:0.14.0
+
 
 
 COPY config/*.jcfg /usr/local/etc/janus/
