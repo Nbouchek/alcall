@@ -8,3 +8,7 @@ services:
     healthCheckPath: /health
     autoDeploy: true
     numInstances: 1
+    # Explicitly set the PORT environment variable to match the Dockerfile's EXPOSE
+    envVars:
+      - key: PORT
+        value: 10000
