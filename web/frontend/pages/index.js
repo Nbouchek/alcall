@@ -897,7 +897,16 @@ export default function Home() {
         console.log("WebSocket message received:", message);
 
         if (message.type === "presence_update") {
-          setOnlineUsers(message.online_users);
+          console.log("RAW PRESENCE DATA:", message);
+          const validUsers = message.online_users
+            .filter((u) => u && u.id && u.username)
+            .map((u) => ({
+              id: u.id,
+              username: u.username,
+              // Add other required user properties
+            }));
+          console.log("PROCESSED USERS:", validUsers);
+          setOnlineUsers(validUsers);
         } else if (message.type === "message") {
           setMessages((prevMessages) => [...prevMessages, message.message]);
           // If the message is for the currently selected chat, mark it as read
@@ -957,6 +966,10 @@ export default function Home() {
   }, [isLoggedIn, user, envVars]);
 
   useEffect(() => {
+    console.log('CURRENT ONLINE USERS STATE:', onlineUsers);
+  }, [onlineUsers]);
+
+  useEffect(() => {
     // Only run this effect if `user` is defined (i.e., user is logged in)
     if (user && callState !== "idle") {
       // Logic for handling call state changes
@@ -997,6 +1010,23 @@ export default function Home() {
   // }, [callState, callEndedModal]);
 
   // --- UI Components ---
+  const styles = {
+    onlineUsersContainer: {
+      position: 'fixed',
+      right: '20px',
+      top: '20px',
+      background: 'white',
+      padding: '15px',
+      borderRadius: '8px',
+      boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
+      zIndex: 100
+    },
+    onlineStatus: {
+      color: 'green',
+      fontWeight: 'bold'
+    }
+  };
+
   const renderAuth = () => (
     <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">
       <div className="w-full max-w-md p-8 space-y-8 bg-gray-800 rounded-lg shadow-lg">
@@ -1364,6 +1394,8 @@ export default function Home() {
         )}
       </main>
 
+      {/* Online Users List */}
+      {isLoggedIn && <OnlineUsersList users={onlineUsers} />}
       {/* Incoming Call Notification */}
       {incomingCall && callState === "ringing" && (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
@@ -1440,6 +1472,9 @@ export default function Home() {
 
       {/* VideoCallInterface Component */}
       <VideoCallInterface
+        user={user}  // Make sure this is passed from parent
+        selectedReceiver={selectedRecipient}
+        callState={callState}
         videoCallState={videoCallState}
         setVideoCallState={setVideoCallState}
         activeVideoCallRecipient={activeVideoCallRecipient}
@@ -1449,6 +1484,49 @@ export default function Home() {
         janusUrl={envVars ? envVars.NEXT_PUBLIC_JANUS_URL : undefined}
         janusHttpUrl={envVars ? envVars.NEXT_PUBLIC_JANUS_HTTP_URL : undefined}
       />
+    </div>
+  );
+
+  const OnlineUsersList = ({ users }) => (
+    <div style={{
+      position: 'fixed',
+      right: '20px',
+      top: '20px',
+      background: '#2d3748',
+      color: 'white',
+      padding: '15px',
+      borderRadius: '8px',
+      boxShadow: '0 2px 10px rgba(0,0,0,0.3)',
+      zIndex: 100,
+      maxHeight: '60vh',
+      overflowY: 'auto',
+      minWidth: '200px'
+    }}>
+      <h3 style={{ marginTop: 0, marginBottom: '10px' }}>Online ({users.length})</h3>
+      {users.length > 0 ? (
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+          {users.map(user => (
+            <li key={user.id} style={{ 
+              padding: '8px 0',
+              borderBottom: '1px solid #4a5568',
+              display: 'flex',
+              alignItems: 'center'
+            }}>
+              <span style={{
+                display: 'inline-block',
+                width: '10px',
+                height: '10px',
+                borderRadius: '50%',
+                background: '#48bb78',
+                marginRight: '8px'
+              }}></span>
+              {user.username}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p style={{ margin: 0 }}>No users online</p>
+      )}
     </div>
   );
 
