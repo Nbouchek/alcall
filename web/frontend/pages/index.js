@@ -945,7 +945,7 @@ export default function Home() {
       setMessages,
       setOnlineUserIds,
       setAllUsers,
-      handleCallEvent,
+      handleCallEvent, // This will now refer to the stable useCallback version
     ] // Include all dependencies
   );
 
@@ -997,7 +997,6 @@ export default function Home() {
       }
     }
   }, [callState, activeCallRecipient, showCallNotification, user]);
-
   // --- UI Components ---
   const styles = {
     onlineUsersContainer: {
@@ -1192,6 +1191,134 @@ export default function Home() {
     );
   };
 
+  // Helper function to handle call events (moved from within WebSocket.onmessage)
+  const handleCallEvent = useCallback(
+    (payload) => {
+      // Implement your call event handling logic here
+      console.log("Call Event Received:", payload);
+      // This function would typically update call-related states (e.g., incomingCall, callState)
+      const { type, call } = payload;
+      if (!call) {
+        console.warn("Received call_event without call payload:", payload);
+        return;
+      }
+
+      switch (type) {
+        case "call_initiate":
+        case "video_call_initiate":
+          // Ensure user is not already in a call
+          if (callState === "idle") {
+            setIncomingCallDetails(call); // Store full call details
+            setIncomingCall({
+              caller_username: call.caller_username,
+              call_type: call.call_type,
+            });
+            setCallState("ringing");
+            setCallType(call.call_type);
+            showCallNotification(
+              "info",
+              `${call.caller_username} is ${
+                call.call_type === "video" ? "video" : "audio"
+              } calling...`
+            );
+            playIncomingCallRingtone();
+          } else {
+            // Send a busy signal back
+            sendWebSocketMessage({
+              type:
+                call.call_type === "video" ? "video_call_busy" : "call_busy",
+              call: {
+                to_user_id: call.from_user_id,
+                from_user_id: user.id,
+                room_id: call.room_id,
+                call_type: call.call_type,
+              },
+            });
+            showCallNotification(
+              "warning",
+              `Call from ${call.caller_username} declined (busy).`
+            );
+          }
+          break;
+
+        case "call_accepted":
+        case "video_call_accepted":
+          stopRingbackTone();
+          clearTimeout(ringtoneTimeoutRef.current);
+          ringtoneTimeoutRef.current = null;
+          setCallState("active"); // Set to active as the other side accepted
+          setVideoCallState("active"); // For video calls
+          showCallNotification(
+            "success",
+            `${
+              userMap.get(call.from_user_id)?.username || "User"
+            } accepted your ${call.call_type} call!`
+          );
+          break;
+
+        case "call_rejected":
+        case "video_call_rejected":
+          stopRingbackTone();
+          clearTimeout(ringtoneTimeoutRef.current);
+          ringtoneTimeoutRef.current = null;
+          setCallState("idle");
+          setVideoCallState("idle");
+          setActiveCallRecipient(null);
+          setActiveVideoCallRecipient(null);
+          setCallRoomId(null);
+          setVideoCallRoomId(null);
+          showCallNotification(
+            "info",
+            `${
+              userMap.get(call.from_user_id)?.username || "User"
+            } rejected your ${call.call_type} call.`
+          );
+          break;
+
+        case "call_ended":
+        case "video_call_ended":
+        case "call_busy": // Handle busy as a type of ended call for the caller
+        case "video_call_busy":
+          // Only trigger endCall if we are actually in an active/calling/ringing state
+          if (callState !== "idle" || videoCallState !== "idle") {
+            showCallEndedModal(
+              "info",
+              `${call.call_type === "video" ? "Video " : "Audio "}Call Ended`,
+              `${call.caller_username || "The other party"} ended the call.`
+            );
+            endCall(); // This will reset all call states and clean up resources
+          }
+          break;
+        default:
+          console.warn("Unknown call event type:", type, payload);
+      }
+    },
+    [
+      user,
+      callState,
+      videoCallState,
+      setIncomingCallDetails,
+      setIncomingCall,
+      setCallState,
+      setCallType,
+      showCallNotification,
+      playIncomingCallRingtone,
+      sendWebSocketMessage,
+      stopRingbackTone,
+      ringtoneTimeoutRef,
+      setVideoCallState,
+      setActiveCallRecipient,
+      setActiveVideoCallRecipient,
+      setCallRoomId,
+      setVideoCallRoomId,
+      endCall,
+      userMap, // Added userMap for lookup
+      showCallEndedModal,
+      stopIncomingCallRingtone,
+      playRingbackTone,
+    ]
+  );
+
   return isLoggedIn ? (
     <div className="flex h-screen bg-gray-900 text-white overflow-hidden">
       <Head>
@@ -1297,10 +1424,3 @@ export default function Home() {
     </div>
   );
 }
-
-// Helper function to handle call events (moved from within WebSocket.onmessage)
-const handleCallEvent = (payload) => {
-  // Implement your call event handling logic here
-  console.log("Call Event Received:", payload);
-  // This function would typically update call-related states (e.g., incomingCall, callState)
-};
