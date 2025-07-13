@@ -22,5 +22,8 @@ services:
     plan: starter
     dockerfilePath: ./services/realtime-service/Dockerfile  # Correct path to Dockerfile
     healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: "10000"
     autoDeploy: true
     numInstances: 1
