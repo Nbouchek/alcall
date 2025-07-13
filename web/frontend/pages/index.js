@@ -1204,6 +1204,15 @@ export default function Home() {
     );
   }
 
+  // Main component return
+  if (!isLoggedIn) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+        {renderAuth()}
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-900 text-white">
       <Head>
