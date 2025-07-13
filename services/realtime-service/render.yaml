@@ -5,7 +5,6 @@ services:
     region: frankfurt
     plan: starter
     buildCommand: docker build -t realtime-service .
-
     healthCheckPath: /health
     autoDeploy: true
     numInstances: 1
