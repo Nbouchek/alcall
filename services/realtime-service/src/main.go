@@ -595,7 +595,7 @@ func main() {
 	router.GET("/online-users", getOnlineUsers)
 
 	// Start server
-	port := os.Getenv("REALTIME_SERVICE_PORT")
+	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8084"
 	}
