@@ -19,14 +19,9 @@ export const initializeWebSocket = (userId, username, onMessage) => {
     return;
   }
 
-  // Fix WebSocket Connection Path: Ensure /ws is always appended if not already in the env var
-  // The environment variable NEXT_PUBLIC_REALTIME_API_URL should eventually be updated on Render
-  // to include /ws. For now, we'll append it here defensively.
-  let baseSocketUrl = process.env.NEXT_PUBLIC_REALTIME_API_URL;
-  if (!baseSocketUrl.endsWith("/ws")) {
-    baseSocketUrl += "/ws";
-  }
-  const socketUrl = `${baseSocketUrl}?user_id=${userId}&username=${username}`;
+  // The NEXT_PUBLIC_REALTIME_API_URL environment variable is now confirmed to correctly
+  // include '/ws', so we can directly use it without defensive appending.
+  const socketUrl = `${process.env.NEXT_PUBLIC_REALTIME_API_URL}?user_id=${userId}&username=${username}`;
 
   console.log(`Attempting WebSocket connection to: ${socketUrl}`);
   socket = new WebSocket(socketUrl);
