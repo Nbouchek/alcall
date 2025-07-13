@@ -947,14 +947,14 @@ export default function Home() {
         console.error("WebSocket error:", error);
       };
     }
-
-    // This ensures fetchAllUsers is called once environment variables are loaded and user is logged in.
-    useEffect(() => {
-      if (isLoggedIn && user && envVars && envVars.NEXT_PUBLIC_USER_API_URL) {
-        fetchAllUsers(envVars.NEXT_PUBLIC_USER_API_URL);
-      }
-    }, [isLoggedIn, user, envVars]);
   }, [isLoggedIn, user, envVars, selectedRecipient]);
+
+  // Top-level useEffect to fetch all users when envVars and user are ready
+  useEffect(() => {
+    if (isLoggedIn && user && envVars && envVars.NEXT_PUBLIC_USER_API_URL) {
+      fetchAllUsers(envVars.NEXT_PUBLIC_USER_API_URL);
+    }
+  }, [isLoggedIn, user, envVars]);
 
   useEffect(() => {
     // Only run this effect if `user` is defined (i.e., user is logged in)
