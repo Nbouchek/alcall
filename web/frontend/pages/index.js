@@ -30,6 +30,7 @@ let WEBSOCKET_URL;
 let JANUS_HTTP_URL;
 let JANUS_URL;
 let REALTIME_HTTP_API_URL;
+let USER_API_BASE_URL; // Add this line
 
 export default function Home() {
   console.log(
@@ -718,7 +719,7 @@ export default function Home() {
     try {
       const token = localStorage.getItem("token");
       const response = await axios.get(
-        `${envVars.NEXT_PUBLIC_AUTH_API_URL}/users`,
+        `${envVars.NEXT_PUBLIC_USER_API_URL}/users`, // Corrected to USER_API_URL
         {
           headers: { Authorization: `Bearer ${token}` },
         }
@@ -831,6 +832,7 @@ export default function Home() {
         JANUS_URL = fetchedEnvVars.NEXT_PUBLIC_JANUS_URL;
         REALTIME_HTTP_API_URL =
           fetchedEnvVars.NEXT_PUBLIC_REALTIME_HTTP_API_URL;
+        USER_API_BASE_URL = fetchedEnvVars.NEXT_PUBLIC_USER_API_URL; // Add this line
 
         // After fetching env vars, check for existing session
         const token = localStorage.getItem("token");
@@ -839,11 +841,12 @@ export default function Home() {
           setUser(JSON.parse(storedUser));
           setIsLoggedIn(true);
           // fetchAllUsers() relies on envVars, so call it here
-          if (fetchedEnvVars.NEXT_PUBLIC_AUTH_API_URL) {
+          if (fetchedEnvVars.NEXT_PUBLIC_USER_API_URL) {
+            // Changed condition
             fetchAllUsers();
           } else {
             console.error(
-              "Auth API URL not available after fetching env vars."
+              "User API URL not available after fetching env vars."
             );
           }
         }
