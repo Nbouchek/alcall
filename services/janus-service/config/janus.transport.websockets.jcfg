@@ -1,5 +1,4 @@
-general: {
-  enabled = true
-  port = 8188
-  interface = "0.0.0.0"
-}
+[general]
+enabled = true
+port = 8188
+interface = "0.0.0.0"
