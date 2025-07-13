@@ -87,12 +87,12 @@ render services create web \
   --name unifiedchat-frontend \
   --root web/frontend \
   --env PORT=3000 \
-  --env NEXT_PUBLIC_AUTH_API_URL=https://unifiedchat-auth-service.onrender.com/api/v1 \
-  --env NEXT_PUBLIC_MESSAGE_API_URL=https://unifiedchat-message-service.onrender.com \
-  --env NEXT_PUBLIC_REALTIME_API_URL=https://alcall-realtime.onrender.com \
-  --env NEXT_PUBLIC_JANUS_URL=wss://unifiedchat-janus-service.onrender.com/janus \
-  --env NEXT_PUBLIC_JANUS_HTTP_URL=https://unifiedchat-janus-service.onrender.com \
-  --env NEXT_PUBLIC_FORCE_NORMAL_MODE=true \
+  --env NEXT_PUBLIC_AUTH_API_URL=https://alcall-auth.onrender.com/api/v1 \
+  --env NEXT_PUBLIC_MESSAGE_API_URL=https://alcall-message.onrender.com/api/v1/messages \
+  --env NEXT_PUBLIC_REALTIME_API_URL=wss://alcall-realtime.onrender.com \
+  --env NEXT_PUBLIC_JANUS_URL=wss://alcall-janus.onrender.com/janus \
+  --env NEXT_PUBLIC_JANUS_HTTP_URL=https://alcall-janus.onrender.com \
+  --env NEXT_PUBLIC_FORCE_NORMAL_MODE=false \
   --branch repo-setup-fixes \
   --plan starter \
   --region oregon

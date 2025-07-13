@@ -27,17 +27,17 @@ services:
       - key: PORT
         value: 3000
       - key: NEXT_PUBLIC_AUTH_API_URL
-        value: "https://unifiedchat-auth-service.onrender.com/api/v1"
+        value: "https://alcall-auth.onrender.com/api/v1"
       - key: NEXT_PUBLIC_MESSAGE_API_URL
-        value: "https://unifiedchat-message-service.onrender.com"
+        value: "https://alcall-message.onrender.com/api/v1/messages"
       - key: NEXT_PUBLIC_REALTIME_API_URL
         value: "wss://alcall-realtime.onrender.com"
       - key: NEXT_PUBLIC_JANUS_URL
-        value: "wss://unifiedchat-janus-service.onrender.com/janus"
+        value: "wss://alcall-janus.onrender.com/janus"
       - key: NEXT_PUBLIC_JANUS_HTTP_URL
-        value: "https://unifiedchat-janus-service.onrender.com"
+        value: "https://alcall-janus.onrender.com"
       - key: NEXT_PUBLIC_FORCE_NORMAL_MODE
-        value: "true"
+        value: "false"
     healthCheckPath: /
     autoDeploy: true
     numInstances: 1
