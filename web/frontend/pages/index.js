@@ -715,25 +715,22 @@ export default function Home() {
   };
 
   const fetchAllUsers = async (userApiUrl) => {
-    if (!userApiUrl) {
-      console.error("User API URL not provided for fetching users.");
-      return;
-    }
     try {
-      const token = localStorage.getItem("token");
-      console.log('Fetching users from:', userApiUrl);
-      const response = await axios.get(`${userApiUrl}/users`, {
-        headers: { Authorization: `Bearer ${token}` },
+      const token = localStorage.getItem('token');
+      const response = await axios.get(userApiUrl, {
+        headers: { Authorization: `Bearer ${token}` }
       });
-      console.log('Users API Response:', response.data);
       const usersData = response.data || [];
-      setAllUsers(usersData);
-      // Populate the userMap for easy username lookup
-      const newMap = new Map();
-      usersData.forEach((u) => newMap.set(u.id.toString(), u.username));
-      setUserMap(newMap);
+      
+      // Initialize with isOnline status
+      const usersWithStatus = usersData.map(user => ({
+        ...user,
+        isOnline: onlineUserIds.has(user.id)
+      }));
+      
+      setAllUsers(usersWithStatus);
     } catch (error) {
-      console.error("Failed to fetch users", error);
+      console.error('Failed to fetch users', error);
     }
   };
 
@@ -903,10 +900,16 @@ export default function Home() {
           console.log('FULL PRESENCE UPDATE:', JSON.stringify(message, null, 2));
           console.log('Current user ID:', user?.id);
           
-          const newOnlineIds = new Set(message.online_users.map(u => u.id));
+          // Convert usernames to user objects
+          const onlineUsers = message.online_users.map(username => {
+            const userObj = allUsers.find(u => u.username === username);
+            return userObj || { username, id: username }; // Fallback if user not found
+          });
+          
+          const newOnlineIds = new Set(onlineUsers.map(u => u.id));
           setOnlineUserIds(newOnlineIds);
           
-          // Mark online status in allUsers
+          // Update online status in allUsers
           setAllUsers(prevUsers => 
             prevUsers.map(user => ({
               ...user,
@@ -966,8 +969,8 @@ export default function Home() {
 
   // Top-level useEffect to fetch all users when envVars and user are ready
   useEffect(() => {
-    if (isLoggedIn && user && envVars && envVars.NEXT_PUBLIC_USER_API_URL) {
-      fetchAllUsers(envVars.NEXT_PUBLIC_USER_API_URL);
+    if (isLoggedIn && user && envVars?.NEXT_PUBLIC_AUTH_API_URL) {
+      fetchAllUsers(`${envVars.NEXT_PUBLIC_AUTH_API_URL}/users`);
     }
   }, [isLoggedIn, user, envVars]);
 
