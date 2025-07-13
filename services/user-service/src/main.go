@@ -111,11 +111,14 @@ func main() {
 		c.Status(200)
 	})
 
-	// Routes
-	r.POST("/users", createUser)
-	r.GET("/users/:id", getUser)
-	r.PUT("/users/:id", updateUser)
-	r.GET("/users", getAllUsers)
+	// API v1 routes
+	api := r.Group("/api/v1")
+	{
+		api.POST("/users", createUser)
+		api.GET("/users/:id", getUser)
+		api.PUT("/users/:id", updateUser)
+		api.GET("/users", getAllUsers)
+	}
 
 	port := os.Getenv("USER_SERVICE_PORT")
 	if port == "" {
