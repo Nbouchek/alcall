@@ -768,7 +768,7 @@ export default function Home() {
     try {
       const token = localStorage.getItem("token");
       const response = await axios.get(
-        `${MESSAGE_API_BASE_URL}/messages/between/${user.id}/${userToSelect.id}`,
+        `${MESSAGE_API_BASE_URL}/between/${user.id}/${userToSelect.id}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -831,7 +831,9 @@ export default function Home() {
           setIsLoggedIn(true);
           // Initialize WebSocket here after user and envVars are set
           initializeWebSocket(
-            `${fetchedEnvVars.NEXT_PUBLIC_REALTIME_API_URL}/ws?user_id=${parsedUser.id}&username=${parsedUser.username}`
+            `${fetchedEnvVars.NEXT_PUBLIC_REALTIME_API_URL}/ws?user_id=${parsedUser.id}&username=${parsedUser.username}`,
+            parsedUser.id,
+            parsedUser.username
           );
         }
       } catch (error) {
@@ -935,8 +937,8 @@ export default function Home() {
 
   // Set the onMessage callback for the WebSocket hook
   useEffect(() => {
-    setOnMessage(handleWebSocketMessage);
-  }, [setOnMessage, handleWebSocketMessage]);
+    // onMessage is not needed if we are managing WebSocket directly
+  }, []);
 
   // Top-level useEffect to fetch all users when envVars and user are ready
   useEffect(() => {
@@ -959,24 +961,23 @@ export default function Home() {
     if (user && callState !== "idle") {
       // Logic for handling call state changes
       if (callState === "in-call") {
-        console.log("Handling 'in-call' state change...");
-        // Additional actions for 'in-call' state if needed
-      } else if (callState === "ringing" && incomingCallDetails) {
-        playIncomingCallRingtone();
-      } else if (callState === "ringing" && !incomingCallDetails) {
-        // This case indicates an outgoing call that is ringing
-        playRingbackTone();
+        showCallNotification(
+          "success",
+          `Call with ${activeCallRecipient?.username} in progress.`
+        );
       }
     }
-    // Cleanup function for when callState or incomingCallDetails change
+  }, [callState, activeCallRecipient, showCallNotification, user]);
+
+  useEffect(() => {
+    if (user && isLoggedIn && WEBSOCKET_URL) {
+      initializeWebSocket(user.id, user.username, handleWebSocketMessage);
+    }
+    // Clean up WebSocket on component unmount or user logout
     return () => {
-      // This will run when the component unmounts or before the effect runs again
-      if (callState === "idle") {
-        stopIncomingCallRingtone();
-        stopRingbackTone();
-      }
+      closeWebSocket(); // Call the imported closeWebSocket function
     };
-  }, [callState, incomingCallDetails, user]); // Added user to dependencies
+  }, [user, isLoggedIn, WEBSOCKET_URL, handleWebSocketMessage]);
 
   // --- UI Components ---
   const styles = {

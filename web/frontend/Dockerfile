@@ -7,10 +7,10 @@ WORKDIR /app
 
 # Use environment variables from Render dashboard/render.yaml
 
-COPY package*.json ./
+COPY package.json package-lock.json ./
 RUN npm install
 
-COPY . .
+COPY . ./
 RUN npm run build
 
 EXPOSE 3000
