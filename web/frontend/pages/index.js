@@ -78,9 +78,6 @@ export default function Home() {
   const [janusInitialized, setJanusInitialized] = useState(false);
   const [callEndedModal, setCallEndedModal] = useState(null);
 
-  // Add this line to fix ReferenceError
-  const [incomingCallDetails, setIncomingCallDetails] = useState(null);
-
   // Video call state
   const [videoCallState, setVideoCallState] = useState("idle"); // "idle" | "calling" | "ringing" | "active"
   const [activeVideoCallRecipient, setActiveVideoCallRecipient] =
@@ -94,6 +91,17 @@ export default function Home() {
   const [audioCallVolume, setAudioCallVolume] = useState(1.0);
   const [audioCallStatus, setAudioCallStatus] = useState("Connecting...");
   const [forceHideModal, setForceHideModal] = useState(false);
+
+  // Add mounted state
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return null;
+  }
 
   // Import and use centralized WebSocket functions
   const {
@@ -427,7 +435,7 @@ export default function Home() {
   };
 
   const handleAcceptCall = async () => {
-    if (!incomingCallDetails) return;
+    if (!incomingCall) return;
 
     if (!(await requestMicrophonePermission())) {
       return;
@@ -438,30 +446,29 @@ export default function Home() {
 
     // Update the recipient to the caller
     const callerUser = allUsers.find(
-      (u) => u.username === incomingCallDetails.caller_username
+      (u) => u.username === incomingCall.caller_username
     );
     if (callerUser) {
       setActiveCallRecipient(callerUser);
     } else {
       // Fallback if user not found in allUsers (should not happen if presence is working)
       setActiveCallRecipient({
-        id: incomingCallDetails.from_user_id,
-        username: incomingCallDetails.caller_username,
+        id: incomingCall.from_user_id,
+        username: incomingCall.caller_username,
       });
     }
-    setCallRoomId(incomingCallDetails.room_id);
-    setCallType(incomingCallDetails.call_type);
+    setCallRoomId(incomingCall.room_id);
+    setCallType(incomingCall.call_type);
     setIncomingCall(null); // Clear incoming call state
-    setIncomingCallDetails(null);
 
     // Send acceptance message via WebSocket
     sendWebSocketMessage({
       type: "call_accepted",
       call: {
-        to_user_id: incomingCallDetails.from_user_id,
+        to_user_id: incomingCall.from_user_id,
         from_user_id: user.id,
-        room_id: incomingCallDetails.room_id,
-        call_type: incomingCallDetails.call_type,
+        room_id: incomingCall.room_id,
+        call_type: incomingCall.call_type,
       },
     });
 
@@ -469,12 +476,11 @@ export default function Home() {
   };
 
   const handleRejectCall = () => {
-    if (!incomingCallDetails) return;
+    if (!incomingCall) return;
 
     stopIncomingCallRingtone();
     setCallState("idle");
     setIncomingCall(null);
-    setIncomingCallDetails(null);
     setActiveCallRecipient(null);
     setCallRoomId(null);
 
@@ -482,10 +488,10 @@ export default function Home() {
     sendWebSocketMessage({
       type: "call_rejected",
       call: {
-        to_user_id: incomingCallDetails.from_user_id,
+        to_user_id: incomingCall.from_user_id,
         from_user_id: user.id,
-        room_id: incomingCallDetails.room_id,
-        call_type: incomingCallDetails.call_type,
+        room_id: incomingCall.room_id,
+        call_type: incomingCall.call_type,
       },
     });
 
@@ -530,7 +536,6 @@ export default function Home() {
     setActiveCallRecipient(null);
     setCallRoomId(null);
     setForceHideModal(true); // Force modal hide after ending call
-    setIncomingCallDetails(null);
 
     if (ringtoneTimeoutRef.current) {
       clearTimeout(ringtoneTimeoutRef.current);
@@ -544,7 +549,6 @@ export default function Home() {
     setActiveCallRecipient,
     setCallRoomId,
     setForceHideModal,
-    setIncomingCallDetails,
     ringtoneTimeoutRef,
   ]);
 
