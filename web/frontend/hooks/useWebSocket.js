@@ -20,45 +20,52 @@ export const useWebSocket = () => {
         ws.current.close(1000, "Re-initializing"); // Close with a normal code
       }
 
-      console.log(`Attempting WebSocket connection to: ${socketUrl}`);
-      const newWs = new WebSocket(socketUrl);
-      ws.current = newWs;
+      if (typeof window !== "undefined" && window.WebSocket) {
+        console.log(`Attempting WebSocket connection to: ${socketUrl}`);
+        const newWs = new WebSocket(socketUrl);
+        ws.current = newWs;
 
-      newWs.onopen = () => {
-        console.log("WebSocket connected successfully");
-        setReconnectAttempts(0); // Reset attempts on successful connection
-      };
+        newWs.onopen = () => {
+          console.log("WebSocket connected successfully");
+          setReconnectAttempts(0); // Reset attempts on successful connection
+        };
 
-      newWs.onmessage = (event) => {
-        if (onMessageCallback.current) {
-          onMessageCallback.current(event.data);
-        }
-      };
+        newWs.onmessage = (event) => {
+          if (onMessageCallback.current) {
+            onMessageCallback.current(event.data);
+          }
+        };
 
-      newWs.onclose = (event) => {
-        console.log("WebSocket disconnected:", event.code, event.reason);
-        if (event.code !== 1000 && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-          const delay =
-            RECONNECT_BASE_DELAY_MS * Math.pow(2, reconnectAttempts);
-          console.log(
-            `Attempting to reconnect WebSocket in ${
-              delay / 1000
-            } seconds... (Attempt ${
-              reconnectAttempts + 1
-            }/${MAX_RECONNECT_ATTEMPTS})`
-          );
-          setReconnectAttempts((prev) => prev + 1);
-          setTimeout(() => initializeWebSocket(socketUrl), delay);
-        } else {
-          console.log(
-            "Max WebSocket reconnect attempts reached or normal closure. Not reconnecting automatically."
-          );
-        }
-      };
+        newWs.onclose = (event) => {
+          console.log("WebSocket disconnected:", event.code, event.reason);
+          if (
+            event.code !== 1000 &&
+            reconnectAttempts < MAX_RECONNECT_ATTEMPTS
+          ) {
+            const delay =
+              RECONNECT_BASE_DELAY_MS * Math.pow(2, reconnectAttempts);
+            console.log(
+              `Attempting to reconnect WebSocket in ${
+                delay / 1000
+              } seconds... (Attempt ${
+                reconnectAttempts + 1
+              }/${MAX_RECONNECT_ATTEMPTS})`
+            );
+            setReconnectAttempts((prev) => prev + 1);
+            setTimeout(() => initializeWebSocket(socketUrl), delay);
+          } else {
+            console.log(
+              "Max WebSocket reconnect attempts reached or normal closure. Not reconnecting automatically."
+            );
+          }
+        };
 
-      newWs.onerror = (error) => {
-        console.error("WebSocket error:", error);
-      };
+        newWs.onerror = (error) => {
+          console.error("WebSocket error:", error);
+        };
+      } else {
+        console.warn("WebSocket is not available in this environment.");
+      }
     },
     [reconnectAttempts]
   );
