@@ -28,13 +28,8 @@ import {
 } from "react-icons/fa";
 
 // --- Configuration (will be populated at runtime) ---
-let AUTH_API_BASE_URL;
-let MESSAGE_API_BASE_URL;
-let WEBSOCKET_URL;
-let JANUS_HTTP_URL;
-let JANUS_URL;
-let REALTIME_HTTP_API_URL;
-let USER_API_BASE_URL;
+// These variables are now accessed directly via process.env.NEXT_PUBLIC_VAR_NAME
+// No need for global let declarations here
 
 export default function Home() {
   console.log(
@@ -42,7 +37,7 @@ export default function Home() {
   );
 
   // --- State ---
-  const [envVars, setEnvVars] = useState(null); // New state to hold runtime env vars
+  // const [envVars, setEnvVars] = useState(null); // Remove envVars state
   const [user, setUser] = useState(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [allUsers, setAllUsers] = useState([]); // All registered users
@@ -92,7 +87,7 @@ export default function Home() {
   } = useWebSocket();
 
   // New function to handle audio call ending from AudioCallHandler
-  const handleAudioCallEnd = () => {
+  const handleAudioCallEnd = useCallback(() => {
     // Prevent infinite loops - if already idle, don't process again
     if (callState === "idle") {
       console.log(
@@ -266,7 +261,20 @@ export default function Home() {
     // Any other global cleanup actions
     isEndingCallRef.current = false;
     console.log("🔥 INDEX - IMMEDIATE AGGRESSIVE CLEANUP ENDED");
-  };
+  }, [
+    callState,
+    isEndingCallRef,
+    activeCallRecipient,
+    callRoomId,
+    incomingCall,
+    setCallState,
+    setIncomingCall,
+    setActiveCallRecipient,
+    setCallRoomId,
+    setForceHideModal,
+    ringtoneTimeoutRef,
+    audioCallRef,
+  ]);
 
   const isEndingCallRef = useRef(false); // To prevent multiple simultaneous cleanups
 
@@ -278,15 +286,21 @@ export default function Home() {
     // Implementation of Janus initialization
   };
 
-  const showCallNotification = (type, message, duration = 3000) => {
-    setCallNotification({ type, message });
-    setTimeout(() => setCallNotification(null), duration);
-  };
+  const showCallNotification = useCallback(
+    (type, message, duration = 3000) => {
+      setCallNotification({ type, message });
+      setTimeout(() => setCallNotification(null), duration);
+    },
+    [setCallNotification]
+  );
 
-  const showCallEndedModal = (type, title, message, duration = 4000) => {
-    setCallEndedModal({ type, title, message });
-    setTimeout(() => setCallEndedModal(null), duration);
-  };
+  const showCallEndedModal = useCallback(
+    (type, title, message, duration = 4000) => {
+      setCallEndedModal({ type, title, message });
+      setTimeout(() => setCallEndedModal(null), duration);
+    },
+    [setCallEndedModal]
+  );
 
   const requestMicrophonePermission = async () => {
     try {
@@ -320,31 +334,31 @@ export default function Home() {
     }
   };
 
-  const playIncomingCallRingtone = () => {
+  const playIncomingCallRingtone = useCallback(() => {
     if (window.playRingtone) {
       window.playRingtone();
     }
-  };
+  }, []);
 
-  const stopIncomingCallRingtone = () => {
+  const stopIncomingCallRingtone = useCallback(() => {
     if (window.stopRingtone) {
       window.stopRingtone();
       console.log("Stopping incoming call ringtone.");
     }
-  };
+  }, []);
 
-  const playRingbackTone = () => {
+  const playRingbackTone = useCallback(() => {
     if (window.playRingback) {
       window.playRingback();
     }
-  };
+  }, []);
 
-  const stopRingbackTone = () => {
+  const stopRingbackTone = useCallback(() => {
     if (window.stopRingback) {
       window.stopRingback();
       console.log("Stopping ringback tone.");
     }
-  };
+  }, []);
 
   const initiateCall = async (recipient) => {
     if (!user) {
@@ -490,7 +504,7 @@ export default function Home() {
   };
 
   // Unified function to end call and reset states
-  const endCall = () => {
+  const endCall = useCallback(() => {
     handleAudioCallEnd(); // Trigger the aggressive cleanup for audio calls
     handleVideoCallEnd(); // Trigger the aggressive cleanup for video calls
 
@@ -505,7 +519,17 @@ export default function Home() {
       clearTimeout(ringtoneTimeoutRef.current);
       ringtoneTimeoutRef.current = null;
     }
-  };
+  }, [
+    handleAudioCallEnd,
+    handleVideoCallEnd,
+    setCallState,
+    setIncomingCall,
+    setActiveCallRecipient,
+    setCallRoomId,
+    setForceHideModal,
+    setIncomingCallDetails,
+    ringtoneTimeoutRef,
+  ]);
 
   const initiateVideoCall = async (recipient) => {
     if (!user) {
@@ -620,7 +644,7 @@ export default function Home() {
     showCallNotification("info", "Video call rejected.");
   };
 
-  const handleVideoCallEnd = () => {
+  const handleVideoCallEnd = useCallback(() => {
     if (videoCallState === "idle") {
       console.log(
         "handleVideoCallEnd called but videoCallState is already idle."
@@ -652,13 +676,28 @@ export default function Home() {
     setVideoCallRoomId(null);
     setForceHideModal(true);
     showCallNotification("info", "Video call ended.");
-  };
+  }, [
+    videoCallState,
+    activeVideoCallRecipient,
+    user,
+    videoCallRoomId,
+    callType,
+    stopIncomingCallRingtone,
+    stopRingbackTone,
+    sendWebSocketMessage,
+    setVideoCallState,
+    setIncomingVideoCall,
+    setActiveVideoCallRecipient,
+    setVideoCallRoomId,
+    setForceHideModal,
+    showCallNotification,
+  ]);
 
   const handleLoginOrRegister = async (e, endpoint) => {
     e.preventDefault();
     try {
       const response = await axios.post(
-        `${AUTH_API_BASE_URL}${endpoint}`,
+        `${process.env.NEXT_PUBLIC_AUTH_API_URL}${endpoint}`,
         loginForm
       );
       const { token, user: userData } = response.data;
@@ -696,289 +735,42 @@ export default function Home() {
     showCallNotification("info", "Logged out successfully!");
   };
 
-  const fetchAllUsers = async (userApiUrl) => {
-    try {
-      const token = localStorage.getItem("token");
-      const response = await axios.get(userApiUrl, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      // Filter out the current user from the allUsers list
-      const usersWithoutSelf = response.data.filter((u) => u.id !== user.id);
-      setAllUsers(usersWithoutSelf);
+  const fetchAllUsers = useCallback(
+    async (userApiUrl) => {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) {
+          throw new Error("No authentication token found");
+        }
 
-      // Initialize isOnline status for all users
-      setAllUsers((prevUsers) =>
-        prevUsers.map((u) => ({
-          ...u,
-          isOnline: onlineUserIds.has(u.id),
-        }))
-      );
-
-      // Populate userMap for quick lookups
-      const newUserMap = new Map();
-      usersWithoutSelf.forEach((u) => newUserMap.set(u.id, u));
-      setUserMap(newUserMap);
-    } catch (error) {
-      console.error("Error fetching all users:", error);
-      showCallNotification("error", "Failed to load users.");
-    }
-  };
-
-  const handleSendMessage = async () => {
-    if (!newMessage.trim() || !selectedRecipient) return;
-
-    const messagePayload = {
-      to_user_id: selectedRecipient.id,
-      content: newMessage.trim(),
-      timestamp: Math.floor(Date.now() / 1000), // Unix timestamp in seconds
-      type: "private_message",
-      local_id: `temp-${Date.now()}`, // Temporary ID for optimistic UI update
-    };
-
-    // Optimistically add message to UI
-    setMessages((prevMessages) => [
-      ...prevMessages,
-      {
-        id: messagePayload.local_id,
-        from_user_id: user.id,
-        from_username: user.username,
-        to_user_id: selectedRecipient.id,
-        content: messagePayload.content,
-        timestamp: messagePayload.timestamp,
-        type: messagePayload.type,
-        status: "sending", // Indicate it's being sent
-      },
-    ]);
-    setNewMessage("");
-
-    // Send via WebSocket
-    sendWebSocketMessage(messagePayload);
-
-    // The WebSocket event will handle updating the message status to 'sent'
-  };
-
-  const selectChatUser = async (userToSelect) => {
-    if (!userToSelect?.id || !user?.id) {
-      console.error("Invalid user selection");
-      return;
-    }
-
-    setSelectedRecipient(userToSelect);
-    setSearchQuery("");
-    setSearchResults([]);
-    setSidebarOpen(false);
-
-    try {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        throw new Error("No authentication token found");
-      }
-
-      console.log(
-        `Fetching messages between ${user.id} and ${userToSelect.id}`
-      );
-      const response = await axios.get(
-        `${MESSAGE_API_BASE_URL}/between/${user.id}/${userToSelect.id}`,
-        {
+        const response = await axios.get(userApiUrl, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
-          validateStatus: (status) => status < 500, // Don't throw for 404
-        }
-      );
-
-      if (response.status === 404) {
-        console.log("No messages found, starting fresh conversation");
-        setMessages([]);
-      } else if (response.status === 200) {
-        setMessages(response.data);
-      }
-    } catch (error) {
-      console.error("Error fetching messages:", error);
-      showCallNotification("error", "Failed to load messages.");
-      setMessages([]);
-    }
-  };
-
-  const handleSearch = (term) => {
-    setSearchQuery(term);
-    if (term.length > 0) {
-      const filteredUsers = allUsers.filter((u) =>
-        u.username.toLowerCase().includes(term.toLowerCase())
-      );
-      setSearchResults(filteredUsers);
-    } else {
-      setSearchResults([]);
-    }
-  };
-
-  const isUserOnline = (username) =>
-    onlineUserIds.has(allUsers.find((u) => u.username === username).id);
-
-  // Fetch environment variables at runtime from public/env.json
-  useEffect(() => {
-    async function fetchEnvVars() {
-      try {
-        const response = await axios.get("/env.json");
-        const fetchedEnvVars = response.data;
-        setEnvVars(fetchedEnvVars);
-        AUTH_API_BASE_URL = fetchedEnvVars.NEXT_PUBLIC_AUTH_API_URL;
-        MESSAGE_API_BASE_URL = fetchedEnvVars.NEXT_PUBLIC_MESSAGE_API_URL;
-        WEBSOCKET_URL = fetchedEnvVars.NEXT_PUBLIC_REALTIME_API_URL;
-        JANUS_HTTP_URL = fetchedEnvVars.NEXT_PUBLIC_JANUS_HTTP_URL;
-        JANUS_URL = fetchedEnvVars.NEXT_PUBLIC_JANUS_URL;
-        REALTIME_HTTP_API_URL = fetchedEnvVars.NEXT_PUBLIC_REALTIME_API_URL;
-        USER_API_BASE_URL = fetchedEnvVars.NEXT_PUBLIC_AUTH_API_URL; // Assuming auth service also handles user data
-        console.log("🔥 DEBUG - Fetched Environment variables at runtime:", {
-          NEXT_PUBLIC_AUTH_API_URL: AUTH_API_BASE_URL,
-          NEXT_PUBLIC_MESSAGE_API_URL: MESSAGE_API_BASE_URL,
-          NEXT_PUBLIC_REALTIME_API_URL: WEBSOCKET_URL,
-          NEXT_PUBLIC_JANUS_HTTP_URL: JANUS_HTTP_URL,
-          NEXT_PUBLIC_JANUS_URL: JANUS_URL,
-          NODE_ENV: process.env.NODE_ENV,
         });
+        // Filter out the current user from the allUsers list
+        const usersWithoutSelf = response.data.filter((u) => u.id !== user.id);
+        setAllUsers(usersWithoutSelf);
 
-        // Check for existing session and initialize WebSocket after env vars are loaded
-        const storedUser = localStorage.getItem("user");
-        const storedToken = localStorage.getItem("token");
-        if (storedUser && storedToken) {
-          const parsedUser = JSON.parse(storedUser);
-          setUser(parsedUser);
-          setIsLoggedIn(true);
-          // Remove WebSocket initialization from here. It will be handled by the dedicated WebSocket useEffect.
-          // initializeWebSocket(
-          //   `${fetchedEnvVars.NEXT_PUBLIC_REALTIME_API_URL}/ws?user_id=${parsedUser.id}&username=${parsedUser.username}`
-          // );
-          // setOnMessage(handleWebSocketMessage); // Remove this as well
-        }
-      } catch (error) {
-        console.error("Error fetching environment variables:", error);
-      }
-    }
-
-    fetchEnvVars();
-  }, []);
-
-  // WebSocket message handling logic
-  const handleWebSocketMessage = useCallback(
-    (data) => {
-      const message = JSON.parse(data);
-      console.log("WebSocket message received:", message);
-
-      if (message.type === "presence_update") {
-        console.log("FULL PRESENCE UPDATE:", JSON.stringify(message, null, 2));
-        console.log("Current user ID:", user?.id);
-
-        // Convert usernames to user objects
-        setAllUsers((prevAllUsers) => {
-          const onlineUsernames = new Set(message.online_users);
-          const newOnlineIds = new Set();
-          const updatedAllUsers = prevAllUsers.map((u) => {
-            const isOnline = onlineUsernames.has(u.username);
-            if (isOnline) {
-              newOnlineIds.add(u.id);
-            }
-            return { ...u, isOnline };
-          });
-          setOnlineUserIds(newOnlineIds); // Update onlineUserIds based on current online users
-          return updatedAllUsers;
-        });
-      } else if (message.type === "new_message") {
-        setMessages((prevMessages) => {
-          const existingMessageIndex = prevMessages.findIndex(
-            (m) => m.id === message.message.local_id
-          );
-
-          if (existingMessageIndex > -1) {
-            const updatedMessages = [...prevMessages];
-            updatedMessages[existingMessageIndex] = {
-              ...updatedMessages[existingMessageIndex],
-              id: message.message.id,
-              status: message.message.status || "sent",
-            };
-            console.log(
-              "Updated optimistic message:",
-              updatedMessages[existingMessageIndex]
-            );
-            return updatedMessages;
-          } else {
-            console.log("Adding new incoming message:", message.message);
-            return [...prevMessages, message.message];
-          }
-        });
-
-        if (
-          message.message.from_user_id === selectedRecipient?.id &&
-          document.visibilityState === "visible"
-        ) {
-          setTimeout(() => {
-            sendWebSocketMessage({
-              type: "message_read",
-              id: message.message.id,
-              local_id: message.message.local_id,
-              from_user_id: user.id,
-              to_user_id: message.message.from_user_id,
-            });
-            console.log("Sent message_read for message:", message.message.id);
-          }, 500);
-        }
-      } else if (message.type === "message_status_update") {
-        console.log("Received message_status_update:", message);
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === message.id ||
-            (m.status === "sending" && m.id === message.local_id)
-              ? { ...m, status: message.status }
-              : m
-          )
+        // Initialize isOnline status for all users
+        setAllUsers((prevUsers) =>
+          prevUsers.map((u) => ({
+            ...u,
+            isOnline: onlineUserIds.has(u.id),
+          }))
         );
-      } else if (message.type === "call_event") {
-        handleCallEvent(message.payload);
+
+        // Populate userMap for quick lookups
+        const newUserMap = new Map();
+        usersWithoutSelf.forEach((u) => newUserMap.set(u.id, u));
+        setUserMap(newUserMap);
+      } catch (error) {
+        console.error("Error fetching all users:", error);
+        showCallNotification("error", "Failed to load users.");
       }
     },
-    [
-      user,
-      selectedRecipient,
-      sendWebSocketMessage,
-      setMessages,
-      setOnlineUserIds,
-      setAllUsers,
-      handleCallEvent, // This will now refer to the stable useCallback version
-    ] // Include all dependencies
+    [user, setAllUsers, onlineUserIds, setUserMap, showCallNotification]
   );
-
-  // Effect for WebSocket connection lifecycle
-  useEffect(() => {
-    if (user && isLoggedIn && WEBSOCKET_URL) {
-      const socketUrl = `${WEBSOCKET_URL}/ws?user_id=${user.id}&username=${user.username}`;
-      initializeWebSocket(socketUrl);
-    }
-    // Clean up WebSocket on component unmount or user logout
-    return () => {
-      closeWebSocket();
-    };
-  }, [user, isLoggedIn, WEBSOCKET_URL, initializeWebSocket, closeWebSocket]); // Stable dependencies
-
-  // Effect for setting the WebSocket message handler
-  useEffect(() => {
-    if (user && isLoggedIn) {
-      // Only set handler if WebSocket is likely initialized
-      setOnMessage(handleWebSocketMessage);
-    }
-  }, [setOnMessage, handleWebSocketMessage, user, isLoggedIn]); // Dependencies for setting the handler
-
-  // Top-level useEffect to fetch all users when envVars and user are ready
-  useEffect(() => {
-    if (isLoggedIn && user && envVars?.NEXT_PUBLIC_AUTH_API_URL) {
-      fetchAllUsers(`${envVars.NEXT_PUBLIC_AUTH_API_URL}/users`);
-    }
-  }, [isLoggedIn, user, envVars]);
-
-  useEffect(() => {
-    console.log("CURRENT ONLINE USERS STATE:", onlineUserIds);
-  }, [onlineUserIds]);
 
   useEffect(() => {
     console.log("Current allUsers state:", allUsers);
@@ -997,6 +789,7 @@ export default function Home() {
       }
     }
   }, [callState, activeCallRecipient, showCallNotification, user]);
+
   // --- UI Components ---
   const styles = {
     onlineUsersContainer: {
@@ -1127,7 +920,7 @@ export default function Home() {
         )}
 
         <div
-          className={`max-w-xs lg:max-w-md xl:max-w-lg p-3 rounded-lg shadow-md relative ${bubbleClass}`}
+          className={`max-w-xs lg:max_w-md xl:max-w-lg p-3 rounded-lg shadow-md relative ${bubbleClass}`}
         >
           {!isSender && (
             <div className="font-bold text-sm mb-1">
@@ -1191,134 +984,6 @@ export default function Home() {
     );
   };
 
-  // Helper function to handle call events (moved from within WebSocket.onmessage)
-  const handleCallEvent = useCallback(
-    (payload) => {
-      // Implement your call event handling logic here
-      console.log("Call Event Received:", payload);
-      // This function would typically update call-related states (e.g., incomingCall, callState)
-      const { type, call } = payload;
-      if (!call) {
-        console.warn("Received call_event without call payload:", payload);
-        return;
-      }
-
-      switch (type) {
-        case "call_initiate":
-        case "video_call_initiate":
-          // Ensure user is not already in a call
-          if (callState === "idle") {
-            setIncomingCallDetails(call); // Store full call details
-            setIncomingCall({
-              caller_username: call.caller_username,
-              call_type: call.call_type,
-            });
-            setCallState("ringing");
-            setCallType(call.call_type);
-            showCallNotification(
-              "info",
-              `${call.caller_username} is ${
-                call.call_type === "video" ? "video" : "audio"
-              } calling...`
-            );
-            playIncomingCallRingtone();
-          } else {
-            // Send a busy signal back
-            sendWebSocketMessage({
-              type:
-                call.call_type === "video" ? "video_call_busy" : "call_busy",
-              call: {
-                to_user_id: call.from_user_id,
-                from_user_id: user.id,
-                room_id: call.room_id,
-                call_type: call.call_type,
-              },
-            });
-            showCallNotification(
-              "warning",
-              `Call from ${call.caller_username} declined (busy).`
-            );
-          }
-          break;
-
-        case "call_accepted":
-        case "video_call_accepted":
-          stopRingbackTone();
-          clearTimeout(ringtoneTimeoutRef.current);
-          ringtoneTimeoutRef.current = null;
-          setCallState("active"); // Set to active as the other side accepted
-          setVideoCallState("active"); // For video calls
-          showCallNotification(
-            "success",
-            `${
-              userMap.get(call.from_user_id)?.username || "User"
-            } accepted your ${call.call_type} call!`
-          );
-          break;
-
-        case "call_rejected":
-        case "video_call_rejected":
-          stopRingbackTone();
-          clearTimeout(ringtoneTimeoutRef.current);
-          ringtoneTimeoutRef.current = null;
-          setCallState("idle");
-          setVideoCallState("idle");
-          setActiveCallRecipient(null);
-          setActiveVideoCallRecipient(null);
-          setCallRoomId(null);
-          setVideoCallRoomId(null);
-          showCallNotification(
-            "info",
-            `${
-              userMap.get(call.from_user_id)?.username || "User"
-            } rejected your ${call.call_type} call.`
-          );
-          break;
-
-        case "call_ended":
-        case "video_call_ended":
-        case "call_busy": // Handle busy as a type of ended call for the caller
-        case "video_call_busy":
-          // Only trigger endCall if we are actually in an active/calling/ringing state
-          if (callState !== "idle" || videoCallState !== "idle") {
-            showCallEndedModal(
-              "info",
-              `${call.call_type === "video" ? "Video " : "Audio "}Call Ended`,
-              `${call.caller_username || "The other party"} ended the call.`
-            );
-            endCall(); // This will reset all call states and clean up resources
-          }
-          break;
-        default:
-          console.warn("Unknown call event type:", type, payload);
-      }
-    },
-    [
-      user,
-      callState,
-      videoCallState,
-      setIncomingCallDetails,
-      setIncomingCall,
-      setCallState,
-      setCallType,
-      showCallNotification,
-      playIncomingCallRingtone,
-      sendWebSocketMessage,
-      stopRingbackTone,
-      ringtoneTimeoutRef,
-      setVideoCallState,
-      setActiveCallRecipient,
-      setActiveVideoCallRecipient,
-      setCallRoomId,
-      setVideoCallRoomId,
-      endCall,
-      userMap, // Added userMap for lookup
-      showCallEndedModal,
-      stopIncomingCallRingtone,
-      playRingbackTone,
-    ]
-  );
-
   return isLoggedIn ? (
     <div className="flex h-screen bg-gray-900 text-white overflow-hidden">
       <Head>
@@ -1379,8 +1044,8 @@ export default function Home() {
         callRoomId &&
         (callState === "active" || callState === "calling") && (
           <AudioCallHandler
-            janusUrl={JANUS_URL} // Use the global Janus URL
-            janusHttpUrl={JANUS_HTTP_URL} // Use the global Janus HTTP URL
+            janusUrl={process.env.NEXT_PUBLIC_JANUS_URL} // Use the global Janus URL
+            janusHttpUrl={process.env.NEXT_PUBLIC_JANUS_HTTP_URL} // Use the global Janus HTTP URL
             currentUserId={user.id}
             currentUsername={user.username}
             activeRecipientId={activeCallRecipient?.id}
@@ -1403,8 +1068,8 @@ export default function Home() {
         videoCallRoomId &&
         (videoCallState === "active" || videoCallState === "calling") && (
           <VideoCallInterface
-            janusUrl={JANUS_URL}
-            janusHttpUrl={JANUS_HTTP_URL}
+            janusUrl={process.env.NEXT_PUBLIC_JANUS_URL}
+            janusHttpUrl={process.env.NEXT_PUBLIC_JANUS_HTTP_URL}
             currentUserId={user.id}
             currentUsername={user.username}
             activeRecipientId={activeVideoCallRecipient?.id}
@@ -1420,7 +1085,8 @@ export default function Home() {
     </div>
   ) : (
     <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">
-      {!envVars ? <div>Loading configuration...</div> : renderAuth()}
+      {/* {!envVars ? <div>Loading configuration...</div> : renderAuth()} */}
+      {renderAuth()}
     </div>
   );
 }
