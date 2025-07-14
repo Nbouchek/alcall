@@ -86,41 +86,29 @@ export default function Home() {
   const [callState, setCallState] = useState("idle"); // "idle" | "calling" | "ringing" | "active"
   const [callRoomId, setCallRoomId] = useState(null);
   const [userMap, setUserMap] = useState(new Map());
-  const audioContextRef = useRef(null);
-  // Add state for call notifications
   const [callNotification, setCallNotification] = useState(null);
   const [janusInitialized, setJanusInitialized] = useState(false);
   const [callEndedModal, setCallEndedModal] = useState(null);
-
-  // Add this line to fix ReferenceError
   const [incomingCallDetails, setIncomingCallDetails] = useState(null);
-
-  // Video call state
   const [videoCallState, setVideoCallState] = useState("idle"); // "idle" | "calling" | "ringing" | "active"
   const [activeVideoCallRecipient, setActiveVideoCallRecipient] =
     useState(null);
   const [incomingVideoCall, setIncomingVideoCall] = useState(null);
   const [videoCallRoomId, setVideoCallRoomId] = useState(null);
   const [callType, setCallType] = useState("audio"); // "audio" | "video"
-
-  // Add state for audio call controls
   const [audioCallMuted, setAudioCallMuted] = useState(false);
   const [audioCallVolume, setAudioCallVolume] = useState(1.0);
   const [audioCallStatus, setAudioCallStatus] = useState("Connecting...");
   const [forceHideModal, setForceHideModal] = useState(false);
-
-  // Add mounted state
   const [mounted, setMounted] = useState(false);
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  // Refs for AudioCallHandler and other uses (All useRef declarations here)
+  const audioContextRef = useRef(null);
+  const isEndingCallRef = useRef(false); // To prevent multiple simultaneous cleanups
+  const audioCallRef = useRef(null);
+  const ringtoneTimeoutRef = useRef(null);
 
-  if (!mounted) {
-    return <div>Loading...</div>; // Return a simple loading state during SSR
-  }
-
-  // Import and use centralized WebSocket functions
+  // Import and use centralized WebSocket functions (must be at top level)
   const {
     initializeWebSocket,
     closeWebSocket,
@@ -128,7 +116,7 @@ export default function Home() {
     setOnMessage,
   } = useWebSocket();
 
-  // New function to handle audio call ending from AudioCallHandler
+  // All useCallback functions must be declared unconditionally at the top level
   const handleAudioCallEnd = useCallback(() => {
     // Prevent infinite loops - if already idle, don't process again
     if (callState === "idle") {
@@ -318,16 +306,6 @@ export default function Home() {
     audioCallRef,
   ]);
 
-  const isEndingCallRef = useRef(false); // To prevent multiple simultaneous cleanups
-
-  // Refs for AudioCallHandler
-  const audioCallRef = useRef(null);
-  const ringtoneTimeoutRef = useRef(null);
-
-  const initializeJanus = () => {
-    // Implementation of Janus initialization
-  };
-
   const showCallNotification = useCallback(
     (type, message, duration = 3000) => {
       setCallNotification({ type, message });
@@ -452,7 +430,7 @@ export default function Home() {
   };
 
   const handleAcceptCall = async () => {
-    if (!incomingCall) return;
+    if (!incomingCallDetails) return;
 
     if (!(await requestMicrophonePermission())) {
       return;
@@ -463,29 +441,30 @@ export default function Home() {
 
     // Update the recipient to the caller
     const callerUser = allUsers.find(
-      (u) => u.username === incomingCall.caller_username
+      (u) => u.username === incomingCallDetails.caller_username
     );
     if (callerUser) {
       setActiveCallRecipient(callerUser);
     } else {
       // Fallback if user not found in allUsers (should not happen if presence is working)
       setActiveCallRecipient({
-        id: incomingCall.from_user_id,
-        username: incomingCall.caller_username,
+        id: incomingCallDetails.from_user_id,
+        username: incomingCallDetails.caller_username,
       });
     }
-    setCallRoomId(incomingCall.room_id);
-    setCallType(incomingCall.call_type);
+    setCallRoomId(incomingCallDetails.room_id);
+    setCallType(incomingCallDetails.call_type);
     setIncomingCall(null); // Clear incoming call state
+    setIncomingCallDetails(null);
 
     // Send acceptance message via WebSocket
     sendWebSocketMessage({
       type: "call_accepted",
       call: {
-        to_user_id: incomingCall.from_user_id,
+        to_user_id: incomingCallDetails.from_user_id,
         from_user_id: user.id,
-        room_id: incomingCall.room_id,
-        call_type: incomingCall.call_type,
+        room_id: incomingCallDetails.room_id,
+        call_type: incomingCallDetails.call_type,
       },
     });
 
@@ -493,11 +472,12 @@ export default function Home() {
   };
 
   const handleRejectCall = () => {
-    if (!incomingCall) return;
+    if (!incomingCallDetails) return;
 
     stopIncomingCallRingtone();
     setCallState("idle");
     setIncomingCall(null);
+    setIncomingCallDetails(null);
     setActiveCallRecipient(null);
     setCallRoomId(null);
 
@@ -505,10 +485,10 @@ export default function Home() {
     sendWebSocketMessage({
       type: "call_rejected",
       call: {
-        to_user_id: incomingCall.from_user_id,
+        to_user_id: incomingCallDetails.from_user_id,
         from_user_id: user.id,
-        room_id: incomingCall.room_id,
-        call_type: incomingCall.call_type,
+        room_id: incomingCallDetails.room_id,
+        call_type: incomingCallDetails.call_type,
       },
     });
 
@@ -553,6 +533,7 @@ export default function Home() {
     setActiveCallRecipient(null);
     setCallRoomId(null);
     setForceHideModal(true); // Force modal hide after ending call
+    setIncomingCallDetails(null);
 
     if (ringtoneTimeoutRef.current) {
       clearTimeout(ringtoneTimeoutRef.current);
@@ -566,6 +547,7 @@ export default function Home() {
     setActiveCallRecipient,
     setCallRoomId,
     setForceHideModal,
+    setIncomingCallDetails,
     ringtoneTimeoutRef,
   ]);
 
@@ -731,6 +713,7 @@ export default function Home() {
     showCallNotification,
   ]);
 
+  // This function is fine to remain here as it's not a hook and doesn't call hooks conditionally
   const handleLoginOrRegister = async (e, endpoint) => {
     e.preventDefault();
     try {
@@ -750,7 +733,7 @@ export default function Home() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     // Close WebSocket connection first
     closeWebSocket();
 
@@ -771,7 +754,7 @@ export default function Home() {
     window.location.reload();
 
     showCallNotification("info", "Logged out successfully!");
-  };
+  }, [closeWebSocket, showCallNotification]);
 
   const fetchAllUsers = useCallback(
     async (userApiUrl) => {
@@ -810,6 +793,16 @@ export default function Home() {
     [user, setAllUsers, onlineUserIds, setUserMap, showCallNotification]
   );
 
+  // Implementation of Janus initialization (now wrapped in useCallback)
+  const initializeJanus = useCallback(() => {
+    // Original implementation (ensure this does not contain conditional hook calls itself)
+  }, []);
+
+  // All useEffects must be declared unconditionally at the top level
+  useEffect(() => {
+    setMounted(true);
+  }, []); // Effect for mounting state
+
   useEffect(() => {
     console.log("Current allUsers state:", allUsers);
     console.log("Current onlineUserIds:", Array.from(onlineUserIds));
@@ -828,7 +821,12 @@ export default function Home() {
     }
   }, [callState, activeCallRecipient, showCallNotification, user]);
 
-  // --- UI Components ---
+  // Conditional return based on mounted state (AFTER ALL HOOKS)
+  if (!mounted) {
+    return <div>Loading...</div>; // Return a simple loading state during SSR
+  }
+
+  // --- UI Components / Other Helper Functions (not hooks) ---
   const renderAuth = () => {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">
