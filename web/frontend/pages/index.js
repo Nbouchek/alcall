@@ -161,6 +161,32 @@ export default function Home() {
     }
   }, []);
 
+  const playIncomingCallRingtone = useCallback(() => {
+    if (window.playRingtone) {
+      window.playRingtone();
+    }
+  }, []);
+
+  const stopIncomingCallRingtone = useCallback(() => {
+    if (window.stopRingtone) {
+      window.stopRingtone();
+      console.log("Stopping incoming call ringtone.");
+    }
+  }, []);
+
+  const playRingbackTone = useCallback(() => {
+    if (window.playRingback) {
+      window.playRingback();
+    }
+  }, []);
+
+  const stopRingbackTone = useCallback(() => {
+    if (window.stopRingback) {
+      window.stopRingback();
+      console.log("Stopping ringback tone.");
+    }
+  }, []);
+
   // --- Effect Hooks (All useEffect hooks here) ---
   useEffect(() => {
     setMounted(true);
