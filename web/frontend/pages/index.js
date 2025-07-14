@@ -190,8 +190,6 @@ export default function Home() {
     }
   }, []);
 
-  // Temporarily commenting out initiateCall, handleAcceptCall, handleRejectCall, handleAudioCallEnd, handleHangUp, endCall
-  /*
   const initiateCall = async (recipient) => {
     if (!user) {
       showCallNotification("error", "Please log in to initiate a call.");
@@ -561,9 +559,8 @@ export default function Home() {
 
   // Unified function to end call and reset states
   const endCall = useCallback(() => {
-    // Temporarily comment out handleAudioCallEnd() and handleVideoCallEnd()
-    // handleAudioCallEnd(); // Trigger the aggressive cleanup for audio calls
-    // handleVideoCallEnd(); // Trigger the aggressive cleanup for video calls
+    handleAudioCallEnd(); // Trigger the aggressive cleanup for audio calls
+    handleVideoCallEnd(); // Trigger the aggressive cleanup for video calls
 
     setCallState("idle");
     setIncomingCall(null);
@@ -577,8 +574,8 @@ export default function Home() {
       ringtoneTimeoutRef.current = null;
     }
   }, [
-    // handleAudioCallEnd,
-    // handleVideoCallEnd,
+    handleAudioCallEnd,
+    handleVideoCallEnd,
     setCallState,
     setIncomingCall,
     setActiveCallRecipient,
@@ -614,11 +611,11 @@ export default function Home() {
       }
       setUser(userData);
       setIsLoggedIn(true);
-      // showCallNotification("success", "Logged in successfully!"); // Re-enable later
-      // fetchAllUsers("/api/users"); // Re-enable later
+      showCallNotification("success", "Logged in successfully!"); // Re-enable later
+      fetchAllUsers("/api/users"); // Re-enable later
     } catch (error) {
       console.error("Authentication error:", error.response?.data || error);
-      // showCallNotification("error", "Authentication failed."); // Re-enable later
+      showCallNotification("error", "Authentication failed."); // Re-enable later
     }
   };
 
