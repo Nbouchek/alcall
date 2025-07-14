@@ -190,6 +190,8 @@ export default function Home() {
     }
   }, []);
 
+  // Temporarily commenting out initiateCall, handleAcceptCall, handleRejectCall, handleAudioCallEnd, handleHangUp, endCall
+  /*
   const initiateCall = async (recipient) => {
     if (!user) {
       showCallNotification("error", "Please log in to initiate a call.");
@@ -357,113 +359,113 @@ export default function Home() {
     });
 
     // IMMEDIATE AND SYNCHRONOUS MICROPHONE CLEANUP
-    console.log("🔥 INDEX - SYNCHRONOUS MICROPHONE CLEANUP");
+    // console.log("🔥 INDEX - SYNCHRONOUS MICROPHONE CLEANUP");
 
     // 1. IMMEDIATE AudioCallHandler cleanup FIRST (most critical)
-    if (audioCallRef.current) {
-      console.log("🔥 INDEX - IMMEDIATE AudioCallHandler cleanup");
-      try {
-        if (audioCallRef.current.forceCleanup) {
-          audioCallRef.current.forceCleanup();
-        }
-        if (audioCallRef.current.hangup) {
-          audioCallRef.current.hangup();
-        }
-      } catch (error) {
-        console.error("🔥 INDEX - AudioCallHandler cleanup error:", error);
-      }
-    }
+    // if (audioCallRef.current) {
+    //   console.log("🔥 INDEX - IMMEDIATE AudioCallHandler cleanup");
+    //   try {
+    //     if (audioCallRef.current.forceCleanup) {
+    //       audioCallRef.current.forceCleanup();
+    //     }
+    //     if (audioCallRef.current.hangup) {
+    //       audioCallRef.current.hangup();
+    //     }
+    //   } catch (error) {
+    //     console.error("🔥 INDEX - AudioCallHandler cleanup error:", error);
+    //   }
+    // }
 
     // 2. IMMEDIATE global stream cleanup
-    console.log("🔥 INDEX - IMMEDIATE global stream cleanup");
+    // console.log("🔥 INDEX - IMMEDIATE global stream cleanup");
 
     // Stop window.localAudioStream immediately
-    if (window.localAudioStream) {
-      console.log("🔥 INDEX - Stopping window.localAudioStream");
-      try {
-        window.localAudioStream.getTracks().forEach((track) => {
-          console.log("🔥 INDEX - Stopping track:", track.kind, track.label);
-          track.stop();
-        });
-        window.localAudioStream = null;
-        console.log("🔥 INDEX - window.localAudioStream nullified");
-      } catch (error) {
-        console.error("🔥 INDEX - Error stopping main stream:", error);
-      }
-    }
+    // if (window.localAudioStream) {
+    //   console.log("🔥 INDEX - Stopping window.localAudioStream");
+    //   try {
+    //     window.localAudioStream.getTracks().forEach((track) => {
+    //       console.log("🔥 INDEX - Stopping track:", track.kind, track.label);
+    //       track.stop();
+    //     });
+    //     window.localAudioStream = null;
+    //     console.log("🔥 INDEX - window.localAudioStream nullified");
+    //   } catch (error) {
+    //     console.error("🔥 INDEX - Error stopping main stream:", error);
+    //   }
+    // }
 
     // Stop window.currentCallStream immediately
-    if (window.currentCallStream) {
-      console.log("🔥 INDEX - Stopping window.currentCallStream");
-      try {
-        window.currentCallStream.getTracks().forEach((track) => {
-          console.log(
-            "🔥 INDEX - Stopping call stream track:",
-            track.kind,
-            track.label
-          );
-          track.stop();
-        });
-        window.currentCallStream = null;
-        console.log("🔥 INDEX - window.currentCallStream nullified");
-      } catch (error) {
-        console.error("🔥 INDEX - Error stopping call stream:", error);
-      }
-    }
+    // if (window.currentCallStream) {
+    //   console.log("🔥 INDEX - Stopping window.currentCallStream");
+    //   try {
+    //     window.currentCallStream.getTracks().forEach((track) => {
+    //       console.log(
+    //         "🔥 INDEX - Stopping call stream track:",
+    //         track.kind,
+    //         track.label
+    //       );
+    //       track.stop();
+    //     });
+    //     window.currentCallStream = null;
+    //     console.log("🔥 INDEX - window.currentCallStream nullified");
+    //   } catch (error) {
+    //     console.error("🔥 INDEX - Error stopping call stream:", error);
+    //   }
+    // }
 
     // 3. IMMEDIATE audio elements cleanup
-    console.log("🔥 INDEX - IMMEDIATE audio elements cleanup");
-    const audioElements = document.querySelectorAll("audio");
-    audioElements.forEach((audio, index) => {
-      try {
-        audio.pause();
-        audio.currentTime = 0;
-        if (audio.srcObject) {
-          const stream = audio.srcObject;
-          if (stream && stream.getTracks) {
-            stream.getTracks().forEach((track) => {
-              console.log(
-                `🔥 INDEX - Stopping track from audio element ${index}:`,
-                track.kind,
-                track.label
-              );
-              track.stop();
-            });
-          }
-          audio.srcObject = null;
-        }
-        audio.src = "";
+    // console.log("🔥 INDEX - IMMEDIATE audio elements cleanup");
+    // const audioElements = document.querySelectorAll("audio");
+    // audioElements.forEach((audio, index) => {
+    //   try {
+    //     audio.pause();
+    //     audio.currentTime = 0;
+    //     if (audio.srcObject) {
+    //       const stream = audio.srcObject;
+    //       if (stream && stream.getTracks) {
+    //         stream.getTracks().forEach((track) => {
+    //           console.log(
+    //             `🔥 INDEX - Stopping track from audio element ${index}:`,
+    //             track.kind,
+    //             track.label
+    //           );
+    //           track.stop();
+    //         });
+    //       }
+    //       audio.srcObject = null;
+    //     }
+    //     audio.src = "";
 
-        // Remove temporary elements immediately
-        if (
-          audio.id &&
-          (audio.id.includes("temp-") ||
-            audio.id.includes("dedicated-") ||
-            audio.id.includes("emergency-"))
-        ) {
-          audio.remove();
-          console.log(`🔥 INDEX - Removed temporary element: ${audio.id}`);
-        }
-      } catch (error) {
-        console.error(
-          `🔥 INDEX - Error cleaning audio element ${index}:`,
-          error
-        );
-      }
-    });
+    //     // Remove temporary elements immediately
+    //     if (
+    //       audio.id &&
+    //       (audio.id.includes("temp-") ||
+    //         audio.id.includes("dedicated-") ||
+    //         audio.id.includes("emergency-"))
+    //     ) {
+    //       audio.remove();
+    //       console.log(`🔥 INDEX - Removed temporary element: ${audio.id}`);
+    //     }
+    //   } catch (error) {
+    //     console.error(
+    //       `🔥 INDEX - Error cleaning audio element ${index}:`,
+    //       error
+    //     );
+    //   }
+    // });
 
     // 4. IMMEDIATE audio context cleanup
-    if (window.audioContext) {
-      console.log("🔥 INDEX - IMMEDIATE audio context cleanup");
-      try {
-        if (window.audioContext.state === "running") {
-          window.audioContext.suspend();
-          console.log("🔥 INDEX - Audio context suspended");
-        }
-      } catch (error) {
-        console.error("🔥 INDEX - Audio context error:", error);
-      }
-    }
+    // if (window.audioContext) {
+    //   console.log("🔥 INDEX - IMMEDIATE audio context cleanup");
+    //   try {
+    //     if (window.audioContext.state === "running") {
+    //       window.audioContext.suspend();
+    //       console.log("🔥 INDEX - Audio context suspended");
+    //     }
+    //   } catch (error) {
+    //     console.error("🔥 INDEX - Audio context error:", error);
+    //   }
+    // }
 
     // 5. IMMEDIATE state reset
     console.log("🔥 INDEX - IMMEDIATE state reset");
@@ -480,24 +482,24 @@ export default function Home() {
     }
 
     // Nullify Janus objects globally
-    if (window.janusGlobal) {
-      console.log("🔥 INDEX - Destroying janusGlobal");
-      try {
-        window.janusGlobal.destroy();
-      } catch (error) {
-        console.error("🔥 INDEX - Error destroying janusGlobal:", error);
-      }
-      window.janusGlobal = null;
-    }
-    if (window.echotestPlugin) {
-      console.log("🔥 INDEX - Detaching echotestPlugin");
-      try {
-        window.echotestPlugin.detach();
-      } catch (error) {
-        console.error("🔥 INDEX - Error detaching echotestPlugin:", error);
-      }
-      window.echotestPlugin = null;
-    }
+    // if (window.janusGlobal) {
+    //   console.log("🔥 INDEX - Destroying janusGlobal");
+    //   try {
+    //     window.janusGlobal.destroy();
+    //   } catch (error) {
+    //     console.error("🔥 INDEX - Error destroying janusGlobal:", error);
+    //   }
+    //   window.janusGlobal = null;
+    // }
+    // if (window.echotestPlugin) {
+    //   console.log("🔥 INDEX - Detaching echotestPlugin");
+    //   try {
+    //     window.echotestPlugin.detach();
+    //   } catch (error) {
+    //     console.error("🔥 INDEX - Error detaching echotestPlugin:", error);
+    //   }
+    //   window.echotestPlugin = null;
+    // }
 
     // Ensure Janus and WebRTC resources are fully released
     // Any other global cleanup actions
@@ -559,8 +561,8 @@ export default function Home() {
 
   // Unified function to end call and reset states
   const endCall = useCallback(() => {
-    handleAudioCallEnd(); // Trigger the aggressive cleanup for audio calls
-    // Temporarily commenting out handleVideoCallEnd()
+    // Temporarily comment out handleAudioCallEnd() and handleVideoCallEnd()
+    // handleAudioCallEnd(); // Trigger the aggressive cleanup for audio calls
     // handleVideoCallEnd(); // Trigger the aggressive cleanup for video calls
 
     setCallState("idle");
@@ -575,8 +577,7 @@ export default function Home() {
       ringtoneTimeoutRef.current = null;
     }
   }, [
-    handleAudioCallEnd,
-    // Temporarily commenting out handleVideoCallEnd()
+    // handleAudioCallEnd,
     // handleVideoCallEnd,
     setCallState,
     setIncomingCall,
@@ -586,6 +587,7 @@ export default function Home() {
     setIncomingCallDetails,
     ringtoneTimeoutRef,
   ]);
+  */
 
   // --- Effect Hooks (All useEffect hooks here) ---
   useEffect(() => {
