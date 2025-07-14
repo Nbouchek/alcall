@@ -148,10 +148,13 @@ export default function Home() {
       return true;
     } catch (error) {
       console.error("Microphone access denied:", error);
-      // Re-enable later: showCallNotification("error", "Microphone access denied. Please enable it in your browser settings.");
+      showCallNotification(
+        "error",
+        "Microphone access denied. Please enable it in your browser settings."
+      );
       return false;
     }
-  }, []); // Depend on showCallNotification later
+  }, [showCallNotification]);
 
   const initAudioContext = useCallback(() => {
     if (typeof window !== "undefined" && !window.audioContext) {
@@ -186,6 +189,56 @@ export default function Home() {
       console.log("Stopping ringback tone.");
     }
   }, []);
+
+  const initiateCall = async (recipient) => {
+    if (!user) {
+      showCallNotification("error", "Please log in to initiate a call.");
+      return;
+    }
+    if (callState !== "idle") {
+      showCallNotification("error", "Already in a call or call pending.");
+      return;
+    }
+    if (!(await requestMicrophonePermission())) {
+      return;
+    }
+
+    const newRoomId = Math.random().toString(36).substring(2, 15);
+    setCallRoomId(newRoomId);
+    setActiveCallRecipient(recipient);
+    setCallType("audio");
+    setCallState("calling"); // Set state to calling
+
+    const callPayload = {
+      to_user_id: recipient.id,
+      from_user_id: user.id,
+      caller_username: user.username,
+      room_id: newRoomId,
+      call_type: "audio",
+    };
+
+    // Send call initiate message via WebSocket
+    sendWebSocketMessage({
+      type: "call_initiate",
+      call: callPayload,
+    });
+
+    playRingbackTone();
+    showCallNotification("info", `Calling ${recipient.username}...`);
+
+    // Set a timeout for the call to be unanswered
+    ringtoneTimeoutRef.current = setTimeout(() => {
+      if (callState === "calling") {
+        console.log("Call unanswered, ending call...");
+        // Temporarily comment out handleHangUp() to isolate the error further
+        // handleHangUp(); // End the call locally
+        showCallNotification(
+          "warning",
+          `${recipient.username} did not answer.`
+        );
+      }
+    }, 30000); // 30 seconds timeout
+  };
 
   // --- Effect Hooks (All useEffect hooks here) ---
   useEffect(() => {
