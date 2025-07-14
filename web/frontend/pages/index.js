@@ -240,6 +240,61 @@ export default function Home() {
     }, 30000); // 30 seconds timeout
   };
 
+  const handleAcceptCall = useCallback(async () => {
+    if (!incomingCallDetails) return;
+
+    if (!(await requestMicrophonePermission())) {
+      return;
+    }
+
+    setCallState("active");
+    stopIncomingCallRingtone();
+
+    // Update the recipient to the caller
+    const callerUser = allUsers.find(
+      (u) => u.username === incomingCallDetails.caller_username
+    );
+    if (callerUser) {
+      setActiveCallRecipient(callerUser);
+    } else {
+      // Fallback if user not found in allUsers (should not happen if presence is working)
+      setActiveCallRecipient({
+        id: incomingCallDetails.from_user_id,
+        username: incomingCallDetails.caller_username,
+      });
+    }
+    setCallRoomId(incomingCallDetails.room_id);
+    setCallType(incomingCallDetails.call_type);
+    setIncomingCall(null); // Clear incoming call state
+    setIncomingCallDetails(null);
+
+    // Send acceptance message via WebSocket
+    sendWebSocketMessage({
+      type: "call_accepted",
+      call: {
+        to_user_id: incomingCallDetails.from_user_id,
+        from_user_id: user.id,
+        room_id: incomingCallDetails.room_id,
+        call_type: incomingCallDetails.call_type,
+      },
+    });
+
+    showCallNotification("success", "Call accepted!");
+  }, [
+    incomingCallDetails,
+    requestMicrophonePermission,
+    setCallState,
+    stopIncomingCallRingtone,
+    allUsers,
+    user,
+    setCallRoomId,
+    setCallType,
+    setIncomingCall,
+    setIncomingCallDetails,
+    sendWebSocketMessage,
+    showCallNotification,
+  ]);
+
   // --- Effect Hooks (All useEffect hooks here) ---
   useEffect(() => {
     setMounted(true);
