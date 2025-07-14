@@ -3,9 +3,6 @@ import Head from "next/head";
 import Script from "next/script";
 import axios from "axios";
 import dynamic from "next/dynamic";
-import OnlineUsersList from "../components/OnlineUsersList";
-import ChatInterface from "../components/ChatInterface";
-import Sidebar from "../components/Sidebar";
 import { useWebSocket } from "../hooks/useWebSocket";
 import {
   FaPhone,
@@ -25,6 +22,23 @@ import {
   FaCog,
   FaArrowLeft,
 } from "react-icons/fa";
+
+// Dynamic imports for all main components that use hooks or browser APIs
+const Sidebar = dynamic(() => import("../components/Sidebar"), { ssr: false });
+const ChatInterface = dynamic(() => import("../components/ChatInterface"), {
+  ssr: false,
+});
+const AudioCallHandler = dynamic(
+  () => import("../components/AudioCallHandler"),
+  { ssr: false }
+);
+const VideoCallInterface = dynamic(
+  () => import("../components/VideoCallInterface"),
+  { ssr: false }
+);
+const OnlineUsersList = dynamic(() => import("../components/OnlineUsersList"), {
+  ssr: false,
+});
 
 // --- Move styles to the top to avoid TDZ issues ---
 const styles = {
@@ -78,6 +92,9 @@ export default function Home() {
   const [janusInitialized, setJanusInitialized] = useState(false);
   const [callEndedModal, setCallEndedModal] = useState(null);
 
+  // Add this line to fix ReferenceError
+  const [incomingCallDetails, setIncomingCallDetails] = useState(null);
+
   // Video call state
   const [videoCallState, setVideoCallState] = useState("idle"); // "idle" | "calling" | "ringing" | "active"
   const [activeVideoCallRecipient, setActiveVideoCallRecipient] =
@@ -100,7 +117,7 @@ export default function Home() {
   }, []);
 
   if (!mounted) {
-    return null;
+    return <div>Loading...</div>; // Return a simple loading state during SSR
   }
 
   // Import and use centralized WebSocket functions
@@ -1044,7 +1061,7 @@ export default function Home() {
       />
 
       {/* Audio Call Handler - Hidden UI */}
-      {user &&
+      {/* {user &&
         callRoomId &&
         (callState === "active" || callState === "calling") && (
           <AudioCallHandler
@@ -1065,10 +1082,10 @@ export default function Home() {
             sendWebSocketMessage={sendWebSocketMessage} // Pass sendWebSocketMessage
             showCallNotification={showCallNotification}
           />
-        )}
+        )} */}
 
       {/* Video Call Interface - Hidden UI */}
-      {user &&
+      {/* {user &&
         videoCallRoomId &&
         (videoCallState === "active" || videoCallState === "calling") && (
           <VideoCallInterface
@@ -1085,7 +1102,7 @@ export default function Home() {
             sendWebSocketMessage={sendWebSocketMessage} // Pass sendWebSocketMessage
             showCallNotification={showCallNotification}
           />
-        )}
+        )} */}
     </div>
   ) : (
     <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">
