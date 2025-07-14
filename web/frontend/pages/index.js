@@ -2,8 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import Head from "next/head";
 import Script from "next/script";
 import axios from "axios";
-import AudioCallHandler from "../components/AudioCallHandler";
-import VideoCallInterface from "../components/VideoCallInterface";
+import dynamic from "next/dynamic";
 import OnlineUsersList from "../components/OnlineUsersList";
 import ChatInterface from "../components/ChatInterface";
 import Sidebar from "../components/Sidebar";
@@ -26,6 +25,24 @@ import {
   FaCog,
   FaArrowLeft,
 } from "react-icons/fa";
+
+// --- Move styles to the top to avoid TDZ issues ---
+const styles = {
+  onlineUsersContainer: {
+    position: "fixed",
+    right: "20px",
+    top: "20px",
+    background: "white",
+    padding: "15px",
+    borderRadius: "8px",
+    boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
+    zIndex: 100,
+  },
+  onlineStatus: {
+    color: "green",
+    fontWeight: "bold",
+  },
+};
 
 // --- Configuration (will be populated at runtime) ---
 // These variables are now accessed directly via process.env.NEXT_PUBLIC_VAR_NAME
@@ -791,23 +808,6 @@ export default function Home() {
   }, [callState, activeCallRecipient, showCallNotification, user]);
 
   // --- UI Components ---
-  const styles = {
-    onlineUsersContainer: {
-      position: "fixed",
-      right: "20px",
-      top: "20px",
-      background: "white",
-      padding: "15px",
-      borderRadius: "8px",
-      boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
-      zIndex: 100,
-    },
-    onlineStatus: {
-      color: "green",
-      fontWeight: "bold",
-    },
-  };
-
   const renderAuth = () => {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">
