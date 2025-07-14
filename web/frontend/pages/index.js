@@ -1012,7 +1012,7 @@ export default function Home() {
       </Head>
 
       {/* Sidebar */}
-      <Sidebar
+      {/* <Sidebar
         sidebarOpen={sidebarOpen}
         setSidebarOpen={setSidebarOpen}
         handleSearch={handleSearch}
@@ -1028,10 +1028,10 @@ export default function Home() {
         showCallNotification={showCallNotification}
         initiateCall={initiateCall}
         initiateVideoCall={initiateVideoCall}
-      />
+      /> */}
 
       {/* Main Chat Area */}
-      <ChatInterface
+      {/* <ChatInterface
         selectedRecipient={selectedRecipient}
         messages={messages}
         user={user}
@@ -1058,7 +1058,7 @@ export default function Home() {
         handleAcceptVideoCall={handleAcceptVideoCall}
         handleRejectVideoCall={handleRejectVideoCall}
         handleVideoCallEnd={handleVideoCallEnd}
-      />
+      /> */}
 
       {/* Audio Call Handler - Hidden UI */}
       {/* {user &&
