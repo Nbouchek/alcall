@@ -230,8 +230,7 @@ export default function Home() {
     ringtoneTimeoutRef.current = setTimeout(() => {
       if (callState === "calling") {
         console.log("Call unanswered, ending call...");
-        // Temporarily comment out handleHangUp() to isolate the error further
-        // handleHangUp(); // End the call locally
+        handleHangUp(); // End the call locally
         showCallNotification(
           "warning",
           `${recipient.username} did not answer.`
@@ -293,6 +292,299 @@ export default function Home() {
     setIncomingCallDetails,
     sendWebSocketMessage,
     showCallNotification,
+  ]);
+
+  const handleRejectCall = useCallback(() => {
+    if (!incomingCallDetails) return;
+
+    stopIncomingCallRingtone();
+    setCallState("idle");
+    setIncomingCall(null);
+    setIncomingCallDetails(null);
+    setActiveCallRecipient(null);
+    setCallRoomId(null);
+
+    // Send rejection message via WebSocket
+    sendWebSocketMessage({
+      type: "call_rejected",
+      call: {
+        to_user_id: incomingCallDetails.from_user_id,
+        from_user_id: user.id,
+        room_id: incomingCallDetails.room_id,
+        call_type: incomingCallDetails.call_type,
+      },
+    });
+
+    showCallNotification("info", "Call rejected.");
+  }, [
+    incomingCallDetails,
+    stopIncomingCallRingtone,
+    setCallState,
+    setIncomingCall,
+    setIncomingCallDetails,
+    setActiveCallRecipient,
+    setCallRoomId,
+    sendWebSocketMessage,
+    showCallNotification,
+    user,
+  ]);
+
+  const handleAudioCallEnd = useCallback(() => {
+    // Prevent infinite loops - if already idle, don't process again
+    if (callState === "idle") {
+      console.log(
+        "🔥 INDEX - handleAudioCallEnd called but already idle, skipping"
+      );
+      return;
+    }
+
+    // Prevent multiple concurrent calls
+    if (isEndingCallRef.current) {
+      console.log(
+        "🔥 INDEX - handleAudioCallEnd already in progress, skipping"
+      );
+      return;
+    }
+
+    isEndingCallRef.current = true;
+
+    console.log("🔥 INDEX - IMMEDIATE AGGRESSIVE CLEANUP STARTING");
+    console.log("🔥 INDEX - Current state before cleanup:", {
+      callState,
+      activeCallRecipient: activeCallRecipient?.username,
+      callRoomId,
+      incomingCall: incomingCall?.caller_username,
+    });
+
+    // IMMEDIATE AND SYNCHRONOUS MICROPHONE CLEANUP
+    console.log("🔥 INDEX - SYNCHRONOUS MICROPHONE CLEANUP");
+
+    // 1. IMMEDIATE AudioCallHandler cleanup FIRST (most critical)
+    if (audioCallRef.current) {
+      console.log("🔥 INDEX - IMMEDIATE AudioCallHandler cleanup");
+      try {
+        if (audioCallRef.current.forceCleanup) {
+          audioCallRef.current.forceCleanup();
+        }
+        if (audioCallRef.current.hangup) {
+          audioCallRef.current.hangup();
+        }
+      } catch (error) {
+        console.error("🔥 INDEX - AudioCallHandler cleanup error:", error);
+      }
+    }
+
+    // 2. IMMEDIATE global stream cleanup
+    console.log("🔥 INDEX - IMMEDIATE global stream cleanup");
+
+    // Stop window.localAudioStream immediately
+    if (window.localAudioStream) {
+      console.log("🔥 INDEX - Stopping window.localAudioStream");
+      try {
+        window.localAudioStream.getTracks().forEach((track) => {
+          console.log("🔥 INDEX - Stopping track:", track.kind, track.label);
+          track.stop();
+        });
+        window.localAudioStream = null;
+        console.log("🔥 INDEX - window.localAudioStream nullified");
+      } catch (error) {
+        console.error("🔥 INDEX - Error stopping main stream:", error);
+      }
+    }
+
+    // Stop window.currentCallStream immediately
+    if (window.currentCallStream) {
+      console.log("🔥 INDEX - Stopping window.currentCallStream");
+      try {
+        window.currentCallStream.getTracks().forEach((track) => {
+          console.log(
+            "🔥 INDEX - Stopping call stream track:",
+            track.kind,
+            track.label
+          );
+          track.stop();
+        });
+        window.currentCallStream = null;
+        console.log("🔥 INDEX - window.currentCallStream nullified");
+      } catch (error) {
+        console.error("🔥 INDEX - Error stopping call stream:", error);
+      }
+    }
+
+    // 3. IMMEDIATE audio elements cleanup
+    console.log("🔥 INDEX - IMMEDIATE audio elements cleanup");
+    const audioElements = document.querySelectorAll("audio");
+    audioElements.forEach((audio, index) => {
+      try {
+        audio.pause();
+        audio.currentTime = 0;
+        if (audio.srcObject) {
+          const stream = audio.srcObject;
+          if (stream && stream.getTracks) {
+            stream.getTracks().forEach((track) => {
+              console.log(
+                `🔥 INDEX - Stopping track from audio element ${index}:`,
+                track.kind,
+                track.label
+              );
+              track.stop();
+            });
+          }
+          audio.srcObject = null;
+        }
+        audio.src = "";
+
+        // Remove temporary elements immediately
+        if (
+          audio.id &&
+          (audio.id.includes("temp-") ||
+            audio.id.includes("dedicated-") ||
+            audio.id.includes("emergency-"))
+        ) {
+          audio.remove();
+          console.log(`🔥 INDEX - Removed temporary element: ${audio.id}`);
+        }
+      } catch (error) {
+        console.error(
+          `🔥 INDEX - Error cleaning audio element ${index}:`,
+          error
+        );
+      }
+    });
+
+    // 4. IMMEDIATE audio context cleanup
+    if (window.audioContext) {
+      console.log("🔥 INDEX - IMMEDIATE audio context cleanup");
+      try {
+        if (window.audioContext.state === "running") {
+          window.audioContext.suspend();
+          console.log("🔥 INDEX - Audio context suspended");
+        }
+      } catch (error) {
+        console.error("🔥 INDEX - Audio context error:", error);
+      }
+    }
+
+    // 5. IMMEDIATE state reset
+    console.log("🔥 INDEX - IMMEDIATE state reset");
+    setCallState("idle");
+    setIncomingCall(null);
+    setActiveCallRecipient(null);
+    setCallRoomId(null);
+    setForceHideModal(true);
+
+    // Clear ringtone timeout
+    if (ringtoneTimeoutRef.current) {
+      clearTimeout(ringtoneTimeoutRef.current);
+      ringtoneTimeoutRef.current = null;
+    }
+
+    // Nullify Janus objects globally
+    if (window.janusGlobal) {
+      console.log("🔥 INDEX - Destroying janusGlobal");
+      try {
+        window.janusGlobal.destroy();
+      } catch (error) {
+        console.error("🔥 INDEX - Error destroying janusGlobal:", error);
+      }
+      window.janusGlobal = null;
+    }
+    if (window.echotestPlugin) {
+      console.log("🔥 INDEX - Detaching echotestPlugin");
+      try {
+        window.echotestPlugin.detach();
+      } catch (error) {
+        console.error("🔥 INDEX - Error detaching echotestPlugin:", error);
+      }
+      window.echotestPlugin = null;
+    }
+
+    // Ensure Janus and WebRTC resources are fully released
+    // Any other global cleanup actions
+    isEndingCallRef.current = false;
+    console.log("🔥 INDEX - IMMEDIATE AGGRESSIVE CLEANUP ENDED");
+  }, [
+    callState,
+    isEndingCallRef,
+    activeCallRecipient,
+    callRoomId,
+    incomingCall,
+    setCallState,
+    setIncomingCall,
+    setActiveCallRecipient,
+    setCallRoomId,
+    setForceHideModal,
+    ringtoneTimeoutRef,
+    audioCallRef,
+  ]);
+
+  const handleHangUp = useCallback(() => {
+    if (callState === "idle") {
+      console.log("handleHangUp called but callState is already idle.");
+      return;
+    }
+
+    console.log("Attempting to hang up call.");
+    stopIncomingCallRingtone();
+    stopRingbackTone();
+
+    // Inform the other party via WebSocket if there's an active recipient
+    if (activeCallRecipient && user) {
+      console.log("Sending call_ended message via WebSocket.");
+      sendWebSocketMessage({
+        type: "call_ended",
+        call: {
+          to_user_id: activeCallRecipient.id,
+          from_user_id: user.id,
+          room_id: callRoomId,
+          call_type: callType,
+        },
+      });
+    }
+
+    endCall(); // Perform local cleanup and state reset
+    showCallNotification("info", "Call ended.");
+  }, [
+    callState,
+    stopIncomingCallRingtone,
+    stopRingbackTone,
+    activeCallRecipient,
+    user,
+    callRoomId,
+    callType,
+    sendWebSocketMessage,
+    endCall,
+    showCallNotification,
+  ]);
+
+  // Unified function to end call and reset states
+  const endCall = useCallback(() => {
+    handleAudioCallEnd(); // Trigger the aggressive cleanup for audio calls
+    // Temporarily commenting out handleVideoCallEnd()
+    // handleVideoCallEnd(); // Trigger the aggressive cleanup for video calls
+
+    setCallState("idle");
+    setIncomingCall(null);
+    setActiveCallRecipient(null);
+    setCallRoomId(null);
+    setForceHideModal(true); // Force modal hide after ending call
+    setIncomingCallDetails(null);
+
+    if (ringtoneTimeoutRef.current) {
+      clearTimeout(ringtoneTimeoutRef.current);
+      ringtoneTimeoutRef.current = null;
+    }
+  }, [
+    handleAudioCallEnd,
+    // Temporarily commenting out handleVideoCallEnd()
+    // handleVideoCallEnd,
+    setCallState,
+    setIncomingCall,
+    setActiveCallRecipient,
+    setCallRoomId,
+    setForceHideModal,
+    setIncomingCallDetails,
+    ringtoneTimeoutRef,
   ]);
 
   // --- Effect Hooks (All useEffect hooks here) ---
