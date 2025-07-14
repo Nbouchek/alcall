@@ -132,6 +132,35 @@ export default function Home() {
     [setCallEndedModal]
   );
 
+  const requestMicrophonePermission = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: false,
+      });
+      // Store the stream globally if needed, or pass it to Janus
+      window.localAudioStream = stream;
+      console.log("Microphone access granted.", stream);
+
+      // Stop tracks immediately after obtaining permission if you don't need them active constantly
+      // stream.getTracks().forEach(track => track.stop());
+
+      return true;
+    } catch (error) {
+      console.error("Microphone access denied:", error);
+      // Re-enable later: showCallNotification("error", "Microphone access denied. Please enable it in your browser settings.");
+      return false;
+    }
+  }, []); // Depend on showCallNotification later
+
+  const initAudioContext = useCallback(() => {
+    if (typeof window !== "undefined" && !window.audioContext) {
+      window.audioContext = new (window.AudioContext ||
+        window.webkitAudioContext)();
+      console.log("AudioContext initialized.");
+    }
+  }, []);
+
   // --- Effect Hooks (All useEffect hooks here) ---
   useEffect(() => {
     setMounted(true);
