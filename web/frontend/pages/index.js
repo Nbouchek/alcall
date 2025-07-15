@@ -127,6 +127,13 @@ export default function Home() {
     [setCallNotification]
   );
 
+  const isUserOnline = useCallback(
+    (userId) => {
+      return onlineUserIds.has(userId);
+    },
+    [onlineUserIds]
+  );
+
   const showCallEndedModal = useCallback(
     (type, title, message, duration = 4000) => {
       setCallEndedModal({ type, title, message });
