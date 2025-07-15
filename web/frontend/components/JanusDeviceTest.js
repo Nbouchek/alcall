@@ -448,7 +448,7 @@ const JanusDeviceTest = forwardRef(({ user, onTestEnd }, ref) => {
       source.connect(analyserRef.current);
       startAudioLevelTimer();
     },
-    [startAudioLevelTimer]
+    [startAudioLevelTimer, IS_DEMO_MODE]
   );
 
   const startAudioLevelTimer = useCallback(() => {
@@ -505,7 +505,6 @@ const JanusDeviceTest = forwardRef(({ user, onTestEnd }, ref) => {
         pluginHandleRef.current.getBitrate({ success: setBitrate });
       }
     }, 1000); // Update every 1 second
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setBitrate, IS_DEMO_MODE]);
 
   const stopBitrateTimer = useCallback(() => {

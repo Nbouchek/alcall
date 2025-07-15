@@ -289,8 +289,6 @@ const JanusVideoCallP2P = forwardRef(({ user, onCallEnd }, ref) => {
       setCallStatus,
       setTargetUser,
       setConnectionError,
-      localVideoEnabled,
-      localAudioEnabled,
       pluginHandleRef,
     ]
   );
@@ -365,8 +363,6 @@ const JanusVideoCallP2P = forwardRef(({ user, onCallEnd }, ref) => {
     setCallStatus,
     setConnectionError,
     targetUser,
-    localVideoEnabled,
-    localAudioEnabled,
     pluginHandleRef,
   ]);
 
@@ -406,7 +402,7 @@ const JanusVideoCallP2P = forwardRef(({ user, onCallEnd }, ref) => {
     setCallStatus,
   ]);
 
-  const endCall = () => {
+  const endCall = useCallback(() => {
     console.log("JanusVideoCallP2P: Ending call");
 
     if (!IS_DEMO_MODE && pluginHandleRef.current) {
@@ -438,48 +434,62 @@ const JanusVideoCallP2P = forwardRef(({ user, onCallEnd }, ref) => {
     if (onCallEnd) {
       onCallEnd();
     }
-  };
+  }, [
+    IS_DEMO_MODE,
+    onCallEnd,
+    setIsInCall,
+    setIsIncoming,
+    setIncomingCall,
+    setTargetUser,
+    setCallStatus,
+  ]);
 
-  const handlePluginMessage = (msg, jsep) => {
-    console.log("JanusVideoCallP2P: Plugin message:", msg);
+  const handlePluginMessage = useCallback(
+    (msg, jsep) => {
+      console.log("JanusVideoCallP2P: Plugin message:", msg);
 
-    const result = msg.result;
-    if (result) {
-      if (result.event === "registered") {
-        setCallStatus("Registered and ready");
-      } else if (result.event === "calling") {
-        setCallStatus("Calling...");
-      } else if (result.event === "incomingcall") {
-        console.log("JanusVideoCallP2P: Incoming call from:", result.username);
-        setIsIncoming(true);
-        setIncomingCall({
-          caller: result.username,
-          jsep: jsep,
-        });
-        setCallStatus(`Incoming call from ${result.username}`);
-      } else if (result.event === "accepted") {
-        console.log("JanusVideoCallP2P: Call accepted");
-        setIsInCall(true);
-        setCallStatus("Call connected");
+      const result = msg.result;
+      if (result) {
+        if (result.event === "registered") {
+          setCallStatus("Registered and ready");
+        } else if (result.event === "calling") {
+          setCallStatus("Calling...");
+        } else if (result.event === "incomingcall") {
+          console.log(
+            "JanusVideoCallP2P: Incoming call from:",
+            result.username
+          );
+          setIsIncoming(true);
+          setIncomingCall({
+            caller: result.username,
+            jsep: jsep,
+          });
+          setCallStatus(`Incoming call from ${result.username}`);
+        } else if (result.event === "accepted") {
+          console.log("JanusVideoCallP2P: Call accepted");
+          setIsInCall(true);
+          setCallStatus("Call connected");
 
-        if (jsep) {
+          if (jsep) {
+            pluginHandleRef.current.handleRemoteJsep({ jsep: jsep });
+          }
+        } else if (result.event === "hangup") {
+          console.log("JanusVideoCallP2P: Call ended by remote");
+          endCall();
+        }
+      }
+
+      if (jsep) {
+        console.log("JanusVideoCallP2P: Handling remote JSEP:", jsep);
+        if (jsep.type === "answer") {
           pluginHandleRef.current.handleRemoteJsep({ jsep: jsep });
         }
-      } else if (result.event === "hangup") {
-        console.log("JanusVideoCallP2P: Call ended by remote");
-        endCall();
       }
-    }
+    },
+    [setCallStatus, setIsIncoming, setIncomingCall, setIsInCall, endCall]
+  );
 
-    if (jsep) {
-      console.log("JanusVideoCallP2P: Handling remote JSEP:", jsep);
-      if (jsep.type === "answer") {
-        pluginHandleRef.current.handleRemoteJsep({ jsep: jsep });
-      }
-    }
-  };
-
-  const toggleVideo = () => {
+  const toggleVideo = useCallback(() => {
     setLocalVideoEnabled(!localVideoEnabled);
     if (localStreamRef.current) {
       const videoTrack = localStreamRef.current.getVideoTracks()[0];
@@ -487,9 +497,9 @@ const JanusVideoCallP2P = forwardRef(({ user, onCallEnd }, ref) => {
         videoTrack.enabled = !localVideoEnabled;
       }
     }
-  };
+  }, [localVideoEnabled]);
 
-  const toggleAudio = () => {
+  const toggleAudio = useCallback(() => {
     setLocalAudioEnabled(!localAudioEnabled);
     if (localStreamRef.current) {
       const audioTrack = localStreamRef.current.getAudioTracks()[0];
@@ -497,13 +507,13 @@ const JanusVideoCallP2P = forwardRef(({ user, onCallEnd }, ref) => {
         audioTrack.enabled = !localAudioEnabled;
       }
     }
-  };
+  }, [localAudioEnabled]);
 
-  const toggleFullscreen = () => {
+  const toggleFullscreen = useCallback(() => {
     setIsFullscreen(!isFullscreen);
-  };
+  }, [isFullscreen]);
 
-  const cleanup = () => {
+  const cleanup = useCallback(() => {
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((track) => track.stop());
     }
@@ -511,7 +521,7 @@ const JanusVideoCallP2P = forwardRef(({ user, onCallEnd }, ref) => {
       janusRef.current.destroy();
       janusRef.current = null;
     }
-  };
+  }, []);
 
   // Incoming call UI
   if (isIncoming && !isInCall) {

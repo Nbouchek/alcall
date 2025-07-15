@@ -35,7 +35,7 @@ const JanusScreenShare = forwardRef(({ user, onShareEnd }, ref) => {
     typeof window !== "undefined" &&
     (window.location.hostname.includes("onrender.com") ||
       window.location.hostname.includes("render.com")) &&
-    !(process.env.NEXT_PUBLIC_FORCE_NORMAL_MODE === "true" || true);
+    !(process.env.NEXT_PUBLIC_FORCE_NORMAL_MODE === "true");
 
   // Janus-specific refs
   const janusRef = useRef(null);
@@ -490,8 +490,7 @@ const JanusScreenShare = forwardRef(({ user, onShareEnd }, ref) => {
         }
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [setPublishers, selectedPublisher, stopViewing] // Removed demoPublishers
+    [setPublishers, selectedPublisher, stopViewing, demoPublishers]
   );
 
   const handleSubscriberMessage = useCallback(
