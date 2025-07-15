@@ -39,6 +39,9 @@ const VideoCallInterface = dynamic(
 const OnlineUsersList = dynamic(() => import("../components/OnlineUsersList"), {
   ssr: false,
 });
+const AuthForm = dynamic(() => import("../components/AuthForm"), {
+  ssr: false,
+});
 
 // --- Move styles to the top to avoid TDZ issues ---
 const styles = {
@@ -76,7 +79,7 @@ export default function Home() {
   const [newMessage, setNewMessage] = useState("");
   const [selectedRecipient, setSelectedRecipient] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [loginForm, setLoginForm] = useState({ username: "", password: "" });
+  const [authError, setAuthError] = useState(null); // New state for authentication errors
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
   const [highlightedUser, setHighlightedUser] = useState(null);
@@ -260,199 +263,6 @@ export default function Home() {
     sendWebSocketMessage,
     showCallNotification,
     user,
-  ]);
-
-  const handleAudioCallEnd = useCallback(() => {
-    // Prevent infinite loops - if already idle, don't process again
-    if (callState === "idle") {
-      console.log(
-        "🔥 INDEX - handleAudioCallEnd called but already idle, skipping"
-      );
-      return;
-    }
-
-    // Prevent multiple concurrent calls
-    if (isEndingCallRef.current) {
-      console.log(
-        "🔥 INDEX - handleAudioCallEnd already in progress, skipping"
-      );
-      return;
-    }
-
-    isEndingCallRef.current = true;
-
-    console.log("🔥 INDEX - IMMEDIATE AGGRESSIVE CLEANUP STARTING");
-    console.log("🔥 INDEX - Current state before cleanup:", {
-      callState,
-      activeCallRecipient: activeCallRecipient?.username,
-      callRoomId,
-      incomingCall: incomingCall?.caller_username,
-    });
-
-    // IMMEDIATE AND SYNCHRONOUS MICROPHONE CLEANUP
-    // console.log("🔥 INDEX - SYNCHRONOUS MICROPHONE CLEANUP");
-
-    // 1. IMMEDIATE AudioCallHandler cleanup FIRST (most critical)
-    // if (audioCallRef.current) {
-    //   console.log("🔥 INDEX - IMMEDIATE AudioCallHandler cleanup");
-    //   try {
-    //     if (audioCallRef.current.forceCleanup) {
-    //       audioCallRef.current.forceCleanup();
-    //     }
-    //     if (audioCallRef.current.hangup) {
-    //       audioCallRef.current.hangup();
-    //     }
-    //   } catch (error) {
-    //     console.error("🔥 INDEX - AudioCallHandler cleanup error:", error);
-    //   }
-    // }
-
-    // 2. IMMEDIATE global stream cleanup
-    // console.log("🔥 INDEX - IMMEDIATE global stream cleanup");
-
-    // Stop window.localAudioStream immediately
-    // if (window.localAudioStream) {
-    //   console.log("🔥 INDEX - Stopping window.localAudioStream");
-    //   try {
-    //     window.localAudioStream.getTracks().forEach((track) => {
-    //       console.log("🔥 INDEX - Stopping track:", track.kind, track.label);
-    //       track.stop();
-    //     });
-    //     window.localAudioStream = null;
-    //     console.log("🔥 INDEX - window.localAudioStream nullified");
-    //   } catch (error) {
-    //     console.error("🔥 INDEX - Error stopping main stream:", error);
-    //   }
-    // }
-
-    // Stop window.currentCallStream immediately
-    // if (window.currentCallStream) {
-    //   console.log("🔥 INDEX - Stopping window.currentCallStream");
-    //   try {
-    //     window.currentCallStream.getTracks().forEach((track) => {
-    //       console.log(
-    //         "🔥 INDEX - Stopping call stream track:",
-    //         track.kind,
-    //         track.label
-    //       );
-    //       track.stop();
-    //     });
-    //     window.currentCallStream = null;
-    //     console.log("🔥 INDEX - window.currentCallStream nullified");
-    //   } catch (error) {
-    //     console.error("🔥 INDEX - Error stopping call stream:", error);
-    //   }
-    // }
-
-    // 3. IMMEDIATE audio elements cleanup
-    // console.log("🔥 INDEX - IMMEDIATE audio elements cleanup");
-    // const audioElements = document.querySelectorAll("audio");
-    // audioElements.forEach((audio, index) => {
-    //   try {
-    //     audio.pause();
-    //     audio.currentTime = 0;
-    //     if (audio.srcObject) {
-    //       const stream = audio.srcObject;
-    //       if (stream && stream.getTracks) {
-    //         stream.getTracks().forEach((track) => {
-    //           console.log(
-    //             `🔥 INDEX - Stopping track from audio element ${index}:`,
-    //             track.kind,
-    //             track.label
-    //           );
-    //           track.stop();
-    //         });
-    //       }
-    //       audio.srcObject = null;
-    //     }
-    //     audio.src = "";
-
-    //     // Remove temporary elements immediately
-    //     if (
-    //       audio.id &&
-    //       (audio.id.includes("temp-") ||
-    //         audio.id.includes("dedicated-") ||
-    //         audio.id.includes("emergency-"))
-    //     ) {
-    //       audio.remove();
-    //       console.log(`🔥 INDEX - Removed temporary element: ${audio.id}`);
-    //     }
-    //   } catch (error) {
-    //     console.error(
-    //       `🔥 INDEX - Error cleaning audio element ${index}:`,
-    //       error
-    //     );
-    //   }
-    // });
-
-    // 4. IMMEDIATE audio context cleanup
-    // if (window.audioContext) {
-    //   console.log("🔥 INDEX - IMMEDIATE audio context cleanup");
-    //   try {
-    //     if (window.audioContext.state === "running") {
-    //       window.audioContext.suspend();
-    //       console.log("🔥 INDEX - Audio context suspended");
-    //     }
-    //   } catch (error) {
-    //     console.error("🔥 INDEX - Audio context error:", error);
-    //   }
-    // }
-
-    // IMMEDIATE state reset to ensure UI consistency
-    setCallActive(false);
-    setIsCalling(false);
-    setIncomingCall(null);
-    setCallAccepted(false);
-    setCallType(null);
-    setCallDetails(null);
-    setLocalStream(null);
-    setRemoteStream(null);
-    setPeerConnection(null);
-    setCallStartTime(null);
-
-    // Clear ringtone timeout
-    if (ringtoneTimeoutRef.current) {
-      clearTimeout(ringtoneTimeoutRef.current);
-      ringtoneTimeoutRef.current = null;
-    }
-
-    // Nullify Janus objects globally
-    // if (window.janusGlobal) {
-    //   console.log("🔥 INDEX - Destroying janusGlobal");
-    //   try {
-    //     window.janusGlobal.destroy();
-    //   } catch (error) {
-    //     console.error("🔥 INDEX - Error destroying janusGlobal:", error);
-    //   }
-    //   window.janusGlobal = null;
-    // }
-    // if (window.echotestPlugin) {
-    //   console.log("🔥 INDEX - Detaching echotestPlugin");
-    //   try {
-    //     window.echotestPlugin.detach();
-    //   } catch (error) {
-    //     console.error("🔥 INDEX - Error detaching echotestPlugin:", error);
-    //   }
-    //   window.echotestPlugin = null;
-    // }
-
-    // Ensure Janus and WebRTC resources are fully released
-    // Any other global cleanup actions
-    isEndingCallRef.current = false;
-    console.log("🔥 INDEX - IMMEDIATE AGGRESSIVE CLEANUP ENDED");
-  }, [
-    callState,
-    isEndingCallRef,
-    activeCallRecipient,
-    callRoomId,
-    incomingCall,
-    setCallState,
-    setIncomingCall,
-    setActiveCallRecipient,
-    setCallRoomId,
-    setForceHideModal,
-    ringtoneTimeoutRef,
-    audioCallRef,
   ]);
 
   const handleHangUp = useCallback(() => {
@@ -732,12 +542,13 @@ export default function Home() {
   }
 
   // --- UI Components / Other Helper Functions (not hooks, can be defined after conditional return) ---
-  const handleLoginOrRegister = async (e, endpoint) => {
+  const handleLoginOrRegister = async (e, endpoint, loginFormData) => {
     e.preventDefault();
+    setAuthError(null); // Clear previous errors
     try {
       const response = await axios.post(
         `${process.env.NEXT_PUBLIC_AUTH_API_URL}${endpoint}`,
-        loginForm
+        loginFormData
       );
       const { token, user: userData } = response.data;
       if (typeof window !== "undefined") {
@@ -750,86 +561,20 @@ export default function Home() {
       fetchAllUsers("/api/users");
     } catch (error) {
       console.error("Authentication error:", error.response?.data || error);
+      setAuthError(
+        error.response?.data?.message ||
+          "Authentication failed. Please try again."
+      ); // Set authentication error
       showCallNotification("error", "Authentication failed.");
     }
   };
 
   const renderAuth = () => {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">
-        <div className="w-full max-w-md p-8 space-y-8 bg-gray-800 rounded-lg shadow-lg">
-          <div className="text-center">
-            <FaRocket className="mx-auto h-12 w-auto text-indigo-500" />
-            <h2 className="mt-6 text-3xl font-extrabold">Welcome to Alcall</h2>
-            <p className="mt-2 text-sm text-gray-400">
-              Sign in to your account
-            </p>
-          </div>
-          <form
-            className="space-y-6"
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleLoginOrRegister(e, "/auth/login");
-            }}
-          >
-            <div className="rounded-md shadow-sm -space-y-px">
-              <div>
-                <input
-                  id="username"
-                  name="username"
-                  type="text"
-                  autoComplete="username"
-                  required
-                  className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-700 placeholder-gray-500 text-white bg-gray-700 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                  placeholder="Username"
-                  value={loginForm.username}
-                  onChange={(e) =>
-                    setLoginForm({ ...loginForm, username: e.target.value })
-                  }
-                />
-              </div>
-              <div>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                  className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-700 placeholder-gray-500 text-white bg-gray-700 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                  placeholder="Password"
-                  value={loginForm.password}
-                  onChange={(e) =>
-                    setLoginForm({ ...loginForm, password: e.target.value })
-                  }
-                />
-              </div>
-            </div>
-
-            <div>
-              <button
-                type="submit"
-                className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                Sign in
-              </button>
-            </div>
-          </form>
-          <div className="text-center">
-            <p className="text-sm text-gray-400">
-              Don't have an account?
-              <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  handleLoginOrRegister(e, "/auth/register");
-                }}
-                className="font-medium text-indigo-400 hover:text-indigo-300 ml-1"
-              >
-                Register
-              </button>
-            </p>
-          </div>
-        </div>
-      </div>
+      <AuthForm
+        onLoginOrRegister={handleLoginOrRegister}
+        authError={authError}
+      />
     );
   };
 
@@ -844,7 +589,7 @@ export default function Home() {
 
     const bubbleClass = isSender
       ? "bg-blue-500 text-white rounded-br-none ml-auto"
-      : "bg-gray-700 text-white rounded-bl-none mr-auto";
+      : "bg-gray-200 text-gray-800 rounded-bl-none mr-auto";
     const marginClass = isFirstInGroup ? "mt-4" : "mt-1";
 
     // Determine avatar display and message grouping
