@@ -413,7 +413,26 @@ export default function Home() {
   // --- Effect Hooks (All useEffect hooks here) ---
   useEffect(() => {
     setMounted(true);
-  }, []); // Effect for mounting state
+
+    // Check for existing session in localStorage on component mount
+    if (typeof window !== "undefined") {
+      const storedUser = localStorage.getItem("user");
+      const storedToken = localStorage.getItem("token");
+      if (storedUser && storedToken) {
+        try {
+          const parsedUser = JSON.parse(storedUser);
+          setUser(parsedUser);
+          setIsLoggedIn(true);
+          // Optionally re-initialize WebSocket here if it depends on user being logged in immediately
+        } catch (error) {
+          console.error("Failed to parse user from localStorage:", error);
+          // Clear invalid data
+          localStorage.removeItem("user");
+          localStorage.removeItem("token");
+        }
+      }
+    }
+  }, []); // Effect for mounting state and initial session check
 
   useEffect(() => {
     if (user && isLoggedIn) {
@@ -719,7 +738,123 @@ export default function Home() {
 
   return (
     <div>
-      <h1>Hello World</h1>
+      <Head>
+        <title>Alcall</title>
+        <link rel="icon" href="/favicon.ico" />
+      </Head>
+
+      <Script src="/janus.js" strategy="beforeInteractive" />
+      <Script src="/adapter.js" strategy="beforeInteractive" />
+      <Script
+        src="/unified-chat-app-janus-deps.js"
+        strategy="beforeInteractive"
+      />
+      <Script src="/ringtone.js" strategy="beforeInteractive" />
+
+      {callNotification && (
+        <div
+          className={`fixed top-5 right-5 p-3 rounded-md shadow-md text-white z-50 ${
+            callNotification.type === "error"
+              ? "bg-red-600"
+              : callNotification.type === "success"
+              ? "bg-green-600"
+              : "bg-blue-600"
+          }`}
+        >
+          {callNotification.message}
+        </div>
+      )}
+
+      {callEndedModal && (
+        <div
+          className={`fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 ${
+            forceHideModal ? "hidden" : ""
+          }`}
+        >
+          <div className="bg-gray-800 p-6 rounded-lg shadow-xl text-center text-white">
+            <h2 className="text-xl font-bold mb-3">{callEndedModal.title}</h2>
+            <p className="mb-4">{callEndedModal.message}</p>
+            <button
+              onClick={() => setCallEndedModal(null)}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {isLoggedIn ? (
+        <div className="flex h-screen bg-gray-900 text-white">
+          {/* Sidebar */}
+          <Sidebar
+            user={user}
+            onLogout={handleLogout}
+            selectedRecipient={selectedRecipient}
+            setSelectedRecipient={setSelectedRecipient}
+            allUsers={allUsers}
+            onlineUserIds={onlineUserIds}
+            setSidebarOpen={setSidebarOpen}
+            sidebarOpen={sidebarOpen}
+            showCallNotification={showCallNotification}
+            initiateCall={initiateCall}
+            initiateVideoCall={initiateVideoCall}
+          />
+
+          {/* Main Chat Area */}
+          <ChatInterface
+            selectedRecipient={selectedRecipient}
+            isUserOnline={isUserOnline}
+            messages={messages}
+            newMessage={newMessage}
+            setNewMessage={setNewMessage}
+            handleSendMessage={handleSendMessage}
+            user={user}
+            initiateCall={initiateCall}
+            initiateVideoCall={initiateVideoCall}
+            handleLogout={handleLogout}
+            handleSearch={handleSearch}
+            renderSearchResults={renderSearchResults}
+          />
+
+          {/* Online Users List (right sidebar) */}
+          <OnlineUsersList
+            allUsers={allUsers}
+            onlineUserIds={onlineUserIds}
+            selectChatUser={selectChatUser}
+            selectedRecipient={selectedRecipient}
+          />
+
+          {/* Audio Call Handler (hidden, for call logic) */}
+          <AudioCallHandler
+            ref={audioCallRef}
+            user={user}
+            selectedRecipient={activeCallRecipient}
+            callRoomId={callRoomId}
+            callState={callState}
+            setCallState={setCallState}
+            setForceHideModal={setForceHideModal}
+            showCallNotification={showCallNotification}
+            playRingbackTone={playRingbackTone}
+            stopRingbackTone={stopRingbackTone}
+            handleAudioCallEnd={handleAudioCallEnd}
+            callType={callType}
+          />
+
+          {/* Video Call Interface (hidden, for video call logic) */}
+          <VideoCallInterface
+            user={user}
+            selectedRecipient={activeVideoCallRecipient}
+            videoCallRoomId={videoCallRoomId}
+            videoCallState={videoCallState}
+            setVideoCallState={setVideoCallState}
+            handleVideoCallEnd={handleVideoCallEnd}
+            showCallNotification={showCallNotification}
+          />
+        </div>
+      ) : (
+        renderAuth()
+      )}
     </div>
   );
 }
