@@ -524,10 +524,207 @@ export default function Home() {
     ringtoneTimeoutRef,
   ]);
 
+  const handleSendMessage = useCallback(() => {
+    if (!newMessage.trim() || !selectedRecipient || !user) {
+      console.warn(
+        "Cannot send empty message or no recipient/sender selected."
+      );
+      return;
+    }
+
+    const messageToSend = {
+      type: "message",
+      content: newMessage,
+      sender_id: user.id,
+      sender: user.username, // Add sender username
+      recipient_id: selectedRecipient.id,
+      recipient: selectedRecipient.username, // Add recipient username
+      timestamp: Date.now(),
+      status: "sending", // Initial status
+    };
+
+    console.log("Sending message:", messageToSend);
+    sendWebSocketMessage(messageToSend);
+
+    // Optimistically add message to UI
+    setMessages((prevMessages) => [...prevMessages, messageToSend]);
+    setNewMessage(""); // Clear input field
+  }, [
+    newMessage,
+    selectedRecipient,
+    user,
+    sendWebSocketMessage,
+    setMessages,
+    setNewMessage,
+  ]);
+
   // --- Effect Hooks (All useEffect hooks here) ---
   useEffect(() => {
     setMounted(true);
   }, []); // Effect for mounting state
+
+  useEffect(() => {
+    if (user && isLoggedIn) {
+      // Initialize WebSocket connection when user logs in
+      const baseWsUrl = process.env.NEXT_PUBLIC_REALTIME_API_URL;
+      const socketUrl = `${baseWsUrl}?user_id=${user.id}&username=${user.username}`;
+      initializeWebSocket(socketUrl);
+
+      // Set up message handler for incoming WebSocket messages
+      setOnMessage((data) => {
+        const message = JSON.parse(data);
+        console.log("WebSocket message received in index.js:", message);
+
+        switch (message.type) {
+          case "message":
+            setMessages((prevMessages) => {
+              // Check for duplicates before adding
+              if (!prevMessages.some((msg) => msg.id === message.id)) {
+                return [...prevMessages, message];
+              }
+              return prevMessages;
+            });
+            break;
+          case "user_online":
+            setOnlineUserIds((prev) => new Set(prev).add(message.user_id));
+            showCallNotification(
+              "info",
+              `${
+                userMap.get(message.user_id)?.username || "A user"
+              } came online.`
+            );
+            break;
+          case "user_offline":
+            setOnlineUserIds((prev) => {
+              const newSet = new Set(prev);
+              newSet.delete(message.user_id);
+              return newSet;
+            });
+            showCallNotification(
+              "warning",
+              `${
+                userMap.get(message.user_id)?.username || "A user"
+              } went offline.`
+            );
+            break;
+          case "call_initiated":
+            // Handle incoming call notification
+            setIncomingCallDetails(message.call);
+            setIncomingCall({
+              caller_username:
+                userMap.get(message.call.from_user_id)?.username || "Unknown",
+              call_type: message.call.call_type,
+            });
+            playIncomingCallRingtone();
+            showCallNotification(
+              "info",
+              `Incoming ${message.call.call_type} call from ${
+                userMap.get(message.call.from_user_id)?.username || "Unknown"
+              }!`
+            );
+            break;
+          case "call_accepted":
+            // Stop ringback tone and update call state for the caller
+            stopRingbackTone();
+            setCallState("active");
+            showCallNotification(
+              "success",
+              `${
+                userMap.get(message.call.to_user_id)?.username ||
+                "The recipient"
+              } accepted your call.`
+            );
+            break;
+          case "call_rejected":
+            // Stop ringback tone and reset call state for the caller
+            stopRingbackTone();
+            setCallState("idle");
+            showCallNotification(
+              "error",
+              `${
+                userMap.get(message.call.to_user_id)?.username ||
+                "The recipient"
+              } rejected your call.`
+            );
+            setIncomingCall(null);
+            setActiveCallRecipient(null);
+            setCallRoomId(null);
+            setIncomingCallDetails(null);
+            break;
+          case "call_ended":
+            // Handle call ending by the other party
+            showCallEndedModal(
+              "info",
+              "Call Ended",
+              `${
+                userMap.get(message.call.from_user_id)?.username ||
+                "The other party"
+              } has ended the call.`
+            );
+            // Trigger aggressive cleanup only if there was an active call
+            if (callState !== "idle") {
+              handleAudioCallEnd(); // This will reset all call-related states and cleanup
+            }
+            break;
+          case "message_status_update":
+            setMessages((prevMessages) =>
+              prevMessages.map((msg) =>
+                msg.id === message.message_id
+                  ? { ...msg, status: message.status }
+                  : msg
+              )
+            );
+            break;
+          case "user_info_update":
+            // This case handles user profile updates, including username changes
+            setAllUsers((prevUsers) =>
+              prevUsers.map((u) =>
+                u.id === message.user.id ? message.user : u
+              )
+            );
+            setUserMap((prevMap) => {
+              const newMap = new Map(prevMap);
+              newMap.set(message.user.id, message.user);
+              return newMap;
+            });
+            // If the current user's info is updated, update the user state
+            if (user && user.id === message.user.id) {
+              setUser(message.user);
+              if (typeof window !== "undefined") {
+                localStorage.setItem("user", JSON.stringify(message.user));
+              }
+            }
+            break;
+          default:
+            console.warn("Unknown message type:", message.type, message);
+        }
+      });
+    } else if (!isLoggedIn) {
+      closeWebSocket();
+    }
+    return () => {
+      // Cleanup WebSocket on component unmount or user logout
+      closeWebSocket();
+    };
+  }, [
+    user,
+    isLoggedIn,
+    initializeWebSocket,
+    setOnMessage,
+    setMessages,
+    setOnlineUserIds,
+    showCallNotification,
+    userMap,
+    setIncomingCallDetails,
+    setIncomingCall,
+    playIncomingCallRingtone,
+    stopRingbackTone,
+    setCallState,
+    showCallEndedModal,
+    handleAudioCallEnd,
+    setActiveCallRecipient,
+    setCallRoomId,
+  ]);
 
   // --- Conditional Render (AFTER ALL HOOKS) ---
   if (!mounted) {
