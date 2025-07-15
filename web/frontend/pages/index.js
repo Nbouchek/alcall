@@ -263,6 +263,157 @@ export default function Home() {
     closeWebSocket,
   ]);
 
+  const fetchAllUsers = useCallback(
+    async (path) => {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) {
+          console.error("No authentication token found.");
+          return;
+        }
+        const response = await axios.get(
+          `${process.env.NEXT_PUBLIC_AUTH_API_URL}${path}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+        setAllUsers(response.data);
+
+        // Create a user map for easy lookup
+        const userMap = new Map();
+        response.data.forEach((u) => userMap.set(u.id, u));
+        setUserMap(userMap);
+      } catch (error) {
+        console.error("Failed to fetch users:", error);
+        showCallNotification("error", "Failed to load users.");
+      }
+    },
+    [setAllUsers, setUserMap, showCallNotification]
+  );
+
+  const initiateCall = useCallback(
+    async (recipient) => {
+      if (!user) {
+        showCallNotification("error", "Please log in to make a call.");
+        return;
+      }
+      if (!recipient) {
+        showCallNotification("error", "Please select a recipient to call.");
+        return;
+      }
+
+      const hasMicrophonePermission = await requestMicrophonePermission();
+      if (!hasMicrophonePermission) {
+        showCallNotification(
+          "error",
+          "Microphone permission is required to make calls."
+        );
+        return;
+      }
+
+      const newCallRoomId = `${user.id}-${recipient.id}-${Date.now()}`;
+      setCallRoomId(newCallRoomId);
+      setActiveCallRecipient(recipient);
+      setCallType("audio");
+      setCallState("calling"); // Set state to 'calling' immediately
+
+      // Send call initiation message via WebSocket
+      sendWebSocketMessage({
+        type: "call_initiated",
+        call: {
+          from_user_id: user.id,
+          from_username: user.username,
+          to_user_id: recipient.id,
+          to_username: recipient.username,
+          room_id: newCallRoomId,
+          call_type: "audio",
+        },
+      });
+
+      playRingbackTone(); // Play ringback tone for the caller
+      showCallNotification("info", `Calling ${recipient.username}...`);
+    },
+    [
+      user,
+      requestMicrophonePermission,
+      setCallRoomId,
+      setActiveCallRecipient,
+      setCallType,
+      setCallState,
+      sendWebSocketMessage,
+      playRingbackTone,
+      showCallNotification,
+    ]
+  );
+
+  const initiateVideoCall = useCallback(
+    async (recipient) => {
+      if (!user) {
+        showCallNotification("error", "Please log in to make a video call.");
+        return;
+      }
+      if (!recipient) {
+        showCallNotification(
+          "error",
+          "Please select a recipient to video call."
+        );
+        return;
+      }
+
+      const hasMicrophonePermission = await requestMicrophonePermission();
+      if (!hasMicrophonePermission) {
+        showCallNotification(
+          "error",
+          "Microphone permission is required to make video calls."
+        );
+        return;
+      }
+      // Also check for camera permission for video calls
+      try {
+        await navigator.mediaDevices.getUserMedia({ video: true });
+      } catch (error) {
+        showCallNotification(
+          "error",
+          "Camera permission is required to make video calls."
+        );
+        console.error("Camera access denied:", error);
+        return;
+      }
+
+      const newCallRoomId = `${user.id}-${recipient.id}-${Date.now()}-video`;
+      setVideoCallRoomId(newCallRoomId);
+      setActiveVideoCallRecipient(recipient);
+      setVideoCallState("calling");
+
+      sendWebSocketMessage({
+        type: "call_initiated",
+        call: {
+          from_user_id: user.id,
+          from_username: user.username,
+          to_user_id: recipient.id,
+          to_username: recipient.username,
+          room_id: newCallRoomId,
+          call_type: "video",
+        },
+      });
+
+      playRingbackTone();
+      showCallNotification("info", `Video calling ${recipient.username}...`);
+    },
+    [
+      user,
+      requestMicrophonePermission,
+      setVideoCallRoomId,
+      setActiveVideoCallRecipient,
+      setVideoCallState,
+      sendWebSocketMessage,
+      playRingbackTone,
+      showCallNotification,
+    ]
+  );
+
   const handleAcceptCall = useCallback(() => {
     if (!incomingCallDetails) return;
 
