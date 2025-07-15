@@ -118,16 +118,16 @@ export default function Home() {
   // --- Callback Functions (All useCallback functions here) ---
   const showCallNotification = useCallback(
     (type, message, duration = 3000) => {
-      setCallNotification({ type, message });
-      setTimeout(() => setCallNotification(null), duration);
+    setCallNotification({ type, message });
+    setTimeout(() => setCallNotification(null), duration);
     },
     [setCallNotification]
   );
 
   const showCallEndedModal = useCallback(
     (type, title, message, duration = 4000) => {
-      setCallEndedModal({ type, title, message });
-      setTimeout(() => setCallEndedModal(null), duration);
+    setCallEndedModal({ type, title, message });
+    setTimeout(() => setCallEndedModal(null), duration);
     },
     [setCallEndedModal]
   );
@@ -179,13 +179,13 @@ export default function Home() {
 
   const playRingbackTone = useCallback(() => {
     if (window.playRingback) {
-      window.playRingtone();
+      window.playRingback();
     }
   }, []);
 
   const stopRingbackTone = useCallback(() => {
     if (window.stopRingback) {
-      window.stopRingtone();
+      window.stopRingback();
       console.log("Stopping ringback tone.");
     }
   }, []);
@@ -505,11 +505,17 @@ export default function Home() {
     console.log("🔥 INDEX - IMMEDIATE AGGRESSIVE CLEANUP ENDED");
   }, [
     callState,
+    isEndingCallRef,
+    activeCallRecipient,
+    callRoomId,
+    incomingCall,
     setCallState,
     setIncomingCall,
     setActiveCallRecipient,
     setCallRoomId,
     setForceHideModal,
+    ringtoneTimeoutRef,
+    audioCallRef,
   ]);
 
   const handleHangUp = useCallback(() => {
@@ -576,7 +582,9 @@ export default function Home() {
     setCallRoomId,
     setForceHideModal,
     setIncomingCallDetails,
+    ringtoneTimeoutRef,
   ]);
+  */
 
   // --- Effect Hooks (All useEffect hooks here) ---
   useEffect(() => {
@@ -598,8 +606,8 @@ export default function Home() {
       );
       const { token, user: userData } = response.data;
       if (typeof window !== "undefined") {
-        localStorage.setItem("token", token);
-        localStorage.setItem("user", JSON.stringify(userData));
+      localStorage.setItem("token", token);
+      localStorage.setItem("user", JSON.stringify(userData));
       }
       setUser(userData);
       setIsLoggedIn(true);
