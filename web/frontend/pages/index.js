@@ -1011,7 +1011,7 @@ export default function Home() {
           <OnlineUsersList
             allUsers={allUsers}
             onlineUserIds={onlineUserIds}
-            selectChatUser={selectChatUser}
+            // Removed selectChatUser as it is not used by OnlineUsersList
             selectedRecipient={selectedRecipient}
           />
 
