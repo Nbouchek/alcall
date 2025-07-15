@@ -179,13 +179,13 @@ export default function Home() {
 
   const playRingbackTone = useCallback(() => {
     if (window.playRingback) {
-      window.playRingback();
+      window.playRingtone();
     }
   }, []);
 
   const stopRingbackTone = useCallback(() => {
     if (window.stopRingback) {
-      window.stopRingback();
+      window.stopRingtone();
       console.log("Stopping ringback tone.");
     }
   }, []);
@@ -505,17 +505,11 @@ export default function Home() {
     console.log("🔥 INDEX - IMMEDIATE AGGRESSIVE CLEANUP ENDED");
   }, [
     callState,
-    isEndingCallRef,
-    activeCallRecipient,
-    callRoomId,
-    incomingCall,
     setCallState,
     setIncomingCall,
     setActiveCallRecipient,
     setCallRoomId,
     setForceHideModal,
-    ringtoneTimeoutRef,
-    audioCallRef,
   ]);
 
   const handleHangUp = useCallback(() => {
@@ -582,9 +576,7 @@ export default function Home() {
     setCallRoomId,
     setForceHideModal,
     setIncomingCallDetails,
-    ringtoneTimeoutRef,
   ]);
-  */
 
   // --- Effect Hooks (All useEffect hooks here) ---
   useEffect(() => {
