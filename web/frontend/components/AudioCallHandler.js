@@ -40,8 +40,53 @@ const AudioCallHandler = forwardRef(
     const numericRoomIdRef = useRef(null);
     const isCleaningUpRef = useRef(false);
 
-    const JANUS_URL =
-      process.env.NEXT_PUBLIC_JANUS_URL || "ws://localhost:8188";
+    const adjustVolume = useCallback(
+      (delta) => {
+        setVolume((prevVolume) => {
+          const newVolume = Math.max(0, Math.min(1, prevVolume + delta));
+          if (audioRef.current) {
+            audioRef.current.volume = newVolume;
+          }
+          return newVolume;
+        });
+      },
+      [setVolume]
+    );
+
+    const toggleMute = useCallback(() => {
+      setIsMuted((prevMuted) => {
+        const newMuted = !prevMuted;
+        if (audioRef.current) {
+          audioRef.current.muted = newMuted;
+        }
+        return newMuted;
+      });
+    }, []);
+
+    const endCall = useCallback(() => {
+      console.log("🔥 AUDIO - endCall initiated");
+      if (isCleaningUpRef.current) {
+        console.log(
+          "🔥 AUDIO - Cleanup already in progress, aborting endCall."
+        );
+        return;
+      }
+      if (!isInCall) {
+        console.log("🔥 AUDIO - Not in call, aborting endCall.");
+        cleanupCall(); // Ensure cleanup happens even if isInCall is false but state is bad
+        return;
+      }
+      console.log("🔥 AUDIO - Starting endCall process...");
+      setCallStatus("Ending call...");
+
+      // Send hangup to Janus
+      if (pluginHandleRef.current) {
+        console.log("🔥 AUDIO - Sending hangup to Janus...");
+        pluginHandleRef.current.hangup();
+      }
+      onCallEnd && onCallEnd(); // Notify parent component about call end
+      cleanupCall();
+    }, [isInCall, onCallEnd, cleanupCall]);
 
     // Monitor parent call state and force cleanup if it becomes idle
     useEffect(() => {
@@ -53,7 +98,7 @@ const AudioCallHandler = forwardRef(
         setIsInCall(false);
         cleanupCall();
       }
-    }, [callState, isInCall]);
+    }, [callState, isInCall, cleanupCall]);
 
     // Keyboard navigation support
     useEffect(() => {
@@ -81,10 +126,31 @@ const AudioCallHandler = forwardRef(
               adjustVolume(-0.1);
               break;
           }
+        } else {
+          // Handle non-ctrl/meta key presses
+          switch (event.key) {
+            case "ArrowUp":
+              event.preventDefault();
+              adjustVolume(0.1);
+              break;
+            case "ArrowDown":
+              event.preventDefault();
+              adjustVolume(-0.1);
+              break;
+            case "m":
+            case "M":
+              event.preventDefault();
+              toggleMute();
+              break;
+            case "Escape":
+              event.preventDefault();
+              endCall();
+              break;
+          }
         }
 
-        // ESC key to end call
-        if (event.key === "Escape") {
+        // ESC key to end call (redundant, but keeping for clarity if not handled above)
+        if (event.key === "Escape" && !event.ctrlKey && !event.metaKey) {
           event.preventDefault();
           endCall();
         }
@@ -109,7 +175,7 @@ const AudioCallHandler = forwardRef(
       }, 2000);
 
       return () => clearInterval(failsafeInterval);
-    }, [isInCall, callState]);
+    }, [isInCall, callState, cleanupCall]);
 
     // Expose functions to parent component
     useImperativeHandle(ref, () => ({
@@ -167,7 +233,7 @@ const AudioCallHandler = forwardRef(
         console.log("AudioCallHandler unmounted, cleaning up...");
         cleanupCall();
       };
-    }, []);
+    }, [cleanupCall]);
 
     const stringToPositiveIntegerHash = (str) => {
       let hash = 0;
@@ -486,9 +552,7 @@ const AudioCallHandler = forwardRef(
             dedicatedAudio.onloadeddata = () =>
               console.log("🔥 AUDIO - DEDICATED: Data loaded");
             dedicatedAudio.oncanplay = () => {
-              console.log(
-                "🔥 AUDIO - DEDICATED: Can play - FORCING PLAY"
-              );
+              console.log("🔥 AUDIO - DEDICATED: Can play - FORCING PLAY");
               dedicatedAudio
                 .play()
                 .then(() => {
@@ -1091,415 +1155,73 @@ const AudioCallHandler = forwardRef(
       }
     };
 
-    const toggleMute = useCallback(() => {
-      if (pluginHandleRef.current) {
-        const newMutedState = !isMuted;
-        setIsMuted(newMutedState);
-        const muteRequest = { request: "configure", muted: newMutedState };
-        pluginHandleRef.current.send({ message: muteRequest });
-        console.log(`Set muted state to: ${newMutedState}`);
-      }
-    }, [isMuted]);
-
-    const endCall = useCallback(() => {
-      console.log("endCall function called");
-      if (callStateRef.current === "idle" || isCleaningUpRef.current) {
-        console.log(
-          "Call already ended or cleanup in progress, skipping endCall."
-        );
-        return;
-      }
-
-      // Set a flag to prevent multiple endCall invocations
+    const cleanupCall = useCallback(() => {
       if (isCleaningUpRef.current) {
-        console.log("endCall already in progress, skipping onCallEnd");
+        console.log("Cleanup already in progress, aborting.");
         return;
       }
-
-      cleanupCall();
-
-      // Only call onCallEnd if we're not already in a cleanup state
-      // and if the call state was not already idle when we started
-      if (
-        onCallEnd &&
-        typeof onCallEnd === "function" &&
-        !isCleaningUpRef.current
-      ) {
-        console.log("Calling onCallEnd prop function.");
-        onCallEnd();
-      } else {
-        console.log(
-          "Skipping onCallEnd call - cleanup in progress or invalid state"
-        );
-      }
-    }, [onCallEnd]);
-
-    const cleanupCall = () => {
-      console.log("🔥 CLEANUP - IMMEDIATE AGGRESSIVE CLEANUP STARTING");
-
-      // Prevent multiple concurrent cleanup calls
-      if (isCleaningUpRef.current) {
-        console.log("🔥 CLEANUP - Already in progress, skipping.");
-        return;
-      }
-
-      if (callStateRef.current === "idle") {
-        console.log("🔥 CLEANUP - Call already idle, skipping.");
-        return;
-      }
-
       isCleaningUpRef.current = true;
-      callStateRef.current = "idle";
 
-      try {
-        // CRITICAL: SYNCHRONOUS IMMEDIATE MICROPHONE RELEASE
-        console.log("🔥 CLEANUP - SYNCHRONOUS MICROPHONE RELEASE");
+      console.log("🔥 AUDIO - Performing full cleanup...");
 
-        // 1. THOROUGH MICROPHONE STREAM CLEANUP (Don't destroy peer connection yet)
-        console.log("🔥 CLEANUP - THOROUGH microphone stream cleanup");
+      // 1. Reset state variables
+      setIsInCall(false);
+      setCallStatus("");
+      setIsMuted(false);
+      setVolume(1.0);
+      numericRoomIdRef.current = null;
 
-        // Stop ALL possible getUserMedia streams that might be capturing microphone
-        console.log("🔥 CLEANUP - Stopping ALL getUserMedia streams");
-
-        // Find all active streams in the browser
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-          // Stop streams attached to plugin
-          if (pluginHandleRef.current && pluginHandleRef.current.webrtcStuff) {
-            const webrtcStuff = pluginHandleRef.current.webrtcStuff;
-
-            // Stop local stream tracks but don't nullify - let Janus handle cleanup properly
-            if (webrtcStuff.myStream) {
-              console.log("🔥 CLEANUP - Stopping Janus myStream tracks");
-              webrtcStuff.myStream.getTracks().forEach((track) => {
-                console.log(
-                  "🔥 CLEANUP - Stopping Janus track:",
-                  track.kind,
-                  track.label
-                );
-                track.stop();
-              });
-              // Don't nullify - Janus needs to clean up properly to avoid null reference errors
-            }
-
-            // Stop remote stream tracks but don't nullify
-            if (webrtcStuff.remoteStream) {
-              console.log("🔥 CLEANUP - Stopping remote stream tracks");
-              webrtcStuff.remoteStream.getTracks().forEach((track) => {
-                console.log(
-                  "🔥 CLEANUP - Stopping remote track:",
-                  track.kind,
-                  track.label
-                );
-                track.stop();
-              });
-              // Don't nullify - let Janus handle this
-            }
-
-            // Don't close peer connection here - let Janus handle it in hangup/detach
-            // This prevents the "config.pc is null" error
-          }
-        }
-
-        // 2. EXHAUSTIVE GLOBAL STREAM CLEANUP
-        console.log("🔥 CLEANUP - EXHAUSTIVE global stream cleanup");
-
-        // Create a comprehensive list of all possible stream references
-        const streamReferences = [
-          { name: "window.localAudioStream", stream: window.localAudioStream },
-          {
-            name: "window.currentCallStream",
-            stream: window.currentCallStream,
-          },
-          {
-            name: "window.getUserMediaStream",
-            stream: window.getUserMediaStream,
-          },
-          { name: "window.microphoneStream", stream: window.microphoneStream },
-          { name: "window.audioStream", stream: window.audioStream },
-        ];
-
-        // Stop all global streams
-        streamReferences.forEach(({ name, stream }) => {
-          if (stream && stream.getTracks) {
-            console.log(`🔥 CLEANUP - Found and stopping ${name}`);
-            stream.getTracks().forEach((track) => {
-              console.log(
-                `🔥 CLEANUP - Stopping ${name} track:`,
-                track.kind,
-                track.label,
-                track.readyState
-              );
-              track.stop();
-            });
-
-            // Nullify the reference
-            if (name === "window.localAudioStream")
-              window.localAudioStream = null;
-            if (name === "window.currentCallStream")
-              window.currentCallStream = null;
-            if (name === "window.getUserMediaStream")
-              window.getUserMediaStream = null;
-            if (name === "window.microphoneStream")
-              window.microphoneStream = null;
-            if (name === "window.audioStream") window.audioStream = null;
-
-            console.log(`🔥 CLEANUP - ${name} NULLIFIED`);
-          }
-        });
-
-        // 3. IMMEDIATE AUDIO ELEMENT CLEANUP
-        console.log("🔥 CLEANUP - IMMEDIATE audio element cleanup");
-        const audioElements = document.querySelectorAll("audio");
-        audioElements.forEach((audio, index) => {
-          console.log(`🔥 CLEANUP - Cleaning audio element ${index}`);
-          try {
-            audio.pause();
-            audio.currentTime = 0;
-            if (audio.srcObject) {
-              const stream = audio.srcObject;
-              if (stream && stream.getTracks) {
-                stream.getTracks().forEach((track) => {
-                  console.log(
-                    `🔥 CLEANUP - Stopping track from element ${index}:`,
-                    track.kind,
-                    track.label
-                  );
-                  track.stop();
-                });
-              }
-              audio.srcObject = null;
-            }
-            audio.src = "";
-            // Remove temporary elements
-            if (
-              audio.id &&
-              (audio.id.includes("temp-") ||
-                audio.id.includes("dedicated-") ||
-                audio.id.includes("emergency-"))
-            ) {
-              audio.remove();
-              console.log(
-                `🔥 CLEANUP - Removed temporary element: ${audio.id}`
-              );
-            }
-          } catch (error) {
-            console.log(
-              `🔥 CLEANUP - Error cleaning audio element ${index}:`,
-              error
-            );
-          }
-        });
-
-        // 4. JANUS PLUGIN CLEANUP (Let Janus handle cleanup properly)
-        console.log("🔥 CLEANUP - Janus plugin cleanup");
-        if (pluginHandleRef.current) {
-          try {
-            // Let Janus handle hangup properly to avoid peer connection issues
-            pluginHandleRef.current.hangup();
-            console.log("🔥 CLEANUP - Janus plugin hangup called");
-
-            // Give a small delay for Janus to process hangup
-            setTimeout(() => {
-              try {
-                if (pluginHandleRef.current) {
-                  pluginHandleRef.current.detach();
-                  console.log("🔥 CLEANUP - Janus plugin detached");
-                  pluginHandleRef.current = null;
-                }
-              } catch (error) {
-                console.log("🔥 CLEANUP - Error during plugin detach:", error);
-                pluginHandleRef.current = null;
-              }
-            }, 100);
-          } catch (error) {
-            console.log("🔥 CLEANUP - Error during plugin cleanup:", error);
-            pluginHandleRef.current = null;
-          }
-        }
-
-        // 5. JANUS CONNECTION CLEANUP (Delayed to allow proper shutdown)
-        console.log("🔥 CLEANUP - Janus connection cleanup");
-        if (janusRef.current) {
-          // Delay destruction to allow plugin to clean up first
-          setTimeout(() => {
-            try {
-              if (janusRef.current) {
-                janusRef.current.destroy();
-                console.log("🔥 CLEANUP - Janus connection destroyed");
-                janusRef.current = null;
-              }
-            } catch (error) {
-              console.log(
-                "🔥 CLEANUP - Error during Janus destruction:",
-                error
-              );
-              janusRef.current = null;
-            }
-          }, 200);
-        }
-
-        // 6. IMMEDIATE AUDIO CONTEXT CLEANUP
-        console.log("🔥 CLEANUP - IMMEDIATE audio context cleanup");
-        if (window.audioContext) {
-          try {
-            if (window.audioContext.state !== "closed") {
-              window.audioContext.suspend();
-              console.log("🔥 CLEANUP - Audio context suspended");
-            }
-          } catch (error) {
-            console.log("🔥 CLEANUP - Error suspending audio context:", error);
-          }
-        }
-
-        // 7. IMMEDIATE MICROPHONE VERIFICATION AND RELEASE
-        console.log("🔥 CLEANUP - IMMEDIATE microphone verification");
-
-        // Clear any lingering stream references
-        try {
-          // Force garbage collection if available
-          if (window.gc) {
-            window.gc();
-            console.log("🔥 CLEANUP - Forced garbage collection");
-          }
-        } catch (error) {
-          console.log("🔥 CLEANUP - GC not available");
-        }
-
-        // 8. IMMEDIATE COMPONENT STATE RESET
-        console.log("🔥 CLEANUP - IMMEDIATE component state reset");
-        setIsInCall(false);
-        setCallStatus("");
-        setIsMuted(false);
-
-        // 9. COMPREHENSIVE MICROPHONE VERIFICATION
-        console.log("🔥 CLEANUP - Comprehensive microphone verification");
-
-        // First, scan for any remaining active audio tracks that might cause echo
-        console.log("🔥 CLEANUP - Scanning for remaining active audio tracks");
-        let remainingActiveTracks = 0;
-
-        // Check all audio elements for active streams
-        document.querySelectorAll("audio").forEach((audio, index) => {
-          if (audio.srcObject && audio.srcObject.getTracks) {
-            audio.srcObject.getTracks().forEach((track) => {
-              if (track.readyState === "live" && track.kind === "audio") {
-                console.log(
-                  `🔥 CLEANUP - WARNING: Found live audio track in element ${index}:`,
-                  track.label
-                );
-                remainingActiveTracks++;
-                // Force stop this track to prevent echo
-                track.stop();
-                console.log(
-                  `🔥 CLEANUP - Force stopped remaining track: ${track.label}`
-                );
-              }
-            });
-          }
-        });
-
-        // Check for any window stream references with active tracks
-        [
-          window.localAudioStream,
-          window.currentCallStream,
-          window.getUserMediaStream,
-          window.microphoneStream,
-          window.audioStream,
-        ].forEach((stream, index) => {
-          if (stream && stream.getTracks) {
-            stream.getTracks().forEach((track) => {
-              if (track.readyState === "live" && track.kind === "audio") {
-                console.log(
-                  `🔥 CLEANUP - WARNING: Found live audio track in window stream ${index}:`,
-                  track.label
-                );
-                remainingActiveTracks++;
-                // Force stop this track to prevent echo
-                track.stop();
-                console.log(
-                  `🔥 CLEANUP - Force stopped window stream track: ${track.label}`
-                );
-              }
-            });
-          }
-        });
-
-        if (remainingActiveTracks > 0) {
-          console.log(
-            `🔥 CLEANUP - WARNING: Found and stopped ${remainingActiveTracks} remaining active audio tracks`
-          );
-        } else {
-          console.log(
-            "🔥 CLEANUP - GOOD: No remaining active audio tracks found"
-          );
-        }
-
-        // Test microphone availability after comprehensive cleanup
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-          // Quick test to verify microphone is available and no echo
-          navigator.mediaDevices
-            .getUserMedia({ audio: true })
-            .then((testStream) => {
-              console.log(
-                "🔥 CLEANUP - SUCCESS: Microphone is available for new calls"
-              );
-              console.log(
-                `🔥 CLEANUP - Test stream has ${
-                  testStream.getTracks().length
-                } tracks`
-              );
-
-              // Immediately stop the test stream to prevent any interference
-              testStream.getTracks().forEach((track) => {
-                console.log(
-                  `🔥 CLEANUP - Stopping test track: ${track.kind} ${track.label}`
-                );
-                track.stop();
-              });
-              console.log(
-                "🔥 CLEANUP - Test stream stopped - microphone fully released"
-              );
-            })
-            .catch((error) => {
-              console.log(
-                "🔥 CLEANUP - ERROR: Microphone NOT available:",
-                error.name,
-                error.message
-              );
-              console.log(
-                "🔥 CLEANUP - This may indicate microphone is still in use by another source"
-              );
-            });
-
-          // Log current media devices
-          navigator.mediaDevices
-            .enumerateDevices()
-            .then((devices) => {
-              const audioInputs = devices.filter(
-                (device) => device.kind === "audioinput"
-              );
-              console.log(
-                `🔥 CLEANUP - Found ${audioInputs.length} audio input devices available`
-              );
-            })
-            .catch((error) => {
-              console.log("🔥 CLEANUP - Error enumerating devices:", error);
-            });
-        }
-
-        console.log(
-          "🔥 CLEANUP - IMMEDIATE CLEANUP COMPLETED - MICROPHONE RELEASED"
-        );
-      } catch (error) {
-        console.error("🔥 CLEANUP - Error during cleanup:", error);
-      } finally {
-        isCleaningUpRef.current = false;
-        // DO NOT call onCallEnd here to prevent infinite recursion
+      // 2. Detach Janus plugin handle
+      if (pluginHandleRef.current) {
+        console.log("Detaching Janus plugin handle...");
+        pluginHandleRef.current.hangup();
+        pluginHandleRef.current.detach();
+        pluginHandleRef.current = null;
       }
-    };
+
+      // 3. Destroy Janus instance if it exists and is not needed elsewhere
+      if (janusRef.current) {
+        console.log("Destroying Janus instance...");
+        janusRef.current.destroy();
+        janusRef.current = null;
+      }
+
+      // 4. Stop local audio/video streams if they are active
+      if (window.localAudioStream) {
+        console.log("Stopping local audio stream tracks...");
+        window.localAudioStream.getTracks().forEach((track) => {
+          track.stop();
+          console.log("Track stopped:", track);
+        });
+        window.localAudioStream = null;
+      }
+
+      // 5. Remove all dynamically created audio elements
+      const existingAudioElements = document.querySelectorAll(
+        "audio[id^='remote-audio-']"
+      );
+      existingAudioElements.forEach((el) => {
+        console.log("Removing audio element:", el.id);
+        el.remove();
+      });
+
+      // 6. Reset audio context (if it was created by this component)
+      if (window.audioContext) {
+        // Only close if it's not needed by other components, or if it was explicitly created here.
+        // For now, we assume it might be shared, so don't close unless necessary.
+        // if (window.audioContext.state !== 'closed') {
+        //     window.audioContext.close();
+        //     console.log('AudioContext closed.');
+        // }
+        // window.audioContext = null;
+      }
+
+      isCleaningUpRef.current = false;
+      console.log("🔥 AUDIO - Full cleanup complete.");
+    }, [setIsInCall, setCallStatus, setIsMuted, setVolume]);
 
     // Audio diagnostics function
-    const diagnoseAudioElements = () => {
+    const diagnoseAudioElements = useCallback(() => {
       console.log("🔥 AUDIO - DIAGNOSTIC REPORT:");
 
       const allAudioElements = document.querySelectorAll("audio");
@@ -1548,7 +1270,7 @@ const AudioCallHandler = forwardRef(
           ? window.audioContext.state
           : "N/A",
       });
-    };
+    }, []);
 
     // Periodic diagnostics during calls
     useEffect(() => {
@@ -1568,7 +1290,7 @@ const AudioCallHandler = forwardRef(
           console.log("🔥 AUDIO - Stopped periodic diagnostics");
         };
       }
-    }, [isInCall]);
+    }, [isInCall, diagnoseAudioElements]);
 
     // Keyboard shortcuts for manual testing
     useEffect(() => {
@@ -1633,36 +1355,7 @@ const AudioCallHandler = forwardRef(
       return () => {
         document.removeEventListener("keydown", handleKeyPress);
       };
-    }, [isInCall, volume]);
-
-    useEffect(() => {
-      const handleKeyPress = (event) => {
-        if (isInCall) {
-          switch (event.key) {
-            case "ArrowUp":
-              event.preventDefault();
-              adjustVolume(0.1);
-              break;
-            case "ArrowDown":
-              event.preventDefault();
-              adjustVolume(-0.1);
-              break;
-            case "m":
-            case "M":
-              event.preventDefault();
-              toggleMute();
-              break;
-            case "Escape":
-              event.preventDefault();
-              endCall();
-              break;
-          }
-        }
-      };
-
-      document.addEventListener("keydown", handleKeyPress);
-      return () => document.removeEventListener("keydown", handleKeyPress);
-    }, [isInCall, adjustVolume, toggleMute, endCall]);
+    }, [isInCall, toggleMute, endCall, adjustVolume, diagnoseAudioElements]);
 
     // Always return only hidden audio elements and status data
     // The parent component handles all UI display
@@ -1693,6 +1386,6 @@ const AudioCallHandler = forwardRef(
   }
 );
 
-AudioCallHandler.displayName = 'AudioCallHandler';
+AudioCallHandler.displayName = "AudioCallHandler";
 
 export default AudioCallHandler;

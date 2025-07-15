@@ -4,6 +4,7 @@ import {
   useRef,
   forwardRef,
   useImperativeHandle,
+  useCallback,
 } from "react";
 import {
   FaPhone,
@@ -82,6 +83,38 @@ const JanusVideoCallP2P = forwardRef(({ user, onCallEnd }, ref) => {
     },
   }));
 
+  const connectToJanus = useCallback(() => {
+    if (janusRef.current) {
+      console.log("JanusVideoCallP2P: Already connected to Janus");
+      return;
+    }
+
+    janusRef.current = new window.Janus({
+      server: JANUS_URL,
+      success: () => {
+        console.log("JanusVideoCallP2P: Connected to Janus");
+        setJanusConnected(true);
+        setCallStatus("Connected to Janus server");
+        attachVideoCallPlugin();
+      },
+      error: (error) => {
+        console.error("JanusVideoCallP2P: Failed to connect to Janus:", error);
+        setConnectionError("Failed to connect to Janus server");
+        setJanusConnected(false);
+      },
+      destroyed: () => {
+        console.log("JanusVideoCallP2P: Janus connection destroyed");
+        setJanusConnected(false);
+      },
+    });
+  }, [
+    JANUS_URL,
+    setJanusConnected,
+    setCallStatus,
+    setConnectionError,
+    attachVideoCallPlugin,
+  ]);
+
   // Initialize Janus connection
   useEffect(() => {
     if (IS_DEMO_MODE) {
@@ -113,35 +146,9 @@ const JanusVideoCallP2P = forwardRef(({ user, onCallEnd }, ref) => {
     return () => {
       cleanup();
     };
-  }, []);
+  }, [IS_DEMO_MODE, connectToJanus, cleanup, setJanusConnected, setCallStatus]);
 
-  const connectToJanus = () => {
-    if (janusRef.current) {
-      console.log("JanusVideoCallP2P: Already connected to Janus");
-      return;
-    }
-
-    janusRef.current = new window.Janus({
-      server: JANUS_URL,
-      success: () => {
-        console.log("JanusVideoCallP2P: Connected to Janus");
-        setJanusConnected(true);
-        setCallStatus("Connected to Janus server");
-        attachVideoCallPlugin();
-      },
-      error: (error) => {
-        console.error("JanusVideoCallP2P: Failed to connect to Janus:", error);
-        setConnectionError("Failed to connect to Janus server");
-        setJanusConnected(false);
-      },
-      destroyed: () => {
-        console.log("JanusVideoCallP2P: Janus connection destroyed");
-        setJanusConnected(false);
-      },
-    });
-  };
-
-  const attachVideoCallPlugin = () => {
+  const attachVideoCallPlugin = useCallback(() => {
     janusRef.current.attach({
       plugin: VIDEOCALL_PLUGIN,
       success: (pluginHandle) => {
@@ -177,9 +184,15 @@ const JanusVideoCallP2P = forwardRef(({ user, onCallEnd }, ref) => {
         }
       },
     });
-  };
+  }, [
+    janusRef,
+    VIDEOCALL_PLUGIN,
+    registerUser,
+    handlePluginMessage,
+    setConnectionError,
+  ]);
 
-  const registerUser = () => {
+  const registerUser = useCallback(() => {
     if (!pluginHandleRef.current) return;
 
     const registerRequest = {
@@ -198,81 +211,105 @@ const JanusVideoCallP2P = forwardRef(({ user, onCallEnd }, ref) => {
         setConnectionError("Failed to register user");
       },
     });
-  };
+  }, [user?.name, setCallStatus, setConnectionError]);
 
-  const startCall = (username) => {
-    if (IS_DEMO_MODE) {
-      console.log("JanusVideoCallP2P: Starting demo call to:", username);
+  const startCall = useCallback(
+    (username) => {
+      if (IS_DEMO_MODE) {
+        console.log("JanusVideoCallP2P: Starting demo call to:", username);
+        setTargetUser(username);
+        setIsInCall(true);
+        setCallStatus(`Demo call with ${username}`);
+        return;
+      }
+
+      if (!pluginHandleRef.current) {
+        console.error("JanusVideoCallP2P: Plugin not attached");
+        return;
+      }
+
       setTargetUser(username);
-      setIsInCall(true);
-      setCallStatus(`Demo call with ${username}`);
-      return;
-    }
+      setCallStatus("Starting call...");
 
-    if (!pluginHandleRef.current) {
-      console.error("JanusVideoCallP2P: Plugin not attached");
-      return;
-    }
+      // Start local media capture
+      navigator.mediaDevices
+        .getUserMedia({ video: true, audio: true })
+        .then((stream) => {
+          localStreamRef.current = stream;
+          if (localVideoRef.current) {
+            localVideoRef.current.srcObject = stream;
+          }
 
-    setTargetUser(username);
-    setCallStatus("Starting call...");
+          // Create offer
+          pluginHandleRef.current.createOffer({
+            media: { audioSend: true, videoSend: true },
+            success: (jsep) => {
+              const callRequest = {
+                request: "call",
+                username: username,
+              };
 
-    // Start local media capture
-    navigator.mediaDevices
-      .getUserMedia({ video: true, audio: true })
-      .then((stream) => {
-        localStreamRef.current = stream;
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = stream;
-        }
-
-        // Create offer
-        pluginHandleRef.current.createOffer({
-          media: { audioSend: true, videoSend: true },
-          success: (jsep) => {
-            const callRequest = {
-              request: "call",
-              username: username,
-            };
-
-            pluginHandleRef.current.send({
-              message: callRequest,
-              jsep: jsep,
-              success: (result) => {
-                console.log("JanusVideoCallP2P: Call initiated:", result);
-                setCallStatus(`Calling ${username}...`);
-              },
-              error: (error) => {
-                console.error(
-                  "JanusVideoCallP2P: Failed to initiate call:",
-                  error
-                );
-                setCallStatus("Failed to start call");
-              },
-            });
-          },
-          error: (error) => {
-            console.error("JanusVideoCallP2P: Failed to create offer:", error);
-            setCallStatus("Failed to create offer");
-          },
+              pluginHandleRef.current.send({
+                message: callRequest,
+                jsep: jsep,
+                success: (result) => {
+                  console.log("JanusVideoCallP2P: Call initiated:", result);
+                  setCallStatus(`Calling ${username}...`);
+                  setIsInCall(true);
+                },
+                error: (error) => {
+                  console.error(
+                    "JanusVideoCallP2P: Failed to initiate call:",
+                    error
+                  );
+                  setCallStatus("Failed to start call");
+                  setConnectionError(error.message);
+                },
+              });
+            },
+            error: (error) => {
+              console.error(
+                "JanusVideoCallP2P: Failed to create offer:",
+                error
+              );
+              setCallStatus("Failed to start call");
+              setConnectionError(error.message);
+            },
+          });
+        })
+        .catch((error) => {
+          console.error("JanusVideoCallP2P: Failed to get user media:", error);
+          setCallStatus("Failed to access media devices");
+          setConnectionError("Failed to access camera/microphone");
         });
-      })
-      .catch((error) => {
-        console.error("JanusVideoCallP2P: Failed to get user media:", error);
-        setCallStatus("Failed to access camera/microphone");
-      });
-  };
+    },
+    [
+      IS_DEMO_MODE,
+      setIsInCall,
+      setCallStatus,
+      setTargetUser,
+      setConnectionError,
+      localVideoEnabled,
+      localAudioEnabled,
+      pluginHandleRef,
+    ]
+  );
 
-  const answerCall = () => {
+  const answerCall = useCallback(() => {
     if (IS_DEMO_MODE) {
       console.log("JanusVideoCallP2P: Answering demo call");
       setIsInCall(true);
       setIsIncoming(false);
-      setCallStatus(`Demo call with ${incomingCall?.caller}`);
+      setCallStatus("Demo call active");
       return;
     }
 
-    if (!pluginHandleRef.current || !incomingCall) return;
+    if (!pluginHandleRef.current || !incomingCall) {
+      console.error("JanusVideoCallP2P: No incoming call to answer");
+      return;
+    }
+
+    setCallStatus("Answering call...");
 
     // Start local media capture
     navigator.mediaDevices
@@ -283,73 +320,91 @@ const JanusVideoCallP2P = forwardRef(({ user, onCallEnd }, ref) => {
           localVideoRef.current.srcObject = stream;
         }
 
-        // Create answer
+        // Answer the offer
         pluginHandleRef.current.createAnswer({
           jsep: incomingCall.jsep,
           media: { audioSend: true, videoSend: true },
           success: (jsep) => {
-            const acceptRequest = {
-              request: "accept",
-            };
-
+            const acceptRequest = { request: "accept" };
             pluginHandleRef.current.send({
               message: acceptRequest,
               jsep: jsep,
               success: (result) => {
-                console.log("JanusVideoCallP2P: Call accepted:", result);
+                console.log("JanusVideoCallP2P: Call answered:", result);
                 setIsInCall(true);
                 setIsIncoming(false);
-                setCallStatus(`In call with ${incomingCall.caller}`);
+                setCallStatus(`Call with ${targetUser}`);
               },
               error: (error) => {
                 console.error(
-                  "JanusVideoCallP2P: Failed to accept call:",
+                  "JanusVideoCallP2P: Failed to answer call:",
                   error
                 );
-                setCallStatus("Failed to accept call");
+                setCallStatus("Failed to answer call");
+                setConnectionError(error.message);
               },
             });
           },
           error: (error) => {
             console.error("JanusVideoCallP2P: Failed to create answer:", error);
-            setCallStatus("Failed to create answer");
+            setCallStatus("Failed to answer call");
+            setConnectionError(error.message);
           },
         });
       })
       .catch((error) => {
         console.error("JanusVideoCallP2P: Failed to get user media:", error);
-        setCallStatus("Failed to access camera/microphone");
+        setCallStatus("Failed to access media devices");
+        setConnectionError("Failed to access camera/microphone");
       });
-  };
+  }, [
+    IS_DEMO_MODE,
+    incomingCall,
+    setIsInCall,
+    setIsIncoming,
+    setCallStatus,
+    setConnectionError,
+    targetUser,
+    localVideoEnabled,
+    localAudioEnabled,
+    pluginHandleRef,
+  ]);
 
-  const declineCall = () => {
+  const declineCall = useCallback(() => {
     if (IS_DEMO_MODE) {
       console.log("JanusVideoCallP2P: Declining demo call");
       setIsIncoming(false);
       setIncomingCall(null);
-      setCallStatus("Call declined");
+      setCallStatus("Demo call declined");
       return;
     }
 
-    if (!pluginHandleRef.current) return;
+    if (!pluginHandleRef.current || !incomingCall) {
+      console.error("JanusVideoCallP2P: No incoming call to decline");
+      return;
+    }
 
-    const declineRequest = {
-      request: "decline",
-    };
-
+    const declineRequest = { request: "decline" };
     pluginHandleRef.current.send({
       message: declineRequest,
-      success: (result) => {
-        console.log("JanusVideoCallP2P: Call declined:", result);
+      success: () => {
+        console.log("JanusVideoCallP2P: Call declined");
         setIsIncoming(false);
         setIncomingCall(null);
         setCallStatus("Call declined");
       },
       error: (error) => {
         console.error("JanusVideoCallP2P: Failed to decline call:", error);
+        setCallStatus("Failed to decline call");
       },
     });
-  };
+  }, [
+    IS_DEMO_MODE,
+    incomingCall,
+    setIsIncoming,
+    setIncomingCall,
+    setCallStatus,
+  ]);
 
   const endCall = () => {
     console.log("JanusVideoCallP2P: Ending call");

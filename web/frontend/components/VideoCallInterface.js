@@ -189,7 +189,14 @@ const VideoCallInterface = forwardRef(
       return () => {
         cleanup();
       };
-    }, [IS_DEMO_MODE, cleanup, connectToJanus, onError]);
+    }, [
+      IS_DEMO_MODE,
+      cleanup,
+      connectToJanus,
+      onError,
+      setJanusConnected,
+      setCallStatus,
+    ]);
 
     // Monitor call state changes
     useEffect(() => {
@@ -475,7 +482,7 @@ const VideoCallInterface = forwardRef(
         }
 
         // Create or join room
-        const room = roomId || await generateRoomId();
+        const room = roomId || (await generateRoomId());
         await createPublisher(stream);
         await joinRoom(room, stream);
 
@@ -561,35 +568,36 @@ const VideoCallInterface = forwardRef(
     }, [onCallEnd]);
 
     // Get user media
-    const getUserMedia = useCallback(async () => {
-      const constraints = {
-        video: isVideoEnabled
-          ? {
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
-              frameRate: { ideal: 30 },
-              facingMode: "user",
-            }
-          : false,
-        audio: isAudioEnabled
-          ? {
-              echoCancellation: true,
-              noiseSuppression: true,
-              autoGainControl: true,
-              sampleRate: 48000,
-            }
-          : false,
-      };
+    const getUserMedia = useCallback(async (constraints) => {
+      const videoConstraints = constraints?.video
+        ? {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            frameRate: { ideal: 30 },
+            facingMode: "user",
+          }
+        : false;
+      const audioConstraints = constraints?.audio
+        ? {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            sampleRate: 48000,
+          }
+        : false;
 
       try {
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: videoConstraints,
+          audio: audioConstraints,
+        });
         console.log("VideoCallInterface: Got user media", stream);
         return stream;
       } catch (error) {
         console.error("VideoCallInterface: Failed to get user media:", error);
         throw new Error("Failed to access camera/microphone");
       }
-    }, [isVideoEnabled, isAudioEnabled]);
+    }, []);
 
     // Generate room ID
     const generateRoomId = useCallback(() => {

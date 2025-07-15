@@ -4,6 +4,7 @@ import {
   useRef,
   forwardRef,
   useImperativeHandle,
+  useCallback,
 } from "react";
 import {
   FaPlay,
@@ -78,40 +79,7 @@ const JanusEchoTest = forwardRef(({ user, onTestEnd }, ref) => {
     },
   }));
 
-  // Initialize Janus connection
-  useEffect(() => {
-    if (IS_DEMO_MODE) {
-      console.log("JanusEchoTest: Running in demo mode");
-      setJanusConnected(true);
-      setTestStatus("Demo mode - Echo test simulated");
-      return;
-    }
-
-    const initializeJanus = () => {
-      if (typeof window !== "undefined" && window.Janus) {
-        console.log("JanusEchoTest: Initializing Janus...");
-
-        window.Janus.init({
-          debug: "all",
-          callback: () => {
-            console.log("JanusEchoTest: Janus initialized");
-            connectToJanus();
-          },
-        });
-      } else {
-        console.log("JanusEchoTest: Janus library not loaded");
-        setTimeout(initializeJanus, 1000);
-      }
-    };
-
-    initializeJanus();
-
-    return () => {
-      cleanup();
-    };
-  }, []);
-
-  const connectToJanus = () => {
+  const connectToJanus = useCallback(() => {
     if (janusRef.current) {
       console.log("JanusEchoTest: Already connected to Janus");
       return;
@@ -134,7 +102,7 @@ const JanusEchoTest = forwardRef(({ user, onTestEnd }, ref) => {
         setJanusConnected(false);
       },
     });
-  };
+  }, [JANUS_URL, setJanusConnected, setTestStatus, setConnectionError]);
 
   const startEchoTest = async () => {
     if (IS_DEMO_MODE) {
@@ -347,46 +315,90 @@ const JanusEchoTest = forwardRef(({ user, onTestEnd }, ref) => {
     }
   };
 
-  const startBitrateTimer = () => {
+  const startBitrateTimer = useCallback(() => {
+    if (bitrateTimerRef.current) {
+      clearInterval(bitrateTimerRef.current);
+    }
     if (IS_DEMO_MODE) {
-      // Simulate bitrate in demo mode
       bitrateTimerRef.current = setInterval(() => {
-        setBitrate(Math.floor(Math.random() * 1000) + 500);
+        setBitrate(Math.floor(Math.random() * 1000) + 500); // Simulate bitrate in demo mode
       }, 1000);
       return;
     }
-
     bitrateTimerRef.current = setInterval(() => {
       if (pluginHandleRef.current) {
-        pluginHandleRef.current.getBitrate((bitrate) => {
-          setBitrate(bitrate);
-        });
+        pluginHandleRef.current.getBitrate({ success: setBitrate });
       }
-    }, 1000);
-  };
+    }, 1000); // Update every 1 second
+  }, [setBitrate, IS_DEMO_MODE]);
 
-  const stopBitrateTimer = () => {
+  const stopBitrateTimer = useCallback(() => {
     if (bitrateTimerRef.current) {
       clearInterval(bitrateTimerRef.current);
       bitrateTimerRef.current = null;
     }
-  };
+  }, []);
 
-  const cleanup = () => {
+  const cleanup = useCallback(() => {
+    console.log("JanusEchoTest: Performing cleanup");
+    if (pluginHandleRef.current) {
+      pluginHandleRef.current.hangup();
+      pluginHandleRef.current.detach();
+      pluginHandleRef.current = null;
+    }
     if (janusRef.current) {
       janusRef.current.destroy();
       janusRef.current = null;
     }
-    stopBitrateTimer();
-  };
-
-  const handleVolumeChange = (e) => {
-    const newVolume = parseFloat(e.target.value);
-    setVolume(newVolume);
-    if (remoteVideoRef.current) {
-      remoteVideoRef.current.volume = newVolume;
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((track) => track.stop());
+      localStreamRef.current = null;
     }
-  };
+    stopBitrateTimer();
+    setIsActive(false);
+    setJanusConnected(false);
+    setTestStatus("");
+    setConnectionError(null);
+  }, [
+    stopBitrateTimer,
+    setIsActive,
+    setJanusConnected,
+    setTestStatus,
+    setConnectionError,
+  ]);
+
+  // Initialize Janus connection
+  useEffect(() => {
+    if (IS_DEMO_MODE) {
+      console.log("JanusEchoTest: Running in demo mode");
+      setJanusConnected(true);
+      setTestStatus("Demo mode - Echo test simulated");
+      return;
+    }
+
+    const initializeJanus = () => {
+      if (typeof window !== "undefined" && window.Janus) {
+        console.log("JanusEchoTest: Initializing Janus...");
+
+        window.Janus.init({
+          debug: "all",
+          callback: () => {
+            console.log("JanusEchoTest: Janus initialized");
+            connectToJanus();
+          },
+        });
+      } else {
+        console.log("JanusEchoTest: Janus library not loaded");
+        setTimeout(initializeJanus, 1000);
+      }
+    };
+
+    initializeJanus();
+
+    return () => {
+      cleanup();
+    };
+  }, [IS_DEMO_MODE, cleanup, connectToJanus, setJanusConnected, setTestStatus]);
 
   if (!isActive) {
     return (

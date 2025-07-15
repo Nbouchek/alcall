@@ -1,5 +1,5 @@
-import React from 'react';
-import { FaUser, FaPhone, FaVideo, FaPaperPlane } from 'react-icons/fa';
+import React from "react";
+import { FaUser, FaPhone, FaVideo, FaPaperPlane } from "react-icons/fa";
 
 export default function ChatInterface({
   selectedRecipient,
@@ -12,8 +12,6 @@ export default function ChatInterface({
   initiateCall,
   initiateVideoCall,
   handleLogout,
-  handleSearch,
-  renderSearchResults
 }) {
   if (!selectedRecipient) {
     return (
@@ -57,9 +55,13 @@ export default function ChatInterface({
             )}
           </div>
           <div className="ml-3">
-            <div className="font-bold text-lg">{selectedRecipient.username}</div>
+            <div className="font-bold text-lg">
+              {selectedRecipient.username}
+            </div>
             <div className="text-sm text-gray-400">
-              {isUserOnline(selectedRecipient.username) ? 'Online now' : 'Offline'}
+              {isUserOnline(selectedRecipient.username)
+                ? "Online now"
+                : "Offline"}
             </div>
           </div>
         </div>
@@ -84,15 +86,27 @@ export default function ChatInterface({
         {messages
           .filter(
             (msg) =>
-              (msg.sender === user?.username && msg.recipient === selectedRecipient?.username) ||
-              (msg.sender === selectedRecipient?.username && msg.recipient === user?.username)
+              (msg.sender === user?.username &&
+                msg.recipient === selectedRecipient?.username) ||
+              (msg.sender === selectedRecipient?.username &&
+                msg.recipient === user?.username)
           )
           .map((msg, index, arr) => {
             const isSender = msg.sender === user?.username;
-            const isFirstInGroup = index === 0 || arr[index - 1].sender !== msg.sender;
+            const isFirstInGroup =
+              index === 0 || arr[index - 1].sender !== msg.sender;
             return (
-              <div key={msg.id} className={`flex ${isSender ? 'justify-end' : 'justify-start'}`}>
-                <div className={`p-3 rounded-lg max-w-xs ${isSender ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-gray-700 text-gray-100 rounded-bl-none'}`}>
+              <div
+                key={msg.id}
+                className={`flex ${isSender ? "justify-end" : "justify-start"}`}
+              >
+                <div
+                  className={`p-3 rounded-lg max-w-xs ${
+                    isSender
+                      ? "bg-indigo-600 text-white rounded-br-none"
+                      : "bg-gray-700 text-gray-100 rounded-bl-none"
+                  }`}
+                >
                   {msg.content}
                 </div>
               </div>
@@ -109,7 +123,7 @@ export default function ChatInterface({
             onChange={(e) => setNewMessage(e.target.value)}
             placeholder="Type a message..."
             className="flex-1 p-2 bg-gray-700 rounded-l-md text-white focus:outline-none"
-            onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+            onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
           />
           <button
             onClick={handleSendMessage}

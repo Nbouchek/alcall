@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import Head from "next/head";
-import Script from "next/script";
 import axios from "axios";
 import dynamic from "next/dynamic";
 import { useWebSocket } from "../hooks/useWebSocket";
@@ -78,10 +77,8 @@ export default function Home() {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const [selectedRecipient, setSelectedRecipient] = useState(null);
-  const [searchQuery, setSearchQuery] = useState("");
   const [authError, setAuthError] = useState(null); // New state for authentication errors
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [searchResults, setSearchResults] = useState([]);
   const [highlightedUser, setHighlightedUser] = useState(null);
   const [activeCallRecipient, setActiveCallRecipient] = useState(null);
   const [incomingCall, setIncomingCall] = useState(null);
@@ -211,10 +208,8 @@ export default function Home() {
     setOnlineUserIds(new Set());
     setMessages([]);
     setSelectedRecipient(null);
-    setSearchQuery("");
     setAuthError(null);
     setSidebarOpen(false);
-    setSearchResults([]);
     setHighlightedUser(null);
     setActiveCallRecipient(null);
     setIncomingCall(null);
@@ -243,10 +238,8 @@ export default function Home() {
     setOnlineUserIds,
     setMessages,
     setSelectedRecipient,
-    setSearchQuery,
     setAuthError,
     setSidebarOpen,
-    setSearchResults,
     setHighlightedUser,
     setActiveCallRecipient,
     setIncomingCall,
@@ -445,13 +438,10 @@ export default function Home() {
     showCallNotification("success", "Call accepted!");
   }, [
     incomingCallDetails,
-    requestMicrophonePermission,
     setCallState,
     stopIncomingCallRingtone,
-    allUsers,
     user,
     setCallRoomId,
-    setCallType,
     setIncomingCall,
     setIncomingCallDetails,
     sendWebSocketMessage,
@@ -823,6 +813,8 @@ export default function Home() {
     handleAudioCallEnd,
     setActiveCallRecipient,
     setCallRoomId,
+    callState,
+    closeWebSocket,
   ]);
 
   // --- Conditional Render (AFTER ALL HOOKS) ---
@@ -971,13 +963,7 @@ export default function Home() {
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      <Script src="/janus.js" strategy="beforeInteractive" />
-      <Script src="/adapter.js" strategy="beforeInteractive" />
-      <Script
-        src="/unified-chat-app-janus-deps.js"
-        strategy="beforeInteractive"
-      />
-      <Script src="/ringtone.js" strategy="beforeInteractive" />
+      {/* Script tags moved to _document.js */}
 
       {callNotification && (
         <div
@@ -1041,8 +1027,6 @@ export default function Home() {
             initiateCall={initiateCall}
             initiateVideoCall={initiateVideoCall}
             handleLogout={handleLogout}
-            handleSearch={handleSearch}
-            renderSearchResults={renderSearchResults}
           />
 
           {/* Online Users List (right sidebar) */}

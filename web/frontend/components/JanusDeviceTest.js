@@ -4,6 +4,8 @@ import {
   useRef,
   forwardRef,
   useImperativeHandle,
+  useCallback,
+  useMemo,
 } from "react";
 import {
   FaVideo,
@@ -68,23 +70,32 @@ const JanusDeviceTest = forwardRef(({ user, onTestEnd }, ref) => {
   const ECHOTEST_PLUGIN = "janus.plugin.echotest";
 
   // Demo devices for demo mode
-  const demoVideoDevices = [
-    { deviceId: "default", label: "Default Camera" },
-    { deviceId: "demo1", label: "Demo Camera 1 (HD)" },
-    { deviceId: "demo2", label: "Demo Camera 2 (4K)" },
-  ];
+  const demoVideoDevices = useMemo(
+    () => [
+      { deviceId: "default", label: "Default Camera" },
+      { deviceId: "demo1", label: "Demo Camera 1 (HD)" },
+      { deviceId: "demo2", label: "Demo Camera 2 (4K)" },
+    ],
+    []
+  );
 
-  const demoAudioInputDevices = [
-    { deviceId: "default", label: "Default Microphone" },
-    { deviceId: "demo1", label: "Demo Microphone 1" },
-    { deviceId: "demo2", label: "Demo Headset Mic" },
-  ];
+  const demoAudioInputDevices = useMemo(
+    () => [
+      { deviceId: "default", label: "Default Microphone" },
+      { deviceId: "demo1", label: "Demo Microphone 1" },
+      { deviceId: "demo2", label: "Demo Headset Mic" },
+    ],
+    []
+  );
 
-  const demoAudioOutputDevices = [
-    { deviceId: "default", label: "Default Speakers" },
-    { deviceId: "demo1", label: "Demo Speakers 1" },
-    { deviceId: "demo2", label: "Demo Headphones" },
-  ];
+  const demoAudioOutputDevices = useMemo(
+    () => [
+      { deviceId: "default", label: "Default Speakers" },
+      { deviceId: "demo1", label: "Demo Speakers 1" },
+      { deviceId: "demo2", label: "Demo Headphones" },
+    ],
+    []
+  );
 
   // Expose functions to parent component
   useImperativeHandle(ref, () => ({
@@ -126,48 +137,7 @@ const JanusDeviceTest = forwardRef(({ user, onTestEnd }, ref) => {
     },
   }));
 
-  // Initialize Janus connection and enumerate devices
-  useEffect(() => {
-    if (IS_DEMO_MODE) {
-      console.log("JanusDeviceTest: Running in demo mode");
-      setJanusConnected(true);
-      setTestStatus("Demo mode - Device testing simulated");
-      setVideoDevices(demoVideoDevices);
-      setAudioInputDevices(demoAudioInputDevices);
-      setAudioOutputDevices(demoAudioOutputDevices);
-      setSelectedVideoDevice("default");
-      setSelectedAudioInput("default");
-      setSelectedAudioOutput("default");
-      return;
-    }
-
-    enumerateDevices();
-
-    const initializeJanus = () => {
-      if (typeof window !== "undefined" && window.Janus) {
-        console.log("JanusDeviceTest: Initializing Janus...");
-
-        window.Janus.init({
-          debug: "all",
-          callback: () => {
-            console.log("JanusDeviceTest: Janus initialized");
-            connectToJanus();
-          },
-        });
-      } else {
-        console.log("JanusDeviceTest: Janus library not loaded");
-        setTimeout(initializeJanus, 1000);
-      }
-    };
-
-    initializeJanus();
-
-    return () => {
-      cleanup();
-    };
-  }, []);
-
-  const enumerateDevices = async () => {
+  const enumerateDevices = useCallback(async () => {
     try {
       // Request permissions first
       await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -208,9 +178,20 @@ const JanusDeviceTest = forwardRef(({ user, onTestEnd }, ref) => {
       console.error("JanusDeviceTest: Failed to enumerate devices:", error);
       setConnectionError("Failed to access devices. Please grant permissions.");
     }
-  };
+  }, [
+    setVideoDevices,
+    setAudioInputDevices,
+    setAudioOutputDevices,
+    setSelectedVideoDevice,
+    setSelectedAudioInput,
+    setSelectedAudioOutput,
+    setConnectionError,
+    selectedVideoDevice,
+    selectedAudioInput,
+    selectedAudioOutput,
+  ]);
 
-  const connectToJanus = () => {
+  const connectToJanus = useCallback(() => {
     if (janusRef.current) {
       console.log("JanusDeviceTest: Already connected to Janus");
       return;
@@ -234,9 +215,15 @@ const JanusDeviceTest = forwardRef(({ user, onTestEnd }, ref) => {
         setJanusConnected(false);
       },
     });
-  };
+  }, [
+    setJanusConnected,
+    setTestStatus,
+    setConnectionError,
+    attachEchoTestPlugin,
+    JANUS_URL,
+  ]);
 
-  const attachEchoTestPlugin = () => {
+  const attachEchoTestPlugin = useCallback(() => {
     janusRef.current.attach({
       plugin: ECHOTEST_PLUGIN,
       success: (pluginHandle) => {
@@ -250,129 +237,170 @@ const JanusDeviceTest = forwardRef(({ user, onTestEnd }, ref) => {
       },
       onmessage: handlePluginMessage,
       onlocalstream: (stream) => {
-        console.log("JanusDeviceTest: Local stream received");
+        console.log("JanusDeviceTest: Local stream received", stream);
         localStreamRef.current = stream;
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = stream;
-          localVideoRef.current.volume = isMuted ? 0 : volume;
         }
+        setTestStatus("Testing...");
         setupAudioLevelMonitoring(stream);
+        startBitrateTimer();
       },
       onremotestream: (stream) => {
-        console.log("JanusDeviceTest: Remote stream received (echo)");
-        // For echo test, we typically don't need to handle remote stream separately
+        console.log("JanusDeviceTest: Remote stream received", stream);
+        // For echotest, we just care about local stream, remote is echo
       },
       oncleanup: () => {
-        console.log("JanusDeviceTest: Plugin cleanup");
+        console.log("JanusDeviceTest: Plugin handle cleaned up");
+        // Additional cleanup for plugin handle
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = null;
         }
+        if (localStreamRef.current) {
+          localStreamRef.current.getTracks().forEach((track) => track.stop());
+          localStreamRef.current = null;
+        }
+        stopAudioLevelTimer();
+        stopBitrateTimer();
         cleanupAudioMonitoring();
+        setIsTesting(false);
+        setTestStatus("Test ended");
       },
     });
-  };
+  }, [
+    handlePluginMessage,
+    setupAudioLevelMonitoring,
+    startBitrateTimer,
+    stopAudioLevelTimer,
+    stopBitrateTimer,
+    cleanupAudioMonitoring,
+    setTestStatus,
+    setIsTesting,
+    setConnectionError,
+  ]);
 
-  const startTest = (deviceConfig = {}) => {
-    if (IS_DEMO_MODE) {
-      console.log("JanusDeviceTest: Starting demo test");
-      setIsTesting(true);
-      setTestStatus("Demo device test active");
-      startBitrateTimer();
-      startAudioLevelTimer();
-      return;
-    }
+  const startTest = useCallback(
+    (deviceConfig = {}) => {
+      if (IS_DEMO_MODE) {
+        console.log("JanusDeviceTest: Starting demo test");
+        setIsTesting(true);
+        setTestStatus("Demo device test active");
+        startBitrateTimer();
+        startAudioLevelTimer();
+        return;
+      }
 
-    if (!pluginHandleRef.current) {
-      console.error("JanusDeviceTest: Plugin not attached");
-      return;
-    }
+      if (!pluginHandleRef.current) {
+        console.error("JanusDeviceTest: Plugin not attached");
+        return;
+      }
 
-    setTestStatus("Starting device test...");
+      setTestStatus("Starting device test...");
 
-    // Build media constraints
-    const constraints = {
-      video: videoEnabled
-        ? {
-            deviceId: selectedVideoDevice
-              ? { exact: selectedVideoDevice }
-              : undefined,
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
+      // Build media constraints
+      const constraints = {
+        video: videoEnabled
+          ? {
+              deviceId: selectedVideoDevice
+                ? { exact: selectedVideoDevice }
+                : undefined,
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            }
+          : false,
+        audio: audioEnabled
+          ? {
+              deviceId: selectedAudioInput
+                ? { exact: selectedAudioInput }
+                : undefined,
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+            }
+          : false,
+      };
+
+      console.log("JanusDeviceTest: Using constraints:", constraints);
+
+      navigator.mediaDevices
+        .getUserMedia(constraints)
+        .then((stream) => {
+          console.log("JanusDeviceTest: Got user media");
+          localStreamRef.current = stream;
+
+          if (localVideoRef.current) {
+            localVideoRef.current.srcObject = stream;
+            localVideoRef.current.volume = isMuted ? 0 : volume;
           }
-        : false,
-      audio: audioEnabled
-        ? {
-            deviceId: selectedAudioInput
-              ? { exact: selectedAudioInput }
-              : undefined,
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          }
-        : false,
-    };
 
-    console.log("JanusDeviceTest: Using constraints:", constraints);
+          setupAudioLevelMonitoring(stream);
 
-    navigator.mediaDevices
-      .getUserMedia(constraints)
-      .then((stream) => {
-        console.log("JanusDeviceTest: Got user media");
-        localStreamRef.current = stream;
+          // Create offer for echo test
+          pluginHandleRef.current.createOffer({
+            media: {
+              audioSend: audioEnabled,
+              videoSend: videoEnabled,
+              audioRecv: audioEnabled,
+              videoRecv: videoEnabled,
+            },
+            success: (jsep) => {
+              const echoRequest = {
+                audio: audioEnabled,
+                video: videoEnabled,
+                bitrate: 128000,
+              };
 
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = stream;
-          localVideoRef.current.volume = isMuted ? 0 : volume;
-        }
-
-        setupAudioLevelMonitoring(stream);
-
-        // Create offer for echo test
-        pluginHandleRef.current.createOffer({
-          media: {
-            audioSend: audioEnabled,
-            videoSend: videoEnabled,
-            audioRecv: audioEnabled,
-            videoRecv: videoEnabled,
-          },
-          success: (jsep) => {
-            const echoRequest = {
-              audio: audioEnabled,
-              video: videoEnabled,
-              bitrate: 128000,
-            };
-
-            pluginHandleRef.current.send({
-              message: echoRequest,
-              jsep: jsep,
-              success: (result) => {
-                console.log("JanusDeviceTest: Echo test started:", result);
-                setIsTesting(true);
-                setTestStatus("Device test active - Echo enabled");
-                startBitrateTimer();
-              },
-              error: (error) => {
-                console.error("JanusDeviceTest: Failed to start test:", error);
-                setTestStatus("Failed to start device test");
-              },
-            });
-          },
-          error: (error) => {
-            console.error("JanusDeviceTest: Failed to create offer:", error);
-            setTestStatus("Failed to create offer");
-          },
+              pluginHandleRef.current.send({
+                message: echoRequest,
+                jsep: jsep,
+                success: (result) => {
+                  console.log("JanusDeviceTest: Echo test started:", result);
+                  setIsTesting(true);
+                  setTestStatus("Device test active - Echo enabled");
+                  startBitrateTimer();
+                },
+                error: (error) => {
+                  console.error(
+                    "JanusDeviceTest: Failed to start test:",
+                    error
+                  );
+                  setTestStatus("Failed to start device test");
+                },
+              });
+            },
+            error: (error) => {
+              console.error("JanusDeviceTest: Failed to create offer:", error);
+              setTestStatus("Failed to create offer");
+            },
+          });
+        })
+        .catch((error) => {
+          console.error("JanusDeviceTest: Failed to get user media:", error);
+          setTestStatus("Failed to access selected devices");
+          setConnectionError(
+            "Failed to access camera/microphone with selected devices"
+          );
         });
-      })
-      .catch((error) => {
-        console.error("JanusDeviceTest: Failed to get user media:", error);
-        setTestStatus("Failed to access selected devices");
-        setConnectionError(
-          "Failed to access camera/microphone with selected devices"
-        );
-      });
-  };
+    },
+    [
+      IS_DEMO_MODE,
+      setIsTesting,
+      setTestStatus,
+      setConnectionError,
+      videoEnabled,
+      audioEnabled,
+      selectedVideoDevice,
+      selectedAudioInput,
+      volume,
+      isMuted,
+      pluginHandleRef,
+      setupAudioLevelMonitoring,
+      startBitrateTimer,
+      startAudioLevelTimer, // Added missing dependency
+    ]
+  );
 
-  const stopTest = () => {
+  const stopTest = useCallback(() => {
     console.log("JanusDeviceTest: Stopping test");
 
     stopBitrateTimer();
@@ -396,165 +424,239 @@ const JanusDeviceTest = forwardRef(({ user, onTestEnd }, ref) => {
     if (onTestEnd) {
       onTestEnd();
     }
-  };
+  }, [
+    stopBitrateTimer,
+    stopAudioLevelTimer,
+    cleanupAudioMonitoring,
+    setIsTesting,
+    setTestStatus,
+    setBitrate,
+    setAudioLevel,
+    onTestEnd,
+  ]);
 
-  const setupAudioLevelMonitoring = (stream) => {
-    if (!stream.getAudioTracks().length) return;
-
-    try {
+  const setupAudioLevelMonitoring = useCallback(
+    (stream) => {
+      if (audioContextRef.current) {
+        audioContextRef.current.close(); // Close previous context if exists
+      }
       audioContextRef.current = new (window.AudioContext ||
         window.webkitAudioContext)();
-      analyserRef.current = audioContextRef.current.createAnalyser();
-
       const source = audioContextRef.current.createMediaStreamSource(stream);
-      source.connect(analyserRef.current);
-
+      analyserRef.current = audioContextRef.current.createAnalyser();
       analyserRef.current.fftSize = 256;
+      source.connect(analyserRef.current);
       startAudioLevelTimer();
-    } catch (error) {
-      console.error(
-        "JanusDeviceTest: Failed to setup audio monitoring:",
-        error
-      );
-    }
-  };
+    },
+    [startAudioLevelTimer]
+  );
 
-  const startAudioLevelTimer = () => {
+  const startAudioLevelTimer = useCallback(() => {
+    if (audioLevelTimerRef.current) {
+      clearInterval(audioLevelTimerRef.current);
+    }
     if (IS_DEMO_MODE) {
       audioLevelTimerRef.current = setInterval(() => {
-        setAudioLevel(Math.random() * 100);
+        setAudioLevel(Math.random() * 100); // Simulate audio level in demo mode
       }, 100);
       return;
     }
-
-    if (!analyserRef.current) return;
-
     audioLevelTimerRef.current = setInterval(() => {
-      const bufferLength = analyserRef.current.frequencyBinCount;
-      const dataArray = new Uint8Array(bufferLength);
-      analyserRef.current.getByteFrequencyData(dataArray);
-
-      let sum = 0;
-      for (let i = 0; i < bufferLength; i++) {
-        sum += dataArray[i];
+      if (analyserRef.current) {
+        const dataArray = new Uint8Array(analyserRef.current.fftSize);
+        analyserRef.current.getByteFrequencyData(dataArray);
+        const sum = dataArray.reduce((a, b) => a + b, 0);
+        const average = sum / dataArray.length;
+        setAudioLevel(average);
       }
-      const average = sum / bufferLength;
-      setAudioLevel(average);
-    }, 100);
-  };
+    }, 100); // Update every 100ms
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setAudioLevel, IS_DEMO_MODE]);
 
-  const stopAudioLevelTimer = () => {
+  const stopAudioLevelTimer = useCallback(() => {
     if (audioLevelTimerRef.current) {
       clearInterval(audioLevelTimerRef.current);
       audioLevelTimerRef.current = null;
     }
-  };
+  }, []);
 
-  const cleanupAudioMonitoring = () => {
+  const cleanupAudioMonitoring = useCallback(() => {
     stopAudioLevelTimer();
-
     if (audioContextRef.current) {
       audioContextRef.current.close();
       audioContextRef.current = null;
     }
     analyserRef.current = null;
-  };
+    setAudioLevel(0);
+  }, [stopAudioLevelTimer, setAudioLevel]);
 
-  const startBitrateTimer = () => {
+  const startBitrateTimer = useCallback(() => {
+    if (bitrateTimerRef.current) {
+      clearInterval(bitrateTimerRef.current);
+    }
     if (IS_DEMO_MODE) {
       bitrateTimerRef.current = setInterval(() => {
-        setBitrate(Math.floor(Math.random() * 1000) + 500);
+        setBitrate(Math.floor(Math.random() * 1000) + 500); // Simulate bitrate in demo mode
       }, 1000);
       return;
     }
-
     bitrateTimerRef.current = setInterval(() => {
-      if (pluginHandleRef.current && pluginHandleRef.current.getBitrate) {
-        const bitrate = pluginHandleRef.current.getBitrate();
-        setBitrate(bitrate);
+      if (pluginHandleRef.current) {
+        pluginHandleRef.current.getBitrate({ success: setBitrate });
       }
-    }, 1000);
-  };
+    }, 1000); // Update every 1 second
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setBitrate, IS_DEMO_MODE]);
 
-  const stopBitrateTimer = () => {
+  const stopBitrateTimer = useCallback(() => {
     if (bitrateTimerRef.current) {
       clearInterval(bitrateTimerRef.current);
       bitrateTimerRef.current = null;
     }
-  };
+  }, []);
 
-  const handlePluginMessage = (msg, jsep) => {
-    console.log("JanusDeviceTest: Plugin message:", msg);
+  const handlePluginMessage = useCallback((msg, jsep) => {
+    console.log("JanusDeviceTest: Plugin message received", msg);
+    // Handle plugin messages (e.g., ICE candidates, media offers/answers)
+  }, []);
 
-    if (jsep) {
-      console.log("JanusDeviceTest: Handling remote JSEP:", jsep);
-      pluginHandleRef.current.handleRemoteJsep({ jsep: jsep });
-    }
+  const toggleVideo = useCallback(() => {
+    setVideoEnabled((prev) => !prev);
+  }, []);
 
-    const result = msg.result;
-    if (result && result.status) {
-      setTestStatus(`Echo test: ${result.status}`);
-    }
-  };
+  const toggleAudio = useCallback(() => {
+    setAudioEnabled((prev) => !prev);
+  }, []);
 
-  const toggleVideo = () => {
-    setVideoEnabled(!videoEnabled);
-    if (localStreamRef.current) {
-      const videoTrack = localStreamRef.current.getVideoTracks()[0];
-      if (videoTrack) {
-        videoTrack.enabled = !videoEnabled;
-      }
-    }
-  };
-
-  const toggleAudio = () => {
-    setAudioEnabled(!audioEnabled);
-    if (localStreamRef.current) {
-      const audioTrack = localStreamRef.current.getAudioTracks()[0];
-      if (audioTrack) {
-        audioTrack.enabled = !audioEnabled;
-      }
-    }
-  };
-
-  const handleVolumeChange = (e) => {
+  const handleVolumeChange = useCallback((e) => {
     const newVolume = parseFloat(e.target.value);
     setVolume(newVolume);
-    if (localVideoRef.current && !isMuted) {
+    if (localVideoRef.current) {
       localVideoRef.current.volume = newVolume;
     }
-  };
-
-  const toggleMute = () => {
-    setIsMuted(!isMuted);
-    if (localVideoRef.current) {
-      localVideoRef.current.volume = !isMuted ? 0 : volume;
+    if (localStreamRef.current) {
+      // This might not directly control stream volume but can affect playback
     }
-  };
+  }, []);
 
-  const changeAudioOutput = async (deviceId) => {
-    setSelectedAudioOutput(deviceId);
-    if (localVideoRef.current && localVideoRef.current.setSinkId) {
+  const toggleMute = useCallback(() => {
+    setIsMuted((prev) => !prev);
+    if (localVideoRef.current) {
+      localVideoRef.current.muted = !isMuted; // Toggle actual audio element mute
+    }
+    if (localStreamRef.current) {
+      localStreamRef.current.getAudioTracks().forEach((track) => {
+        track.enabled = !track.enabled; // Toggle stream track enable
+      });
+    }
+  }, [isMuted]);
+
+  const changeAudioOutput = useCallback(async (deviceId) => {
+    if (typeof localVideoRef.current.setSinkId === "function") {
       try {
         await localVideoRef.current.setSinkId(deviceId);
-        console.log("JanusDeviceTest: Audio output changed to:", deviceId);
+        setSelectedAudioOutput(deviceId);
+        console.log(`Audio output changed to ${deviceId}`);
       } catch (error) {
-        console.error("JanusDeviceTest: Failed to change audio output:", error);
+        console.error("Error setting audio output device:", error);
       }
+    } else {
+      console.warn("setSinkId not supported on this browser.");
     }
-  };
+  }, []);
 
-  const cleanup = () => {
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach((track) => track.stop());
+  const cleanup = useCallback(() => {
+    console.log("JanusDeviceTest: Performing cleanup");
+    if (pluginHandleRef.current) {
+      pluginHandleRef.current.hangup();
+      pluginHandleRef.current.detach();
+      pluginHandleRef.current = null;
     }
-    cleanupAudioMonitoring();
-    stopBitrateTimer();
     if (janusRef.current) {
       janusRef.current.destroy();
       janusRef.current = null;
     }
-  };
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((track) => track.stop());
+      localStreamRef.current = null;
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+    stopAudioLevelTimer();
+    stopBitrateTimer();
+    cleanupAudioMonitoring();
+    setIsTesting(false);
+    setJanusConnected(false);
+    setTestStatus("");
+    setConnectionError(null);
+  }, [
+    stopAudioLevelTimer,
+    stopBitrateTimer,
+    cleanupAudioMonitoring,
+    setIsTesting,
+    setJanusConnected,
+    setTestStatus,
+    setConnectionError,
+  ]);
+
+  // Initialize Janus connection and enumerate devices
+  useEffect(() => {
+    if (IS_DEMO_MODE) {
+      console.log("JanusDeviceTest: Running in demo mode");
+      setJanusConnected(true);
+      setTestStatus("Demo mode - Device testing simulated");
+      setVideoDevices(demoVideoDevices);
+      setAudioInputDevices(demoAudioInputDevices);
+      setAudioOutputDevices(demoAudioOutputDevices);
+      setSelectedVideoDevice("default");
+      setSelectedAudioInput("default");
+      setSelectedAudioOutput("default");
+      return;
+    }
+
+    enumerateDevices();
+
+    const initializeJanus = () => {
+      if (typeof window !== "undefined" && window.Janus) {
+        console.log("JanusDeviceTest: Initializing Janus...");
+
+        window.Janus.init({
+          debug: "all",
+          callback: () => {
+            console.log("JanusDeviceTest: Janus initialized");
+            connectToJanus();
+          },
+        });
+      } else {
+        console.log("JanusDeviceTest: Janus library not loaded");
+        setTimeout(initializeJanus, 1000);
+      }
+    };
+
+    initializeJanus();
+
+    return () => {
+      cleanup();
+    };
+  }, [
+    IS_DEMO_MODE,
+    enumerateDevices,
+    connectToJanus,
+    cleanup,
+    setJanusConnected,
+    setTestStatus,
+    setVideoDevices,
+    setAudioInputDevices,
+    setAudioOutputDevices,
+    setSelectedVideoDevice,
+    setSelectedAudioInput,
+    setSelectedAudioOutput,
+    demoVideoDevices,
+    demoAudioInputDevices,
+    demoAudioOutputDevices,
+  ]);
 
   return (
     <div className="bg-white rounded-lg shadow-lg overflow-hidden">

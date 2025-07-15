@@ -4,6 +4,8 @@ import {
   useRef,
   forwardRef,
   useImperativeHandle,
+  useCallback,
+  useMemo,
 } from "react";
 import {
   FaPaperPlane,
@@ -47,31 +49,40 @@ const JanusTextRoom = forwardRef(({ user, onLeaveRoom }, ref) => {
   const TEXTROOM_PLUGIN = "janus.plugin.textroom";
 
   // Demo data for demo mode
-  const demoRooms = [
-    { room: "1234", description: "Demo General Chat", participants: 3 },
-    { room: "5678", description: "Demo Tech Talk", participants: 7 },
-    { room: "9999", description: "Demo Random", participants: 2 },
-  ];
+  const demoRooms = useMemo(
+    () => [
+      { room: "1234", description: "Demo General Chat", participants: 3 },
+      { room: "5678", description: "Demo Tech Talk", participants: 7 },
+      { room: "9999", description: "Demo Random", participants: 2 },
+    ],
+    []
+  );
 
-  const demoMessages = [
-    {
-      username: "Alice",
-      text: "Hello everyone!",
-      timestamp: Date.now() - 300000,
-    },
-    {
-      username: "Bob",
-      text: "Hey Alice! How's it going?",
-      timestamp: Date.now() - 240000,
-    },
-    {
-      username: "Charlie",
-      text: "Good morning!",
-      timestamp: Date.now() - 180000,
-    },
-  ];
+  const demoMessages = useMemo(
+    () => [
+      {
+        username: "Alice",
+        text: "Hello everyone!",
+        timestamp: Date.now() - 300000,
+      },
+      {
+        username: "Bob",
+        text: "Hey Alice! How's it going?",
+        timestamp: Date.now() - 240000,
+      },
+      {
+        username: "Charlie",
+        text: "Good morning!",
+        timestamp: Date.now() - 180000,
+      },
+    ],
+    []
+  );
 
-  const demoParticipants = ["Alice", "Bob", "Charlie", user?.name || "You"];
+  const demoParticipants = useMemo(
+    () => ["Alice", "Bob", "Charlie", user?.name || "You"],
+    [user]
+  );
 
   // Expose functions to parent component
   useImperativeHandle(ref, () => ({
@@ -98,6 +109,38 @@ const JanusTextRoom = forwardRef(({ user, onLeaveRoom }, ref) => {
       };
     },
   }));
+
+  const connectToJanus = useCallback(() => {
+    if (janusRef.current) {
+      console.log("JanusTextRoom: Already connected to Janus");
+      return;
+    }
+
+    janusRef.current = new window.Janus({
+      server: JANUS_URL,
+      success: () => {
+        console.log("JanusTextRoom: Connected to Janus");
+        setJanusConnected(true);
+        setRoomStatus("Connected to Janus server");
+        attachTextRoomPlugin();
+      },
+      error: (error) => {
+        console.error("JanusTextRoom: Failed to connect to Janus:", error);
+        setConnectionError("Failed to connect to Janus server");
+        setJanusConnected(false);
+      },
+      destroyed: () => {
+        console.log("JanusTextRoom: Janus connection destroyed");
+        setJanusConnected(false);
+      },
+    });
+  }, [
+    JANUS_URL,
+    setJanusConnected,
+    setRoomStatus,
+    setConnectionError,
+    attachTextRoomPlugin,
+  ]);
 
   // Initialize Janus connection
   useEffect(() => {
@@ -132,7 +175,17 @@ const JanusTextRoom = forwardRef(({ user, onLeaveRoom }, ref) => {
     return () => {
       cleanup();
     };
-  }, []);
+  }, [
+    IS_DEMO_MODE,
+    connectToJanus,
+    cleanup,
+    setJanusConnected,
+    setRoomStatus,
+    setAvailableRooms,
+    demoRooms,
+    user?.name,
+    setUsername,
+  ]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -143,33 +196,7 @@ const JanusTextRoom = forwardRef(({ user, onLeaveRoom }, ref) => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const connectToJanus = () => {
-    if (janusRef.current) {
-      console.log("JanusTextRoom: Already connected to Janus");
-      return;
-    }
-
-    janusRef.current = new window.Janus({
-      server: JANUS_URL,
-      success: () => {
-        console.log("JanusTextRoom: Connected to Janus");
-        setJanusConnected(true);
-        setRoomStatus("Connected to Janus server");
-        attachTextRoomPlugin();
-      },
-      error: (error) => {
-        console.error("JanusTextRoom: Failed to connect to Janus:", error);
-        setConnectionError("Failed to connect to Janus server");
-        setJanusConnected(false);
-      },
-      destroyed: () => {
-        console.log("JanusTextRoom: Janus connection destroyed");
-        setJanusConnected(false);
-      },
-    });
-  };
-
-  const attachTextRoomPlugin = () => {
+  const attachTextRoomPlugin = useCallback(() => {
     janusRef.current.attach({
       plugin: TEXTROOM_PLUGIN,
       success: (pluginHandle) => {
@@ -199,9 +226,17 @@ const JanusTextRoom = forwardRef(({ user, onLeaveRoom }, ref) => {
         console.log("JanusTextRoom: Plugin cleanup");
       },
     });
-  };
+  }, [
+    janusRef,
+    TEXTROOM_PLUGIN,
+    listRooms,
+    handlePluginMessage,
+    handleDataChannelMessage,
+    setRoomStatus,
+    setConnectionError,
+  ]);
 
-  const listRooms = () => {
+  const listRooms = useCallback(() => {
     if (IS_DEMO_MODE) {
       setAvailableRooms(demoRooms);
       return;
@@ -225,175 +260,233 @@ const JanusTextRoom = forwardRef(({ user, onLeaveRoom }, ref) => {
         console.error("JanusTextRoom: Failed to list rooms:", error);
       },
     });
-  };
+  }, [IS_DEMO_MODE, demoRooms, setAvailableRooms]);
 
-  const joinRoom = (roomId, username) => {
-    if (IS_DEMO_MODE) {
-      console.log("JanusTextRoom: Joining demo room:", roomId);
-      setRoomId(roomId);
-      setUsername(username);
-      setIsInRoom(true);
-      setMessages(demoMessages);
-      setParticipants(demoParticipants);
-      setRoomStatus(`Demo room: ${roomId}`);
-      return;
-    }
-
-    if (!pluginHandleRef.current) {
-      console.error("JanusTextRoom: Plugin not attached");
-      return;
-    }
-
-    setRoomStatus("Joining room...");
-
-    const joinRequest = {
-      textroom: "join",
-      room: roomId,
-      username: username,
-      display: username,
-    };
-
-    pluginHandleRef.current.send({
-      message: joinRequest,
-      success: (result) => {
-        console.log("JanusTextRoom: Join request successful:", result);
+  const joinRoom = useCallback(
+    (roomId, username) => {
+      if (IS_DEMO_MODE) {
+        console.log("JanusTextRoom: Joining demo room:", roomId);
         setRoomId(roomId);
         setUsername(username);
-        setRoomStatus(`Joined room: ${roomId}`);
-      },
-      error: (error) => {
-        console.error("JanusTextRoom: Failed to join room:", error);
-        setRoomStatus("Failed to join room");
-      },
-    });
-  };
+        setIsInRoom(true);
+        setMessages(demoMessages);
+        setParticipants(demoParticipants);
+        setRoomStatus(`Demo room: ${roomId}`);
+        return;
+      }
 
-  const leaveRoom = () => {
-    console.log("JanusTextRoom: Leaving room");
+      if (!pluginHandleRef.current) {
+        console.error("JanusTextRoom: Plugin not attached");
+        return;
+      }
 
-    if (!IS_DEMO_MODE && pluginHandleRef.current) {
+      setRoomStatus("Joining room...");
+
+      const joinRequest = {
+        textroom: "join",
+        room: parseInt(roomId, 10),
+        username: username,
+        display: username,
+      };
+
+      pluginHandleRef.current.send({
+        message: joinRequest,
+        success: (result) => {
+          console.log("JanusTextRoom: Joined room:", result);
+          setIsInRoom(true);
+          setRoomStatus(`Joined room ${roomId}`);
+          setParticipants(result.participants || []);
+          setMessages([]); // Clear previous messages
+        },
+        error: (error) => {
+          console.error("JanusTextRoom: Failed to join room:", error);
+          setRoomStatus("Failed to join room");
+          setConnectionError(error.message);
+        },
+      });
+    },
+    [
+      IS_DEMO_MODE,
+      demoMessages,
+      demoParticipants,
+      setIsInRoom,
+      setMessages,
+      setParticipants,
+      setRoomId,
+      setRoomStatus,
+      setUsername,
+    ]
+  );
+
+  const leaveRoom = useCallback(() => {
+    if (IS_DEMO_MODE) {
+      console.log("JanusTextRoom: Leaving demo room");
+      setIsInRoom(false);
+      setRoomStatus("Left demo room");
+      setMessages([]);
+      setParticipants([]);
+      setUsername("");
+      setRoomId("");
+      onLeaveRoom && onLeaveRoom();
+      return;
+    }
+
+    if (pluginHandleRef.current) {
       const leaveRequest = { textroom: "leave" };
       pluginHandleRef.current.send({
         message: leaveRequest,
-        success: (result) => {
-          console.log("JanusTextRoom: Leave request successful:", result);
+        success: () => {
+          console.log("JanusTextRoom: Left room");
+          setIsInRoom(false);
+          setRoomStatus("Left room");
+          setMessages([]);
+          setParticipants([]);
+          setUsername("");
+          setRoomId("");
+          onLeaveRoom && onLeaveRoom();
         },
         error: (error) => {
           console.error("JanusTextRoom: Failed to leave room:", error);
+          setRoomStatus("Failed to leave room");
         },
       });
     }
+  }, [
+    IS_DEMO_MODE,
+    onLeaveRoom,
+    setIsInRoom,
+    setMessages,
+    setParticipants,
+    setRoomId,
+    setRoomStatus,
+    setUsername,
+  ]);
 
-    // Reset state
-    setIsInRoom(false);
-    setMessages([]);
-    setParticipants([]);
-    setRoomId("");
-    setUsername("");
-    setRoomStatus("Left room");
-
-    if (onLeaveRoom) {
-      onLeaveRoom();
-    }
-  };
-
-  const sendMessage = (messageText) => {
-    if (!messageText.trim()) return;
-
-    if (IS_DEMO_MODE) {
-      console.log("JanusTextRoom: Sending demo message:", messageText);
-      const newMessage = {
-        username: username,
-        text: messageText,
-        timestamp: Date.now(),
-      };
-      setMessages((prev) => [...prev, newMessage]);
-      setCurrentMessage("");
-      return;
-    }
-
-    if (!pluginHandleRef.current) {
-      console.error("JanusTextRoom: Plugin not attached");
-      return;
-    }
-
-    const messageRequest = {
-      textroom: "message",
-      room: roomId,
-      text: messageText,
-    };
-
-    pluginHandleRef.current.send({
-      message: messageRequest,
-      success: (result) => {
-        console.log("JanusTextRoom: Message sent:", result);
+  const sendMessage = useCallback(
+    (messageText) => {
+      if (IS_DEMO_MODE) {
+        console.log("JanusTextRoom: Sending demo message:", messageText);
+        setMessages((prev) => [
+          ...prev,
+          {
+            username: username,
+            text: messageText,
+            timestamp: Date.now(),
+          },
+        ]);
         setCurrentMessage("");
-      },
-      error: (error) => {
-        console.error("JanusTextRoom: Failed to send message:", error);
-      },
-    });
-  };
-
-  const handlePluginMessage = (msg, jsep) => {
-    console.log("JanusTextRoom: Plugin message:", msg);
-
-    if (msg.textroom === "success") {
-      if (msg.room) {
-        setIsInRoom(true);
-        setRoomStatus(`Connected to room: ${msg.room}`);
+        return;
       }
-    } else if (msg.textroom === "join") {
-      console.log("JanusTextRoom: User joined:", msg.username);
-      setParticipants((prev) => [...prev, msg.username]);
-    } else if (msg.textroom === "leave") {
-      console.log("JanusTextRoom: User left:", msg.username);
-      setParticipants((prev) => prev.filter((p) => p !== msg.username));
-    } else if (msg.textroom === "message") {
-      console.log("JanusTextRoom: New message:", msg);
-      const newMessage = {
-        username: msg.from,
-        text: msg.text,
-        timestamp: msg.date ? new Date(msg.date).getTime() : Date.now(),
-      };
-      setMessages((prev) => [...prev, newMessage]);
-    } else if (msg.textroom === "participants") {
-      console.log("JanusTextRoom: Participants list:", msg.participants);
-      setParticipants(msg.participants.map((p) => p.username));
-    }
 
-    if (jsep) {
-      console.log("JanusTextRoom: Handling JSEP:", jsep);
-      pluginHandleRef.current.createAnswer({
-        jsep: jsep,
-        tracks: [{ type: "data" }],
-        success: (ourjsep) => {
-          pluginHandleRef.current.send({
-            message: { textroom: "ack" },
-            jsep: ourjsep,
-          });
+      if (!pluginHandleRef.current || !isInRoom) {
+        console.error("JanusTextRoom: Not in room or plugin not attached");
+        return;
+      }
+
+      const messageRequest = { textroom: "send", text: messageText };
+      pluginHandleRef.current.send({
+        message: messageRequest,
+        success: () => {
+          console.log("JanusTextRoom: Message sent");
+          setMessages((prev) => [
+            ...prev,
+            {
+              username: username,
+              text: messageText,
+              timestamp: Date.now(),
+            },
+          ]);
+          setCurrentMessage("");
         },
         error: (error) => {
-          console.error("JanusTextRoom: Failed to create answer:", error);
+          console.error("JanusTextRoom: Failed to send message:", error);
         },
       });
+    },
+    [IS_DEMO_MODE, isInRoom, setCurrentMessage, setMessages, username]
+  );
+
+  const handlePluginMessage = useCallback(
+    (msg, jsep) => {
+      console.log("JanusTextRoom: Plugin message received", msg);
+
+      if (jsep) {
+        console.log("JanusTextRoom: Handling JSEP:", jsep);
+        // No JSEP handling needed for textroom, just acknowledging it
+      }
+
+      const event = msg.textroom;
+      if (event) {
+        switch (event) {
+          case "joined":
+            console.log("JanusTextRoom: User joined room:", msg.display);
+            setParticipants((prev) => [...prev, msg.display]);
+            break;
+          case "leaving":
+            console.log("JanusTextRoom: User leaving room:", msg.display);
+            setParticipants((prev) => prev.filter((p) => p !== msg.display));
+            break;
+          case "event":
+            // Handle other room events (e.g., changes in participants, etc.)
+            if (msg.participants) {
+              setParticipants(msg.participants.map((p) => p.display));
+            }
+            break;
+          default:
+            console.warn("JanusTextRoom: Unknown textroom event:", event, msg);
+            break;
+        }
+      }
+    },
+    [setParticipants]
+  );
+
+  const handleDataChannelMessage = useCallback(
+    (message) => {
+      console.log("JanusTextRoom: Handling data channel message:", message);
+      // Add incoming message to the messages state
+      setMessages((prev) => [...prev, message]);
+    },
+    [setMessages]
+  );
+
+  const cleanup = useCallback(() => {
+    console.log("JanusTextRoom: Performing cleanup");
+    if (pluginHandleRef.current) {
+      pluginHandleRef.current.hangup();
+      pluginHandleRef.current.detach();
+      pluginHandleRef.current = null;
     }
-  };
-
-  const handleDataChannelMessage = (message) => {
-    console.log("JanusTextRoom: Data channel message:", message);
-    // Handle data channel messages if needed
-  };
-
-  const handleSendMessage = (e) => {
-    e.preventDefault();
-    sendMessage(currentMessage);
-  };
-
-  const cleanup = () => {
     if (janusRef.current) {
       janusRef.current.destroy();
       janusRef.current = null;
+    }
+    setIsInRoom(false);
+    setJanusConnected(false);
+    setRoomStatus("");
+    setConnectionError(null);
+    setMessages([]);
+    setParticipants([]);
+    setAvailableRooms([]);
+    setUsername("");
+    setRoomId("1234");
+  }, [
+    setIsInRoom,
+    setJanusConnected,
+    setRoomStatus,
+    setConnectionError,
+    setMessages,
+    setParticipants,
+    setAvailableRooms,
+    setUsername,
+    setRoomId,
+  ]);
+
+  const handleSendMessage = (e) => {
+    e.preventDefault();
+    if (currentMessage.trim()) {
+      sendMessage(currentMessage);
+      setCurrentMessage("");
     }
   };
 

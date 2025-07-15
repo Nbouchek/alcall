@@ -94,81 +94,6 @@ const JanusVideoCall = forwardRef(
       },
     }));
 
-    // Initialize Janus connection
-    useEffect(() => {
-      if (IS_DEMO_MODE) {
-        console.log("JanusVideoCall: Running in demo mode");
-        setJanusConnected(true);
-        setCallStatus("Demo mode - Video calling simulated");
-        return;
-      }
-
-      initializeJanus();
-
-      return () => {
-        cleanup();
-      };
-    }, [IS_DEMO_MODE, cleanup, connectToJanus]);
-
-    // Connect to Janus server
-    const connectToJanus = useCallback(() => {
-      if (janusRef.current) {
-        console.log("JanusVideoCall: Already connected to Janus");
-        return;
-      }
-
-      janusRef.current = new window.Janus({
-        server: JANUS_URL,
-        success: () => {
-          console.log("JanusVideoCall: Connected to Janus");
-          setJanusConnected(true);
-          setCallStatus("Connected to Janus server");
-        },
-        error: (error) => {
-          console.error("JanusVideoCall: Failed to connect to Janus:", error);
-          setConnectionError("Failed to connect to Janus server");
-          setJanusConnected(false);
-        },
-        destroyed: () => {
-          console.log("JanusVideoCall: Janus connection destroyed");
-          janusRef.current = null;
-        },
-      });
-    }, [JANUS_URL]);
-
-    const initializeJanus = () => {
-      if (
-        typeof window !== "undefined" &&
-        window.Janus &&
-        window.adapterLoaded
-      ) {
-        console.log(
-          "JanusVideoCall: Both adapter and Janus loaded, initializing..."
-        );
-
-        window.Janus.init({
-          debug: "all",
-          callback: () => {
-            console.log("JanusVideoCall: Janus initialized");
-            connectToJanus();
-          },
-          error: (error) => {
-            console.error(
-              "JanusVideoCall: Janus initialization failed:",
-              error
-            );
-            setConnectionError("Failed to initialize Janus library");
-          },
-        });
-      } else {
-        console.log("JanusVideoCall: Waiting for libraries to load...", {
-          janus: !!window.Janus,
-          adapter: !!window.adapterLoaded,
-        });
-        setTimeout(initializeJanus, 1000);
-      }
-    };
-
     const startVideoCall = async () => {
       if (IS_DEMO_MODE) {
         console.log("JanusVideoCall: Starting demo video call");
@@ -641,14 +566,6 @@ const JanusVideoCall = forwardRef(
       }
     };
 
-    const cleanup = () => {
-      if (janusRef.current) {
-        janusRef.current.destroy();
-        janusRef.current = null;
-      }
-      stopCallTimer();
-    };
-
     const generateRoomId = (roomName) => {
       return Math.floor(Math.random() * 1000000);
     };
@@ -659,12 +576,147 @@ const JanusVideoCall = forwardRef(
       }, 1000);
     };
 
-    const stopCallTimer = () => {
+    const stopCallTimer = useCallback(() => {
       if (durationIntervalRef.current) {
         clearInterval(durationIntervalRef.current);
         durationIntervalRef.current = null;
       }
-    };
+      setCallDuration(0);
+    }, []);
+
+    const cleanup = useCallback(() => {
+      console.log("JanusVideoCall: Performing cleanup");
+      stopCallTimer();
+      if (publisherRef.current) {
+        publisherRef.current.hangup();
+        publisherRef.current.detach();
+        publisherRef.current = null;
+      }
+      subscribersRef.current.forEach((sub) => {
+        sub.hangup();
+        sub.detach();
+      });
+      subscribersRef.current.clear();
+      if (janusRef.current) {
+        janusRef.current.destroy();
+        janusRef.current = null;
+      }
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach((track) => track.stop());
+        localStreamRef.current = null;
+      }
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = null;
+      }
+      // Remove all dynamically created remote video elements
+      const existingRemoteVideos = document.querySelectorAll(
+        "video[id^='remote-video-']"
+      );
+      existingRemoteVideos.forEach((el) => el.remove());
+
+      setIsInCall(false);
+      setIsPublishing(false);
+      setCallStatus("");
+      setCallDuration(0);
+      setParticipants([]);
+      setRoomId(null);
+      setJanusConnected(false);
+      setConnectionError(null);
+      setSubscriptions(new Map());
+    }, [
+      stopCallTimer,
+      setIsInCall,
+      setIsPublishing,
+      setCallStatus,
+      setCallDuration,
+      setParticipants,
+      setRoomId,
+      setJanusConnected,
+      setConnectionError,
+      setSubscriptions,
+    ]);
+
+    // Initialize Janus connection
+    useEffect(() => {
+      if (IS_DEMO_MODE) {
+        console.log("JanusVideoCall: Running in demo mode");
+        setJanusConnected(true);
+        setCallStatus("Demo mode - Video calling simulated");
+        return;
+      }
+
+      initializeJanus();
+
+      return () => {
+        cleanup();
+      };
+    }, [
+      IS_DEMO_MODE,
+      cleanup,
+      connectToJanus,
+      initializeJanus,
+      setJanusConnected,
+      setCallStatus,
+    ]);
+
+    // Connect to Janus server
+    const connectToJanus = useCallback(() => {
+      if (janusRef.current) {
+        console.log("JanusVideoCall: Already connected to Janus");
+        return;
+      }
+
+      janusRef.current = new window.Janus({
+        server: JANUS_URL,
+        success: () => {
+          console.log("JanusVideoCall: Connected to Janus");
+          setJanusConnected(true);
+          setCallStatus("Connected to Janus server");
+        },
+        error: (error) => {
+          console.error("JanusVideoCall: Failed to connect to Janus:", error);
+          setConnectionError("Failed to connect to Janus server");
+          setJanusConnected(false);
+        },
+        destroyed: () => {
+          console.log("JanusVideoCall: Janus connection destroyed");
+          janusRef.current = null;
+        },
+      });
+    }, [JANUS_URL]);
+
+    const initializeJanus = useCallback(() => {
+      if (
+        typeof window !== "undefined" &&
+        window.Janus &&
+        window.adapterLoaded
+      ) {
+        console.log(
+          "JanusVideoCall: Both adapter and Janus loaded, initializing..."
+        );
+
+        window.Janus.init({
+          debug: "all",
+          callback: () => {
+            console.log("JanusVideoCall: Janus initialized");
+            connectToJanus();
+          },
+          error: (error) => {
+            console.error(
+              "JanusVideoCall: Janus initialization failed:",
+              error
+            );
+            setConnectionError("Failed to initialize Janus library");
+          },
+        });
+      } else {
+        console.log("JanusVideoCall: Waiting for libraries to load...", {
+          janus: !!window.Janus,
+          adapter: !!window.adapterLoaded,
+        });
+        setTimeout(initializeJanus, 1000);
+      }
+    }, [connectToJanus, setConnectionError]);
 
     const formatDuration = (seconds) => {
       const mins = Math.floor(seconds / 60);

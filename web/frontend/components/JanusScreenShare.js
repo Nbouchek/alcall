@@ -4,6 +4,8 @@ import {
   useRef,
   forwardRef,
   useImperativeHandle,
+  useCallback,
+  useMemo,
 } from "react";
 import {
   FaDesktop,
@@ -52,10 +54,13 @@ const JanusScreenShare = forwardRef(({ user, onShareEnd }, ref) => {
   const VIDEOROOM_PLUGIN = "janus.plugin.videoroom";
 
   // Demo data
-  const demoPublishers = [
-    { id: 1, display: "Alice's Screen", video: true, audio: false },
-    { id: 2, display: "Bob's Presentation", video: true, audio: true },
-  ];
+  const demoPublishers = useMemo(
+    () => [
+      { id: 1, display: "Alice's Screen", video: true, audio: false },
+      { id: 2, display: "Bob's Presentation", video: true, audio: true },
+    ],
+    []
+  );
 
   // Expose functions to parent component
   useImperativeHandle(ref, () => ({
@@ -86,6 +91,38 @@ const JanusScreenShare = forwardRef(({ user, onShareEnd }, ref) => {
       };
     },
   }));
+
+  const connectToJanus = useCallback(() => {
+    if (janusRef.current) {
+      console.log("JanusScreenShare: Already connected to Janus");
+      return;
+    }
+
+    janusRef.current = new window.Janus({
+      server: JANUS_URL,
+      success: () => {
+        console.log("JanusScreenShare: Connected to Janus");
+        setJanusConnected(true);
+        setShareStatus("Connected to Janus server");
+        attachPublisherPlugin();
+      },
+      error: (error) => {
+        console.error("JanusScreenShare: Failed to connect to Janus:", error);
+        setConnectionError("Failed to connect to Janus server");
+        setJanusConnected(false);
+      },
+      destroyed: () => {
+        console.log("JanusScreenShare: Janus connection destroyed");
+        setJanusConnected(false);
+      },
+    });
+  }, [
+    JANUS_URL,
+    setJanusConnected,
+    setShareStatus,
+    setConnectionError,
+    attachPublisherPlugin,
+  ]);
 
   // Initialize Janus connection
   useEffect(() => {
@@ -119,35 +156,17 @@ const JanusScreenShare = forwardRef(({ user, onShareEnd }, ref) => {
     return () => {
       cleanup();
     };
-  }, []);
+  }, [
+    IS_DEMO_MODE,
+    connectToJanus,
+    cleanup,
+    setJanusConnected,
+    setShareStatus,
+    setPublishers,
+    demoPublishers,
+  ]);
 
-  const connectToJanus = () => {
-    if (janusRef.current) {
-      console.log("JanusScreenShare: Already connected to Janus");
-      return;
-    }
-
-    janusRef.current = new window.Janus({
-      server: JANUS_URL,
-      success: () => {
-        console.log("JanusScreenShare: Connected to Janus");
-        setJanusConnected(true);
-        setShareStatus("Connected to Janus server");
-        attachPublisherPlugin();
-      },
-      error: (error) => {
-        console.error("JanusScreenShare: Failed to connect to Janus:", error);
-        setConnectionError("Failed to connect to Janus server");
-        setJanusConnected(false);
-      },
-      destroyed: () => {
-        console.log("JanusScreenShare: Janus connection destroyed");
-        setJanusConnected(false);
-      },
-    });
-  };
-
-  const attachPublisherPlugin = () => {
+  const attachPublisherPlugin = useCallback(() => {
     janusRef.current.attach({
       plugin: VIDEOROOM_PLUGIN,
       success: (pluginHandle) => {
@@ -160,7 +179,7 @@ const JanusScreenShare = forwardRef(({ user, onShareEnd }, ref) => {
           "JanusScreenShare: Failed to attach publisher plugin:",
           error
         );
-        setConnectionError("Failed to attach to videoroom plugin");
+        setConnectionError("Failed to connect to videoroom plugin");
       },
       onmessage: handlePublisherMessage,
       onlocalstream: (stream) => {
@@ -177,9 +196,15 @@ const JanusScreenShare = forwardRef(({ user, onShareEnd }, ref) => {
         }
       },
     });
-  };
+  }, [
+    janusRef,
+    VIDEOROOM_PLUGIN,
+    joinRoom,
+    handlePublisherMessage,
+    setConnectionError,
+  ]);
 
-  const attachSubscriberPlugin = () => {
+  const attachSubscriberPlugin = useCallback(() => {
     janusRef.current.attach({
       plugin: VIDEOROOM_PLUGIN,
       success: (pluginHandle) => {
@@ -206,9 +231,9 @@ const JanusScreenShare = forwardRef(({ user, onShareEnd }, ref) => {
         }
       },
     });
-  };
+  }, [janusRef, VIDEOROOM_PLUGIN, handleSubscriberMessage]);
 
-  const joinRoom = () => {
+  const joinRoom = useCallback(() => {
     if (!publisherHandleRef.current) return;
 
     const joinRequest = {
@@ -229,9 +254,9 @@ const JanusScreenShare = forwardRef(({ user, onShareEnd }, ref) => {
         setShareStatus("Failed to join room");
       },
     });
-  };
+  }, [publisherHandleRef, roomId, user, setShareStatus]);
 
-  const startScreenShare = () => {
+  const startScreenShare = useCallback(() => {
     if (IS_DEMO_MODE) {
       console.log("JanusScreenShare: Starting demo screen share");
       setIsSharing(true);
@@ -248,76 +273,55 @@ const JanusScreenShare = forwardRef(({ user, onShareEnd }, ref) => {
 
     // Get screen share
     navigator.mediaDevices
-      .getDisplayMedia({
-        video: {
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-          frameRate: { ideal: 15 },
-        },
-        audio: true,
-      })
+      .getDisplayMedia({ video: true, audio: true }) // Request screen and audio
       .then((stream) => {
-        console.log("JanusScreenShare: Screen capture successful");
         screenStreamRef.current = stream;
-
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = stream;
         }
 
-        // Handle stream end (user stops sharing)
-        stream.getVideoTracks()[0].addEventListener("ended", () => {
-          console.log("JanusScreenShare: Screen sharing ended by user");
-          stopScreenShare();
-        });
-
-        // Create offer with screen stream
+        // Publish screen stream
         publisherHandleRef.current.createOffer({
           media: {
             video: "screen",
-            audio: true,
             audioSend: true,
+            audioRecv: false,
             videoSend: true,
+            videoRecv: false,
           },
+          stream: stream,
           success: (jsep) => {
-            const publishRequest = {
-              request: "configure",
-              audio: true,
-              video: true,
-            };
-
-            publisherHandleRef.current.send({
-              message: publishRequest,
-              jsep: jsep,
-              success: (result) => {
-                console.log(
-                  "JanusScreenShare: Screen sharing started:",
-                  result
-                );
-                setIsSharing(true);
-                setShareStatus("Screen sharing active");
-              },
-              error: (error) => {
-                console.error(
-                  "JanusScreenShare: Failed to start sharing:",
-                  error
-                );
-                setShareStatus("Failed to start screen sharing");
-              },
-            });
+            const publish = { request: "configure", audio: true, video: true };
+            publisherHandleRef.current.send({ message: publish, jsep: jsep });
+            setIsSharing(true);
+            setShareStatus("Screen sharing active");
           },
           error: (error) => {
-            console.error("JanusScreenShare: Failed to create offer:", error);
-            setShareStatus("Failed to create offer");
+            console.error(
+              "JanusScreenShare: Failed to create offer for screen share:",
+              error
+            );
+            setShareStatus("Failed to start screen share");
+            setConnectionError("Failed to create screen share offer");
+            stopScreenShare(); // Ensure cleanup on error
           },
         });
       })
       .catch((error) => {
-        console.error("JanusScreenShare: Failed to get screen:", error);
-        setShareStatus("Failed to access screen");
+        console.error("JanusScreenShare: Failed to get display media:", error);
+        setShareStatus("Screen capture denied or failed");
+        setConnectionError("Permission denied for screen capture");
       });
-  };
+  }, [
+    IS_DEMO_MODE,
+    publisherHandleRef,
+    stopScreenShare,
+    setIsSharing,
+    setShareStatus,
+    setConnectionError,
+  ]);
 
-  const stopScreenShare = () => {
+  const stopScreenShare = useCallback(() => {
     console.log("JanusScreenShare: Stopping screen share");
 
     if (screenStreamRef.current) {
@@ -347,142 +351,213 @@ const JanusScreenShare = forwardRef(({ user, onShareEnd }, ref) => {
     if (onShareEnd) {
       onShareEnd();
     }
-  };
+  }, [
+    IS_DEMO_MODE,
+    publisherHandleRef,
+    onShareEnd,
+    setIsSharing,
+    setShareStatus,
+  ]);
 
-  const viewScreen = (publisherId) => {
-    if (IS_DEMO_MODE) {
-      console.log("JanusScreenShare: Viewing demo screen:", publisherId);
-      const publisher = demoPublishers.find((p) => p.id === publisherId);
-      setSelectedPublisher(publisher);
-      setIsViewing(true);
-      setShareStatus(`Viewing ${publisher?.display}`);
-      return;
-    }
-
-    if (!subscriberHandleRef.current) {
-      attachSubscriberPlugin();
-      setTimeout(() => viewScreen(publisherId), 1000);
-      return;
-    }
-
-    const publisher = publishers.find((p) => p.id === publisherId);
-    if (!publisher) {
-      console.error("JanusScreenShare: Publisher not found:", publisherId);
-      return;
-    }
-
-    setSelectedPublisher(publisher);
-    setShareStatus("Subscribing to screen...");
-
-    const subscribeRequest = {
-      request: "join",
-      room: roomId,
-      ptype: "subscriber",
-      feed: publisherId,
-    };
-
-    subscriberHandleRef.current.send({
-      message: subscribeRequest,
-      success: (result) => {
-        console.log("JanusScreenShare: Subscribe successful:", result);
+  const viewScreen = useCallback(
+    (publisherId) => {
+      if (IS_DEMO_MODE) {
+        console.log("JanusScreenShare: Viewing demo screen:", publisherId);
+        const publisher = demoPublishers.find((p) => p.id === publisherId);
+        setSelectedPublisher(publisher);
         setIsViewing(true);
-        setShareStatus(`Viewing ${publisher.display}`);
-      },
-      error: (error) => {
-        console.error("JanusScreenShare: Failed to subscribe:", error);
-        setShareStatus("Failed to view screen");
-      },
-    });
-  };
+        setShareStatus(`Viewing ${publisher?.display}`);
+        return;
+      }
 
-  const stopViewing = () => {
-    console.log("JanusScreenShare: Stopping viewing");
+      if (!subscriberHandleRef.current) {
+        attachSubscriberPlugin();
+        setTimeout(() => viewScreen(publisherId), 1000);
+        return;
+      }
 
-    if (!IS_DEMO_MODE && subscriberHandleRef.current) {
-      const leaveRequest = {
-        request: "leave",
+      const publisher = publishers.find((p) => p.id === publisherId);
+      if (!publisher) {
+        console.error("JanusScreenShare: Publisher not found:", publisherId);
+        return;
+      }
+
+      setSelectedPublisher(publisher);
+      setShareStatus("Subscribing to screen...");
+
+      const subscribeRequest = {
+        request: "join",
+        room: roomId,
+        ptype: "subscriber",
+        feed: publisherId,
       };
 
       subscriberHandleRef.current.send({
-        message: leaveRequest,
+        message: subscribeRequest,
         success: (result) => {
-          console.log("JanusScreenShare: Leave successful:", result);
+          console.log("JanusScreenShare: Subscribe successful:", result);
+          setIsViewing(true);
+          setShareStatus(`Viewing ${publisher.display}`);
         },
         error: (error) => {
-          console.error("JanusScreenShare: Failed to leave:", error);
+          console.error("JanusScreenShare: Failed to subscribe:", error);
+          setShareStatus("Failed to view screen");
         },
       });
+    },
+    [
+      IS_DEMO_MODE,
+      publishers,
+      roomId,
+      subscriberHandleRef,
+      attachSubscriberPlugin,
+      setSelectedPublisher,
+      setIsViewing,
+      setShareStatus,
+    ]
+  );
+
+  const stopViewing = useCallback(() => {
+    if (IS_DEMO_MODE) {
+      console.log("JanusScreenShare: Stopping demo viewing");
+      setIsViewing(false);
+      setSelectedPublisher(null);
+      return;
     }
 
+    if (subscriberHandleRef.current) {
+      subscriberHandleRef.current.hangup();
+      subscriberHandleRef.current.detach();
+      subscriberHandleRef.current = null;
+    }
+    if (remoteVideoRef.current) {
+      remoteVideoRef.current.srcObject = null;
+    }
     setIsViewing(false);
     setSelectedPublisher(null);
-    setShareStatus("Stopped viewing");
-  };
+    setShareStatus("Stopped viewing screen");
+  }, [IS_DEMO_MODE, setIsViewing, setSelectedPublisher, setShareStatus]);
 
-  const handlePublisherMessage = (msg, jsep) => {
-    console.log("JanusScreenShare: Publisher message:", msg);
+  const handlePublisherMessage = useCallback(
+    (msg, jsep) => {
+      console.log("JanusScreenShare: Publisher message received", msg);
 
-    if (msg.videoroom === "joined") {
-      if (msg.publishers && msg.publishers.length > 0) {
-        setPublishers(msg.publishers);
+      if (jsep) {
+        console.log("JanusScreenShare: Handling publisher JSEP:", jsep);
+        publisherHandleRef.current.handleRemoteJsep({ jsep: jsep });
       }
-    } else if (msg.videoroom === "event") {
-      if (msg.publishers) {
-        setPublishers((prev) => [...prev, ...msg.publishers]);
+
+      const event = msg.videoroom;
+      if (event) {
+        if (event === "joined") {
+          const newPublishers = msg.publishers || [];
+          console.log("JanusScreenShare: Current publishers:", newPublishers);
+          setPublishers(newPublishers);
+        } else if (event === "event") {
+          // Publisher list updated
+          if (msg.publishers) {
+            const newPublishers = msg.publishers || [];
+            setPublishers((prev) => {
+              const updated = [...prev];
+              newPublishers.forEach((p) => {
+                if (!updated.some((existing) => existing.id === p.id)) {
+                  updated.push(p);
+                }
+              });
+              return updated;
+            });
+          }
+          // Leaving or unpublishing
+          if (msg.leaving) {
+            console.log("JanusScreenShare: Publisher leaving:", msg.leaving);
+            setPublishers((prev) => prev.filter((p) => p.id !== msg.leaving));
+            if (selectedPublisher?.id === msg.leaving) {
+              stopViewing(); // Stop viewing if the publisher leaves
+            }
+          }
+          if (msg.unpublished) {
+            console.log(
+              "JanusScreenShare: Publisher unpublished:",
+              msg.unpublished
+            );
+            setPublishers((prev) =>
+              prev.filter((p) => p.id !== msg.unpublished)
+            );
+            if (selectedPublisher?.id === msg.unpublished) {
+              stopViewing(); // Stop viewing if the publisher unpublishes
+            }
+          }
+        }
       }
-      if (msg.unpublished) {
-        setPublishers((prev) => prev.filter((p) => p.id !== msg.unpublished));
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [setPublishers, selectedPublisher, stopViewing] // Removed demoPublishers
+  );
+
+  const handleSubscriberMessage = useCallback(
+    (msg, jsep) => {
+      console.log("JanusScreenShare: Subscriber message received", msg);
+
+      if (jsep) {
+        console.log("JanusScreenShare: Handling subscriber JSEP:", jsep);
+        subscriberHandleRef.current.handleRemoteJsep({ jsep: jsep });
+
+        const body = { request: "start" };
+        subscriberHandleRef.current.send({ message: body });
       }
-      if (msg.leaving) {
-        setPublishers((prev) => prev.filter((p) => p.id !== msg.leaving));
+
+      const event = msg.videoroom;
+      if (event) {
+        if (event === "attached") {
+          console.log("JanusScreenShare: Subscriber attached");
+        } else if (event === "event") {
+          // Handle subscriber events if needed
+        }
       }
+    },
+    [subscriberHandleRef]
+  );
+
+  const toggleFullscreen = useCallback(() => {
+    setIsFullscreen((prev) => !prev);
+  }, []);
+
+  const cleanup = useCallback(() => {
+    console.log("JanusScreenShare: Performing cleanup");
+    if (publisherHandleRef.current) {
+      publisherHandleRef.current.hangup();
+      publisherHandleRef.current.detach();
+      publisherHandleRef.current = null;
     }
-
-    if (jsep) {
-      console.log("JanusScreenShare: Handling publisher JSEP:", jsep);
-      publisherHandleRef.current.handleRemoteJsep({ jsep: jsep });
-    }
-  };
-
-  const handleSubscriberMessage = (msg, jsep) => {
-    console.log("JanusScreenShare: Subscriber message:", msg);
-
-    if (jsep) {
-      console.log("JanusScreenShare: Handling subscriber JSEP:", jsep);
-      subscriberHandleRef.current.createAnswer({
-        jsep: jsep,
-        media: { audioSend: false, videoSend: false },
-        success: (ourjsep) => {
-          const startRequest = {
-            request: "start",
-            room: roomId,
-          };
-
-          subscriberHandleRef.current.send({
-            message: startRequest,
-            jsep: ourjsep,
-          });
-        },
-        error: (error) => {
-          console.error("JanusScreenShare: Failed to create answer:", error);
-        },
-      });
-    }
-  };
-
-  const toggleFullscreen = () => {
-    setIsFullscreen(!isFullscreen);
-  };
-
-  const cleanup = () => {
-    if (screenStreamRef.current) {
-      screenStreamRef.current.getTracks().forEach((track) => track.stop());
+    if (subscriberHandleRef.current) {
+      subscriberHandleRef.current.hangup();
+      subscriberHandleRef.current.detach();
+      subscriberHandleRef.current = null;
     }
     if (janusRef.current) {
       janusRef.current.destroy();
       janusRef.current = null;
     }
-  };
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach((track) => track.stop());
+      screenStreamRef.current = null;
+    }
+    setIsSharing(false);
+    setIsViewing(false);
+    setJanusConnected(false);
+    setShareStatus("");
+    setConnectionError(null);
+    setPublishers([]);
+    setSelectedPublisher(null);
+  }, [
+    setIsSharing,
+    setIsViewing,
+    setJanusConnected,
+    setShareStatus,
+    setConnectionError,
+    setPublishers,
+    setSelectedPublisher,
+  ]);
 
   // Screen sharing UI
   if (isSharing) {

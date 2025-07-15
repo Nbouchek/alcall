@@ -4,6 +4,8 @@ import {
   useRef,
   forwardRef,
   useImperativeHandle,
+  useCallback,
+  useMemo,
 } from "react";
 import {
   FaPlay,
@@ -52,11 +54,14 @@ const JanusStreaming = forwardRef(({ user, onStreamEnd }, ref) => {
   const STREAMING_PLUGIN = "janus.plugin.streaming";
 
   // Demo streams for demo mode
-  const demoStreams = [
-    { id: 1, description: "Demo Live Stream", type: "live", enabled: true },
-    { id: 2, description: "Demo Video Stream", type: "video", enabled: true },
-    { id: 3, description: "Demo Audio Stream", type: "audio", enabled: true },
-  ];
+  const demoStreams = useMemo(
+    () => [
+      { id: 1, description: "Demo Live Stream", type: "live", enabled: true },
+      { id: 2, description: "Demo Video Stream", type: "video", enabled: true },
+      { id: 3, description: "Demo Audio Stream", type: "audio", enabled: true },
+    ],
+    []
+  );
 
   // Expose functions to parent component
   useImperativeHandle(ref, () => ({
@@ -81,6 +86,38 @@ const JanusStreaming = forwardRef(({ user, onStreamEnd }, ref) => {
       listStreams();
     },
   }));
+
+  const connectToJanus = useCallback(() => {
+    if (janusRef.current) {
+      console.log("JanusStreaming: Already connected to Janus");
+      return;
+    }
+
+    janusRef.current = new window.Janus({
+      server: JANUS_URL,
+      success: () => {
+        console.log("JanusStreaming: Connected to Janus");
+        setJanusConnected(true);
+        setStreamStatus("Connected to Janus server");
+        attachStreamingPlugin();
+      },
+      error: (error) => {
+        console.error("JanusStreaming: Failed to connect to Janus:", error);
+        setConnectionError("Failed to connect to Janus server");
+        setJanusConnected(false);
+      },
+      destroyed: () => {
+        console.log("JanusStreaming: Janus connection destroyed");
+        setJanusConnected(false);
+      },
+    });
+  }, [
+    JANUS_URL,
+    setJanusConnected,
+    setStreamStatus,
+    setConnectionError,
+    attachStreamingPlugin,
+  ]);
 
   // Initialize Janus connection
   useEffect(() => {
@@ -114,35 +151,17 @@ const JanusStreaming = forwardRef(({ user, onStreamEnd }, ref) => {
     return () => {
       cleanup();
     };
-  }, []);
+  }, [
+    IS_DEMO_MODE,
+    cleanup,
+    connectToJanus,
+    setJanusConnected,
+    setStreamStatus,
+    setAvailableStreams,
+    demoStreams,
+  ]);
 
-  const connectToJanus = () => {
-    if (janusRef.current) {
-      console.log("JanusStreaming: Already connected to Janus");
-      return;
-    }
-
-    janusRef.current = new window.Janus({
-      server: JANUS_URL,
-      success: () => {
-        console.log("JanusStreaming: Connected to Janus");
-        setJanusConnected(true);
-        setStreamStatus("Connected to Janus server");
-        attachStreamingPlugin();
-      },
-      error: (error) => {
-        console.error("JanusStreaming: Failed to connect to Janus:", error);
-        setConnectionError("Failed to connect to Janus server");
-        setJanusConnected(false);
-      },
-      destroyed: () => {
-        console.log("JanusStreaming: Janus connection destroyed");
-        setJanusConnected(false);
-      },
-    });
-  };
-
-  const attachStreamingPlugin = () => {
+  const attachStreamingPlugin = useCallback(() => {
     janusRef.current.attach({
       plugin: STREAMING_PLUGIN,
       success: (pluginHandle) => {
@@ -169,9 +188,17 @@ const JanusStreaming = forwardRef(({ user, onStreamEnd }, ref) => {
         }
       },
     });
-  };
+  }, [
+    janusRef,
+    STREAMING_PLUGIN,
+    listStreams,
+    handlePluginMessage,
+    setConnectionError,
+    isMuted,
+    volume,
+  ]);
 
-  const listStreams = () => {
+  const listStreams = useCallback(() => {
     if (IS_DEMO_MODE) {
       setAvailableStreams(demoStreams);
       return;
@@ -195,7 +222,7 @@ const JanusStreaming = forwardRef(({ user, onStreamEnd }, ref) => {
         console.error("JanusStreaming: Failed to list streams:", error);
       },
     });
-  };
+  }, [IS_DEMO_MODE, demoStreams, setAvailableStreams]);
 
   const startStreaming = (streamId) => {
     if (IS_DEMO_MODE) {
@@ -240,109 +267,122 @@ const JanusStreaming = forwardRef(({ user, onStreamEnd }, ref) => {
     });
   };
 
-  const stopStreaming = () => {
+  const stopStreaming = useCallback(() => {
     console.log("JanusStreaming: Stopping streaming");
 
     stopBitrateTimer();
 
-    if (!IS_DEMO_MODE && pluginHandleRef.current) {
-      const stopRequest = { request: "stop" };
-      pluginHandleRef.current.send({
-        message: stopRequest,
-        success: (result) => {
-          console.log("JanusStreaming: Stop request successful:", result);
-        },
-        error: (error) => {
-          console.error("JanusStreaming: Failed to stop streaming:", error);
-        },
-      });
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = null;
+    if (pluginHandleRef.current) {
+      if (!IS_DEMO_MODE) {
+        const stopRequest = { request: "stop" };
+        pluginHandleRef.current.send({
+          message: stopRequest,
+          success: (result) => {
+            console.log("JanusStreaming: Stop request successful:", result);
+          },
+          error: (error) => {
+            console.error("JanusStreaming: Failed to stop stream:", error);
+          },
+        });
       }
+      pluginHandleRef.current.hangup();
+      pluginHandleRef.current.detach();
+      pluginHandleRef.current = null;
     }
 
-    // Reset state
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
     setIsStreaming(false);
     setSelectedStream(null);
-    setStreamStatus("Streaming stopped");
+    setStreamStatus("Stream stopped");
     setBitrate(0);
-
     if (onStreamEnd) {
       onStreamEnd();
     }
-  };
+  }, [
+    IS_DEMO_MODE,
+    stopBitrateTimer,
+    setIsStreaming,
+    setSelectedStream,
+    setStreamStatus,
+    setBitrate,
+    onStreamEnd,
+  ]);
 
-  const handlePluginMessage = (msg, jsep) => {
-    console.log("JanusStreaming: Plugin message:", msg);
+  const handlePluginMessage = useCallback(
+    (msg, jsep) => {
+      console.log("JanusStreaming: Plugin message received", msg);
 
-    if (jsep) {
-      console.log("JanusStreaming: Handling remote JSEP:", jsep);
-
-      pluginHandleRef.current.createAnswer({
-        jsep: jsep,
-        tracks: [{ type: "data" }],
-        success: (ourjsep) => {
-          const startRequest = { request: "start" };
-          pluginHandleRef.current.send({
-            message: startRequest,
-            jsep: ourjsep,
-            success: (result) => {
-              console.log("JanusStreaming: Stream started:", result);
-              setIsStreaming(true);
-              startBitrateTimer();
-            },
-            error: (error) => {
-              console.error("JanusStreaming: Failed to start:", error);
-            },
-          });
-        },
-        error: (error) => {
-          console.error("JanusStreaming: Failed to create answer:", error);
-        },
-      });
-    }
-
-    const result = msg.result;
-    if (result) {
-      if (result.status) {
-        setStreamStatus(`Stream: ${result.status}`);
+      if (jsep) {
+        console.log("JanusStreaming: Handling JSEP:", jsep);
+        pluginHandleRef.current.handleRemoteJsep({ jsep: jsep });
       }
-    }
-  };
 
-  const startBitrateTimer = () => {
+      const event = msg.plugindata?.data?.streaming;
+      if (event) {
+        if (event === "list") {
+          setAvailableStreams(msg.plugindata.data.list);
+        } else if (event === "event") {
+          // Handle other streaming events if needed
+        }
+      }
+    },
+    [setAvailableStreams]
+  );
+
+  const startBitrateTimer = useCallback(() => {
+    if (bitrateTimerRef.current) {
+      clearInterval(bitrateTimerRef.current);
+    }
     if (IS_DEMO_MODE) {
-      // Simulate bitrate in demo mode
       bitrateTimerRef.current = setInterval(() => {
-        setBitrate(Math.floor(Math.random() * 2000) + 1000);
+        setBitrate(Math.floor(Math.random() * 1000) + 500);
       }, 1000);
       return;
     }
-
     bitrateTimerRef.current = setInterval(() => {
       if (pluginHandleRef.current) {
-        pluginHandleRef.current.getBitrate((bitrate) => {
-          setBitrate(bitrate);
-        });
+        pluginHandleRef.current.getBitrate({ success: setBitrate });
       }
     }, 1000);
-  };
+  }, [setBitrate, IS_DEMO_MODE]);
 
-  const stopBitrateTimer = () => {
+  const stopBitrateTimer = useCallback(() => {
     if (bitrateTimerRef.current) {
       clearInterval(bitrateTimerRef.current);
       bitrateTimerRef.current = null;
     }
-  };
+  }, []);
 
-  const cleanup = () => {
+  const cleanup = useCallback(() => {
+    console.log("JanusStreaming: Performing cleanup");
+    if (pluginHandleRef.current) {
+      pluginHandleRef.current.hangup();
+      pluginHandleRef.current.detach();
+      pluginHandleRef.current = null;
+    }
     if (janusRef.current) {
       janusRef.current.destroy();
       janusRef.current = null;
     }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
     stopBitrateTimer();
-  };
+    setIsStreaming(false);
+    setJanusConnected(false);
+    setStreamStatus("");
+    setConnectionError(null);
+    setSelectedStream(null);
+  }, [
+    stopBitrateTimer,
+    setIsStreaming,
+    setJanusConnected,
+    setStreamStatus,
+    setConnectionError,
+    setSelectedStream,
+  ]);
 
   const handleVolumeChange = (e) => {
     const newVolume = parseFloat(e.target.value);

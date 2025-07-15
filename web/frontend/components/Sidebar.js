@@ -1,5 +1,11 @@
-import React from "react";
-import { FaSignOutAlt, FaSearch, FaPhone, FaVideo } from "react-icons/fa";
+import React, { useState, useCallback } from "react";
+import {
+  FaSignOutAlt,
+  FaSearch,
+  FaPhone,
+  FaVideo,
+  FaUser,
+} from "react-icons/fa";
 
 export default function Sidebar({
   user,
@@ -11,11 +17,61 @@ export default function Sidebar({
   setSidebarOpen,
   sidebarOpen,
   showCallNotification,
-  handleSearch,
-  renderSearchResults,
   initiateCall, // Add initiateCall prop
   initiateVideoCall, // Add initiateVideoCall prop
 }) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+
+  const handleSearch = useCallback(
+    (query) => {
+      setSearchQuery(query);
+      if (query.length > 0 && allUsers.length > 0) {
+        const filteredUsers = allUsers.filter((u) =>
+          u.username.toLowerCase().includes(query.toLowerCase())
+        );
+        setSearchResults(filteredUsers);
+      } else {
+        setSearchResults([]);
+      }
+    },
+    [allUsers, setSearchQuery, setSearchResults]
+  );
+
+  const selectChatUser = useCallback(
+    (userToSelect) => {
+      setSelectedRecipient(userToSelect);
+      setSearchQuery(""); // Clear search query
+      setSearchResults([]); // Clear search results
+      setSidebarOpen(false); // Close sidebar on mobile after selecting user
+    },
+    [setSelectedRecipient, setSearchQuery, setSearchResults, setSidebarOpen]
+  );
+
+  const renderSearchResults = useCallback(() => {
+    if (searchQuery.length === 0) return null;
+    if (searchResults.length === 0) {
+      return <div className="p-4 text-gray-400">No users found.</div>;
+    }
+    return (
+      <div className="mt-2 bg-gray-700 rounded-md shadow-lg">
+        {searchResults.map((result) => (
+          <div
+            key={result.id}
+            className="flex items-center p-3 hover:bg-gray-600 cursor-pointer"
+            onClick={() => selectChatUser(result)}
+          >
+            <FaUser className="text-gray-400 mr-3" />
+            <span className="text-white">{result.username}</span>
+            {onlineUserIds.has(result.id) && (
+              <span className="ml-auto text-green-400 text-xs">Online</span>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  }, [searchQuery, searchResults, onlineUserIds, selectChatUser]);
+
   return (
     <div className="w-64 bg-gray-800 h-screen p-4">
       <div className="flex items-center justify-between mb-6">
