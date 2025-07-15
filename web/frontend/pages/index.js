@@ -932,30 +932,6 @@ export default function Home() {
     );
   };
 
-  const renderSearchResults = () => {
-    if (searchQuery.length === 0) return null;
-    if (searchResults.length === 0) {
-      return <div className="p-4 text-gray-400">No users found.</div>;
-    }
-    return (
-      <div className="mt-2 bg-gray-700 rounded-md shadow-lg">
-        {searchResults.map((result) => (
-          <div
-            key={result.id}
-            className="flex items-center p-3 hover:bg-gray-600 cursor-pointer"
-            onClick={() => selectChatUser(result)}
-          >
-            <FaUser className="text-gray-400 mr-3" />
-            <span className="text-white">{result.username}</span>
-            {onlineUserIds.has(result.id) && (
-              <span className="ml-auto text-green-400 text-xs">Online</span>
-            )}
-          </div>
-        ))}
-      </div>
-    );
-  };
-
   return (
     <div>
       <Head>
@@ -1013,6 +989,8 @@ export default function Home() {
             showCallNotification={showCallNotification}
             initiateCall={initiateCall}
             initiateVideoCall={initiateVideoCall}
+            // Removed selectChatUser and renderSearchResults as props,
+            // as search logic is now internal to Sidebar
           />
 
           {/* Main Chat Area */}

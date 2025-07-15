@@ -49,7 +49,7 @@ const JanusDeviceTest = forwardRef(({ user, onTestEnd }, ref) => {
     typeof window !== "undefined" &&
     (window.location.hostname.includes("onrender.com") ||
       window.location.hostname.includes("render.com")) &&
-    !(process.env.NEXT_PUBLIC_FORCE_NORMAL_MODE === "true" || true);
+    !(process.env.NEXT_PUBLIC_FORCE_NORMAL_MODE === "true");
 
   // Janus-specific refs
   const janusRef = useRef(null);
@@ -437,41 +437,49 @@ const JanusDeviceTest = forwardRef(({ user, onTestEnd }, ref) => {
 
   const setupAudioLevelMonitoring = useCallback(
     (stream) => {
-      if (audioContextRef.current) {
-        audioContextRef.current.close(); // Close previous context if exists
+      if (IS_DEMO_MODE) {
+        console.log(
+          "JanusDeviceTest: Demo mode - skipping audio monitoring setup."
+        );
+        return;
       }
-      audioContextRef.current = new (window.AudioContext ||
-        window.webkitAudioContext)();
-      const source = audioContextRef.current.createMediaStreamSource(stream);
-      analyserRef.current = audioContextRef.current.createAnalyser();
-      analyserRef.current.fftSize = 256;
-      source.connect(analyserRef.current);
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext ||
+          window.webkitAudioContext)();
+      }
+      const audioContext = audioContextRef.current;
+      const source = audioContext.createMediaStreamSource(stream);
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 2048;
+      source.connect(analyser);
+      analyserRef.current = analyser;
       startAudioLevelTimer();
     },
-    [startAudioLevelTimer, IS_DEMO_MODE]
+    [IS_DEMO_MODE, startAudioLevelTimer]
   );
 
   const startAudioLevelTimer = useCallback(() => {
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     if (audioLevelTimerRef.current) {
       clearInterval(audioLevelTimerRef.current);
     }
     if (IS_DEMO_MODE) {
+      console.log("JanusDeviceTest: Demo mode - simulating audio level.");
       audioLevelTimerRef.current = setInterval(() => {
-        setAudioLevel(Math.random() * 100); // Simulate audio level in demo mode
-      }, 100);
-      return;
-    }
-    audioLevelTimerRef.current = setInterval(() => {
-      if (analyserRef.current) {
-        const dataArray = new Uint8Array(analyserRef.current.fftSize);
-        analyserRef.current.getByteFrequencyData(dataArray);
+        setAudioLevel(Math.floor(Math.random() * 100)); // Simulate audio level
+      }, 200);
+    } else if (analyserRef.current && audioContextRef.current) {
+      const analyser = analyserRef.current;
+      const audioContext = audioContextRef.current;
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      audioLevelTimerRef.current = setInterval(() => {
+        analyser.getByteFrequencyData(dataArray);
         const sum = dataArray.reduce((a, b) => a + b, 0);
         const average = sum / dataArray.length;
-        setAudioLevel(average);
-      }
-    }, 100); // Update every 100ms
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setAudioLevel, IS_DEMO_MODE]);
+        setAudioLevel(Math.min(100, Math.floor(average)));
+      }, 100);
+    }
+  }, [IS_DEMO_MODE]);
 
   const stopAudioLevelTimer = useCallback(() => {
     if (audioLevelTimerRef.current) {
@@ -495,17 +503,25 @@ const JanusDeviceTest = forwardRef(({ user, onTestEnd }, ref) => {
       clearInterval(bitrateTimerRef.current);
     }
     if (IS_DEMO_MODE) {
+      console.log("JanusDeviceTest: Demo mode - simulating bitrate.");
       bitrateTimerRef.current = setInterval(() => {
-        setBitrate(Math.floor(Math.random() * 1000) + 500); // Simulate bitrate in demo mode
+        setBitrate(Math.floor(Math.random() * 1000) + 100); // Simulate bitrate
       }, 1000);
-      return;
+    } else if (pluginHandleRef.current) {
+      bitrateTimerRef.current = setInterval(() => {
+        pluginHandleRef.current.getSendStats({
+          success: (json) => {
+            const bitrateValue = json.bitrate_sent;
+            if (bitrateValue) {
+              setBitrate(parseInt(bitrateValue.split(" ")[0]));
+            } else {
+              setBitrate(0);
+            }
+          },
+        });
+      }, 1000);
     }
-    bitrateTimerRef.current = setInterval(() => {
-      if (pluginHandleRef.current) {
-        pluginHandleRef.current.getBitrate({ success: setBitrate });
-      }
-    }, 1000); // Update every 1 second
-  }, [setBitrate, IS_DEMO_MODE]);
+  }, [IS_DEMO_MODE]);
 
   const stopBitrateTimer = useCallback(() => {
     if (bitrateTimerRef.current) {
