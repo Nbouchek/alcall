@@ -235,7 +235,14 @@ const AudioCallHandler = forwardRef(
       };
     }, [cleanupCall]);
 
-    const stringToPositiveIntegerHash = (str) => {
+    const stopRingbackTone = useCallback(() => {
+      if (window.stopRingback) {
+        window.stopRingback();
+        console.log("Stopping ringback tone.");
+      }
+    }, []);
+
+    const stringToPositiveIntegerHash = useCallback((str) => {
       let hash = 0;
       for (let i = 0; i < str.length; i++) {
         const char = str.charCodeAt(i);
@@ -244,142 +251,87 @@ const AudioCallHandler = forwardRef(
       }
       // Return a non-zero positive integer
       return Math.abs(hash) + 1;
-    };
+    }, []);
 
-    const startCall = async (roomId) => {
-      console.log("🔥 AUDIO - startCall executed with roomId:", roomId);
-      console.log("🔥 AUDIO - Current state:", {
-        janusInitialized,
-        user: user?.username,
-        selectedReceiver: selectedReceiver?.username,
-        roomId,
-        isInCall,
-      });
-
-      // Check if microphone stream is already available from parent
-      let microphoneStream = window.localAudioStream;
-
-      if (!microphoneStream) {
-        // IMMEDIATE MICROPHONE ACCESS REQUEST - Don't wait for Janus
-        console.log(
-          "🔥 AUDIO - No existing stream, requesting microphone access..."
-        );
-        try {
-          microphoneStream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-              autoGainControl: true,
-              echoCancellation: true,
-              noiseSuppression: true,
-              sampleRate: 48000,
-            },
-            video: false,
-          });
-          console.log(
-            "🔥 AUDIO - MICROPHONE ACCESS GRANTED!",
-            microphoneStream
-          );
-          setCallStatus("🎤 Microphone access granted - connecting...");
-
-          // Store the stream for later use
-          window.localAudioStream = microphoneStream;
-        } catch (micError) {
-          console.error("🔥 AUDIO - MICROPHONE ACCESS DENIED:", micError);
-          setCallStatus("❌ Microphone access denied");
-          if (onError) {
-            if (micError.name === "NotAllowedError") {
-              onError(
-                "Microphone permission denied. Please allow microphone access and try again."
-              );
-            } else if (micError.name === "NotFoundError") {
-              onError(
-                "No microphone found. Please connect a microphone and try again."
-              );
-            } else {
-              onError("Failed to access microphone: " + micError.message);
-            }
-          }
+    const startCall = useCallback(
+      async (roomId) => {
+        console.log("🔥 AUDIO - startCall executed with roomId:", roomId);
+        if (isCleaningUpRef.current) {
+          console.log("🔥 AUDIO - Cleanup in progress, aborting startCall.");
           return;
         }
-      } else {
-        console.log(
-          "🔥 AUDIO - Using existing microphone stream from parent permission request"
-        );
-        setCallStatus("🎤 Using existing microphone access - connecting...");
-      }
+        if (isInCall) {
+          console.log("🔥 AUDIO - Already in call, aborting startCall.");
+          return;
+        }
 
-      // Log audio track details
-      console.log(
-        "🔥 AUDIO - Audio tracks:",
-        microphoneStream.getAudioTracks()
-      );
-      const audioTracks = microphoneStream.getAudioTracks();
-      audioTracks.forEach((track, index) => {
-        console.log(`🔥 AUDIO - Track ${index}:`, {
-          id: track.id,
-          kind: track.kind,
-          label: track.label,
-          enabled: track.enabled,
-          muted: track.muted,
-          readyState: track.readyState,
-          settings: track.getSettings ? track.getSettings() : "N/A",
-        });
-      });
+        setCallStatus("Connecting...");
+        setIsInCall(true);
+        callStateRef.current = "connecting";
+        numericRoomIdRef.current = stringToPositiveIntegerHash(roomId);
 
-      // Show the stream is working by creating a temporary audio element
-      const tempAudio = document.createElement("audio");
-      tempAudio.srcObject = microphoneStream;
-      tempAudio.muted = true; // Muted to avoid feedback
-      tempAudio.id = "temp-local-audio";
-      document.body.appendChild(tempAudio);
-      console.log("🔥 AUDIO - Local audio stream attached to temp element");
-
-      if (!janusInitialized) {
-        console.error("🔥 AUDIO - Janus not initialized. Cannot start call.");
-        if (onError) onError("Call service is not ready. Please try again.");
-        return;
-      }
-
-      if (!user || !selectedReceiver || !roomId) {
-        console.error(
-          "🔥 AUDIO - Cannot start call, missing user, receiver or roomId"
-        );
-        if (onError)
-          onError("Cannot start call, missing user, receiver or roomId");
-        return;
-      }
-
-      setIsInCall(true);
-      setCallStatus("Connecting to call server...");
-
-      if (sendCallNotification) {
-        console.log(
-          "🔥 AUDIO - Sending call notification to:",
-          selectedReceiver.username
-        );
-        sendCallNotification(selectedReceiver.id, roomId);
-      }
-
-      const janus = new window.Janus({
-        server: JANUS_URL,
-        success: () => {
-          console.log("🔥 AUDIO - Janus session created successfully");
-          janusRef.current = janus;
-          attachAudioBridgePlugin(janus, roomId);
-        },
-        error: (error) => {
-          const errorMsg = `Janus session creation failed: ${error}`;
-          console.error("🔥 AUDIO - " + errorMsg);
-          if (onError) onError(errorMsg);
+        try {
+          if (typeof window !== "undefined" && !window.Janus) {
+            console.log(
+              "🔥 AUDIO - Janus library not yet loaded, initializing..."
+            );
+            await new Promise((resolve) => {
+              window.Janus.init({
+                debug: "all",
+                callback: () => {
+                  console.log("🔥 AUDIO - Janus initialized in startCall.");
+                  resolve();
+                },
+              });
+            });
+          }
+          if (!janusRef.current) {
+            console.log("🔥 AUDIO - Initializing Janus instance...");
+            janusRef.current = new window.Janus({
+              server:
+                process.env.NEXT_PUBLIC_JANUS_URL || "ws://localhost:8188",
+              success: () => {
+                console.log("🔥 AUDIO - Janus connected.");
+                attachAudioBridgePlugin(
+                  janusRef.current,
+                  numericRoomIdRef.current
+                );
+              },
+              error: (error) => {
+                console.error("🔥 AUDIO - Janus connection error:", error);
+                setCallStatus("Connection Error");
+                onError && onError("Janus connection failed: " + error);
+                cleanupCall();
+              },
+              destroyed: () => {
+                console.log("🔥 AUDIO - Janus connection destroyed.");
+                cleanupCall();
+              },
+            });
+          } else {
+            console.log("🔥 AUDIO - Reattaching AudioBridge plugin...");
+            attachAudioBridgePlugin(janusRef.current, numericRoomIdRef.current);
+          }
+        } catch (error) {
+          console.error("🔥 AUDIO - Error during startCall:", error);
+          setCallStatus("Error initiating call");
+          onError && onError("Error initiating call: " + error);
           cleanupCall();
-        },
-        destroyed: () => {
-          console.log(
-            "🔥 AUDIO - Janus session destroyed by startCall's instance."
-          );
-          cleanupCall();
-        },
-      });
-    };
+        }
+      },
+      [
+        isInCall,
+        setCallStatus,
+        onError,
+        attachAudioBridgePlugin,
+        cleanupCall,
+        stringToPositiveIntegerHash,
+      ]
+    );
+
+    const handleLogout = useCallback(() => {
+      // ... existing code ...
+    }, []);
 
     const attachAudioBridgePlugin = (janus, roomId) => {
       numericRoomIdRef.current = stringToPositiveIntegerHash(roomId);
