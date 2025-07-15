@@ -398,13 +398,17 @@ export default function Home() {
     //   }
     // }
 
-    // 5. IMMEDIATE state reset
-    console.log("🔥 INDEX - IMMEDIATE state reset");
-    setCallState("idle");
+    // IMMEDIATE state reset to ensure UI consistency
+    setCallActive(false);
+    setIsCalling(false);
     setIncomingCall(null);
-    setActiveCallRecipient(null);
-    setCallRoomId(null);
-    setForceHideModal(true);
+    setCallAccepted(false);
+    setCallType(null);
+    setCallDetails(null);
+    setLocalStream(null);
+    setRemoteStream(null);
+    setPeerConnection(null);
+    setCallStartTime(null);
 
     // Clear ringtone timeout
     if (ringtoneTimeoutRef.current) {
