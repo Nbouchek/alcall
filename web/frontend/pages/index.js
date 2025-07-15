@@ -193,6 +193,76 @@ export default function Home() {
     }
   }, []);
 
+  const handleLogout = useCallback(() => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+    }
+    setUser(null);
+    setIsLoggedIn(false);
+    setAllUsers([]);
+    setOnlineUserIds(new Set());
+    setMessages([]);
+    setSelectedRecipient(null);
+    setSearchQuery("");
+    setAuthError(null);
+    setSidebarOpen(false);
+    setSearchResults([]);
+    setHighlightedUser(null);
+    setActiveCallRecipient(null);
+    setIncomingCall(null);
+    setCallState("idle");
+    setCallRoomId(null);
+    setUserMap(new Map());
+    setCallNotification(null);
+    setJanusInitialized(false);
+    setCallEndedModal(null);
+    setIncomingCallDetails(null);
+    setVideoCallState("idle");
+    setActiveVideoCallRecipient(null);
+    setIncomingVideoCall(null);
+    setVideoCallRoomId(null);
+    setCallType("audio");
+    setAudioCallMuted(false);
+    setAudioCallVolume(1.0);
+    setAudioCallStatus("Connecting...");
+    setForceHideModal(false);
+    showCallNotification("success", "Logged out successfully!");
+    closeWebSocket();
+  }, [
+    setUser,
+    setIsLoggedIn,
+    setAllUsers,
+    setOnlineUserIds,
+    setMessages,
+    setSelectedRecipient,
+    setSearchQuery,
+    setAuthError,
+    setSidebarOpen,
+    setSearchResults,
+    setHighlightedUser,
+    setActiveCallRecipient,
+    setIncomingCall,
+    setCallState,
+    setCallRoomId,
+    setUserMap,
+    setCallNotification,
+    setJanusInitialized,
+    setCallEndedModal,
+    setIncomingCallDetails,
+    setVideoCallState,
+    setActiveVideoCallRecipient,
+    setIncomingVideoCall,
+    setVideoCallRoomId,
+    setCallType,
+    setAudioCallMuted,
+    setAudioCallVolume,
+    setAudioCallStatus,
+    setForceHideModal,
+    showCallNotification,
+    closeWebSocket,
+  ]);
+
   const handleAcceptCall = useCallback(() => {
     if (!incomingCallDetails) return;
 
