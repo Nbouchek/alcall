@@ -757,6 +757,9 @@ func main() {
 	// Initialize the hub
 	hub = NewHub()
 
+	// Start hub goroutine
+	// go hub.run() // Removed as hub.run is undefined
+
 	router := gin.Default()
 
 	// Configure CORS
@@ -768,6 +771,12 @@ func main() {
 	config.AllowCredentials = true
 	router.Use(cors.New(config))
 
+	// Set trusted proxies to allow Gin to correctly parse client IPs from reverse proxies
+	// IMPORTANT: In production, configure this more securely based on your proxy setup.
+	if err := router.SetTrustedProxies(nil); err != nil {
+		log.Fatalf("Failed to set trusted proxies: %v", err)
+	}
+
 	// WebSocket endpoint
 	router.GET("/ws", handleWebSocket)
 
@@ -778,10 +787,9 @@ func main() {
 	router.GET("/online-users", getOnlineUsers)
 
 	// Health check endpoint
-	router.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
-	});
+	router.GET("/health", healthCheck)
 
+	// Get port from environment variable, default to 8084
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8084" // Default port if not set by environment
@@ -813,5 +821,11 @@ func main() {
 	if err := router.Run(":" + port); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
+}
+
+// healthCheck responds to health check requests.
+func healthCheck(c *gin.Context) {
+	log.Println("Health check endpoint hit!")
+	c.String(http.StatusOK, "OK")
 }
 

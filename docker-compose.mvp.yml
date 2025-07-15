@@ -78,7 +78,7 @@ services:
       - janus_logs:/var/log/janus
       - janus_data:/var/lib/janus
     environment:
-      - JANUS_HTTP_PORT=${JANUS_HTTP_PORT:-8088}
+      - JANUS_HTTP_PORT=8088
       - STUN_SERVER=stun.l.google.com
       - STUN_PORT=19302
       - DEBUG_LEVEL=4
@@ -88,13 +88,11 @@ services:
       - JANUS_TURN_USERNAME=${JANUS_TURN_USERNAME:-}
       - JANUS_TURN_PASSWORD=${JANUS_TURN_PASSWORD:-}
     healthcheck:
-      test:
-        - "CMD-SHELL"
-        - "curl -f http://localhost:${JANUS_HTTP_PORT:-8088}/janus/info || exit 1"
+      test: ["CMD-SHELL", "curl -f http://localhost:8088/janus/info || exit 1"]
       interval: 30s
       timeout: 15s
       retries: 5
-      start_period: 60s
+      start_period: 90s
     security_opt:
       - no-new-privileges:true
     deploy:
@@ -204,6 +202,7 @@ services:
   unifiedchat-realtime-service:
     build: ./services/realtime-service
     container_name: unifiedchat-realtime-service
+    hostname: unifiedchat-realtime-service
     restart: unless-stopped
     env_file:
       - .env
@@ -211,6 +210,11 @@ services:
       - "8084:8084"
     networks:
       - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       POSTGRES_DSN: "host=postgres user=unifiedchat password=${POSTGRES_PASSWORD} dbname=unifiedchat port=5432 sslmode=disable"
       REDIS_HOST: redis
@@ -219,16 +223,11 @@ services:
     volumes:
       - ./.env:/app/.env
     healthcheck:
-      test:
-        - "CMD"
-        - "wget"
-        - "--no-verbose"
-        - "--tries=1"
-        - "--spider"
-        - "http://localhost:8084/health"
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: ["CMD-SHELL", "curl -s http://localhost:8084/health | grep OK"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
 
   unifiedchat-gateway-service:
     build: ./services/gateway-service
