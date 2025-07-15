@@ -265,6 +265,45 @@ export default function Home() {
     user,
   ]);
 
+  const handleAudioCallEnd = useCallback(() => {
+    console.log("🔥 INDEX - handleAudioCallEnd called");
+    setCallState("idle");
+    setIncomingCall(null);
+    setActiveCallRecipient(null);
+    setCallRoomId(null);
+    setForceHideModal(true);
+    setIncomingCallDetails(null);
+
+    if (ringtoneTimeoutRef.current) {
+      clearTimeout(ringtoneTimeoutRef.current);
+      ringtoneTimeoutRef.current = null;
+    }
+    // Additional cleanup (e.g., stopping streams) can be added here if needed
+  }, [
+    setCallState,
+    setIncomingCall,
+    setActiveCallRecipient,
+    setCallRoomId,
+    setForceHideModal,
+    setIncomingCallDetails,
+    ringtoneTimeoutRef,
+  ]);
+
+  const handleVideoCallEnd = useCallback(() => {
+    console.log("🔥 INDEX - handleVideoCallEnd called");
+    // Similar cleanup for video calls, if distinct from audio
+    setVideoCallState("idle");
+    setActiveVideoCallRecipient(null);
+    setIncomingVideoCall(null);
+    setVideoCallRoomId(null);
+    // Additional video-specific cleanup
+  }, [
+    setVideoCallState,
+    setActiveVideoCallRecipient,
+    setIncomingVideoCall,
+    setVideoCallRoomId,
+  ]);
+
   const handleHangUp = useCallback(() => {
     if (callState === "idle") {
       console.log("handleHangUp called but callState is already idle.");
@@ -289,8 +328,11 @@ export default function Home() {
       });
     }
 
-    // Temporarily comment out endCall()
-    // endCall(); // Perform local cleanup and state reset
+    handleAudioCallEnd(); // Perform local cleanup and state reset for audio calls
+    // If current call is a video call, call handleVideoCallEnd()
+    if (callType === "video") {
+      handleVideoCallEnd();
+    }
     showCallNotification("info", "Call ended.");
   }, [
     callState,
@@ -301,15 +343,15 @@ export default function Home() {
     callRoomId,
     callType,
     sendWebSocketMessage,
-    // endCall, // Keep commented for now
+    handleAudioCallEnd,
+    handleVideoCallEnd,
     showCallNotification,
   ]);
 
   // Unified function to end call and reset states
   const endCall = useCallback(() => {
-    // Temporarily comment out handleAudioCallEnd() and handleVideoCallEnd()
-    // handleAudioCallEnd(); // Trigger the aggressive cleanup for audio calls
-    // handleVideoCallEnd(); // Trigger the aggressive cleanup for video calls
+    handleAudioCallEnd(); // Trigger the aggressive cleanup for audio calls
+    handleVideoCallEnd(); // Trigger the aggressive cleanup for video calls
 
     setCallState("idle");
     setIncomingCall(null);
@@ -323,8 +365,8 @@ export default function Home() {
       ringtoneTimeoutRef.current = null;
     }
   }, [
-    // handleAudioCallEnd, // Keep commented for now
-    // handleVideoCallEnd, // Keep commented for now
+    handleAudioCallEnd,
+    handleVideoCallEnd,
     setCallState,
     setIncomingCall,
     setActiveCallRecipient,
