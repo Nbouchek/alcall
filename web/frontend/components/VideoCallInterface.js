@@ -90,6 +90,1035 @@ const VideoCallInterface = forwardRef(
     const containerRef = useRef(null);
     const screenshareRef = useRef(null);
     const qualityCheckIntervalRef = useRef(null);
+    const lastBytesSent = useRef(0);
+    const lastTimestamp = useRef(0);
+
+    // Callbacks
+    const cleanup = useCallback(() => {
+      console.log("VideoCallInterface: Running cleanup...");
+
+      if (durationIntervalRef.current) {
+        clearInterval(durationIntervalRef.current);
+        durationIntervalRef.current = null;
+      }
+      if (qualityCheckIntervalRef.current) {
+        clearInterval(qualityCheckIntervalRef.current);
+        qualityCheckIntervalRef.current = null;
+      }
+      if (controlsTimeoutRef.current) {
+        clearTimeout(controlsTimeoutRef.current);
+        controlsTimeoutRef.current = null;
+      }
+
+      if (localStream) {
+        localStream.getTracks().forEach((track) => track.stop());
+        setLocalStream(null);
+      }
+
+      remoteStreamsRef.current.forEach((stream) => {
+        stream.getTracks().forEach((track) => track.stop());
+      });
+      setRemoteStreams(new Map());
+      remoteStreamsRef.current.clear();
+
+      if (janusRef.current) {
+        janusRef.current.destroy();
+        janusRef.current = null;
+      }
+
+      setIsInCall(false);
+      setIsVideoEnabled(true);
+      setIsAudioEnabled(true);
+      setIsScreenSharing(false);
+      setCallDuration(0);
+      setParticipants([]);
+      setConnectionQuality("good");
+      setNetworkStats({
+        bitrate: 0,
+        packetLoss: 0,
+        latency: 0,
+      });
+      setJanusConnected(false);
+      setConnectionError(null);
+      setCurrentRoomId(null);
+      setIsPublishing(false);
+      setSubscriptions(new Map());
+      setShowControls(true);
+      setVolume(1.0);
+      setIsMuted(false);
+      setCallStatus("Call ended");
+
+      onCallEnd?.();
+    }, [localStream, onCallEnd]);
+
+    const getUserMedia = useCallback(async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: true,
+        });
+        return stream;
+      } catch (error) {
+        console.error("Error accessing media devices:", error);
+        throw new Error(
+          "Permission denied or no media devices available: " + error.message
+        );
+      }
+    }, []);
+
+    const connectToJanus = useCallback(() => {
+      console.log("VideoCallInterface: Connecting to Janus...");
+      janusRef.current = new window.Janus({
+        server: JANUS_URL,
+        iceServers: [], // Consider adding STUN/TURN servers
+        success: () => {
+          console.log("VideoCallInterface: Connected to Janus");
+          setJanusConnected(true);
+        },
+        error: (error) => {
+          console.error("VideoCallInterface: Janus connection error:", error);
+          setConnectionError("Janus connection failed");
+          onError?.("Video call connection error");
+          cleanup();
+        },
+        destroyed: () => {
+          console.log("VideoCallInterface: Janus connection destroyed");
+          setJanusConnected(false);
+          cleanup();
+        },
+      });
+    }, [JANUS_URL, onError, cleanup]);
+
+    const initializeJanus = useCallback(() => {
+      if (typeof window !== "undefined" && window.Janus) {
+        console.log("VideoCallInterface: Initializing Janus...");
+        window.Janus.init({
+          debug: "all",
+          callback: () => {
+            console.log("VideoCallInterface: Janus initialized");
+            connectToJanus();
+          },
+          error: (error) => {
+            console.error("VideoCallInterface: Janus init failed:", error);
+            setConnectionError("Failed to initialize Janus");
+            onError?.("Failed to initialize video calling");
+          },
+        });
+      } else {
+        console.log("VideoCallInterface: Waiting for Janus libraries...");
+        setTimeout(initializeJanus, 1000);
+      }
+    }, [connectToJanus, onError]);
+
+    const handlePublisherMessage = useCallback(
+      (msg, jsep) => {
+        console.log("VideoCallInterface: Publisher message received:", msg);
+
+        const event = msg["videoroom"];
+        if (event) {
+          if (event === "joined") {
+            const myid = msg["id"];
+            const mypvtid = msg["private_id"];
+            console.log(
+              `Successfully joined room ${msg.room} with ID ${myid} (private ${mypvtid})`
+            );
+            setCallStatus("Connected");
+
+            if (msg["publishers"]) {
+              const newParticipants = msg["publishers"].map((publisher) => ({
+                id: publisher.id,
+                display: publisher.display,
+                talking: publisher.talking,
+              }));
+              setParticipants((prev) => {
+                const updated = new Set([
+                  ...prev,
+                  ...newParticipants.map((p) => JSON.stringify(p)),
+                ]);
+                return Array.from(updated).map((p) => JSON.parse(p));
+              });
+
+              // Subscribe to existing publishers
+              msg["publishers"].forEach((publisher) => {
+                console.log(
+                  "VideoCallInterface: Subscribing to existing publisher",
+                  publisher
+                );
+                createSubscriber(publisher.id, publisher.private_id);
+              });
+            }
+          } else if (event === "event") {
+            // Publisher event, e.g., participant list update, bitrate change, etc.
+            if (msg["publishers"]) {
+              const newParticipants = msg["publishers"].map((publisher) => ({
+                id: publisher.id,
+                display: publisher.display,
+                talking: publisher.talking,
+              }));
+              setParticipants((prev) => {
+                const updated = new Set([
+                  ...prev,
+                  ...newParticipants.map((p) => JSON.stringify(p)),
+                ]);
+                return Array.from(updated).map((p) => JSON.parse(p));
+              });
+
+              msg["publishers"].forEach((publisher) => {
+                console.log(
+                  "VideoCallInterface: New publisher in room",
+                  publisher
+                );
+                createSubscriber(publisher.id, publisher.private_id);
+              });
+            } else if (msg["leaving"]) {
+              // A participant left
+              const leavingId = msg["leaving"];
+              console.log("VideoCallInterface: Participant left", leavingId);
+              setParticipants((prev) => prev.filter((p) => p.id !== leavingId));
+              // Also clean up subscriber handle
+              if (subscribersRef.current.has(leavingId)) {
+                subscribersRef.current.get(leavingId).hangup();
+                subscribersRef.current.delete(leavingId);
+                setRemoteStreams((prev) => {
+                  const newMap = new Map(prev);
+                  newMap.delete(leavingId);
+                  return newMap;
+                });
+              }
+            } else if (msg["unpublished"]) {
+              // A participant stopped publishing
+              const unpublishedId = msg["unpublished"];
+              console.log(
+                "VideoCallInterface: Participant unpublished",
+                unpublishedId
+              );
+              setParticipants((prev) =>
+                prev.filter((p) => p.id !== unpublishedId)
+              );
+              if (subscribersRef.current.has(unpublishedId)) {
+                subscribersRef.current.get(unpublishedId).hangup();
+                subscribersRef.current.delete(unpublishedId);
+                setRemoteStreams((prev) => {
+                  const newMap = new Map(prev);
+                  newMap.delete(unpublishedId);
+                  return newMap;
+                });
+              }
+            } else if (msg["error"]) {
+              console.error(
+                "VideoCallInterface: VideoRoom plugin error:",
+                msg["error"]
+              );
+              setConnectionError(msg["error"]);
+              onError?.(msg["error"]);
+              cleanup();
+            }
+          }
+        }
+
+        if (jsep) {
+          console.log("VideoCallInterface: Handling JSEP (publisher)", jsep);
+          publisherRef.current.handleRemoteJsep(jsep);
+        }
+      },
+      [onError, cleanup, createSubscriber]
+    );
+
+    const attachVideoRoomPlugin = useCallback(() => {
+      if (!janusRef.current) {
+        console.error(
+          "VideoCallInterface: Janus not initialized, cannot attach plugin"
+        );
+        return;
+      }
+      console.log("VideoCallInterface: Attaching VideoRoom plugin...");
+
+      janusRef.current.attach({
+        plugin: VIDEOROOM_PLUGIN,
+        opaqueId: "videoroom-" + window.Janus.randomString(12),
+        success: (pluginHandle) => {
+          console.log(
+            "VideoCallInterface: VideoRoom plugin attached",
+            pluginHandle
+          );
+          publisherRef.current = pluginHandle;
+          setIsPublishing(true);
+        },
+        error: (error) => {
+          console.error(
+            "VideoCallInterface: Error attaching VideoRoom plugin:",
+            error
+          );
+          setConnectionError("Failed to attach video plugin");
+          onError?.("Video plugin error");
+          cleanup();
+        },
+        consentDialog: (on) => {
+          console.log("VideoCallInterface: Consent dialog", on);
+          // Implement UI for consent if needed
+        },
+        iceState: (state) => {
+          console.log("VideoCallInterface: ICE state changed: " + state);
+        },
+        mediaState: (medium, on) => {
+          console.log(
+            "VideoCallInterface: Media state changed - " + medium + " " + on
+          );
+        },
+        webrtcState: (on) => {
+          console.log(
+            "VideoCallInterface: WebRTC peer connection state changed: " + on
+          );
+        },
+        slowLink: (uplink, lost, mid) => {
+          console.log(
+            "VideoCallInterface: Janus reports slow link uplink " +
+              uplink +
+              " lost " +
+              lost +
+              " mid " +
+              mid
+          );
+          setConnectionQuality("poor");
+        },
+        onmessage: (msg, jsep) => {
+          handlePublisherMessage(msg, jsep);
+        },
+        onlocalstream: (stream) => {
+          console.log("VideoCallInterface: Local stream received", stream);
+          if (localVideoRef.current) {
+            localVideoRef.current.srcObject = stream;
+            localVideoRef.current.play();
+          }
+        },
+        onremotestream: (stream) => {
+          // This is for publisher's own remote stream (e.g., echo test). Handled by subscribers.
+          console.log(
+            "VideoCallInterface: Publisher got remote stream (should not happen)",
+            stream
+          );
+        },
+        oncleanup: () => {
+          console.log("VideoCallInterface: Publisher plugin cleaned up");
+          setIsPublishing(false);
+          if (localVideoRef.current) {
+            localVideoRef.current.srcObject = null;
+          }
+        },
+      });
+    }, [janusRef, onError, cleanup, handlePublisherMessage]);
+
+    const handleSubscriberMessage = useCallback(
+      (id, msg, jsep) => {
+        console.log(
+          `VideoCallInterface: Subscriber message for ${id} received:`,
+          msg
+        );
+
+        const event = msg["videoroom"];
+        if (event) {
+          if (event === "attached") {
+            // Subscriber attached successfully
+            console.log("Subscriber attached to room");
+          } else if (event === "event") {
+            // Participant list, bitrate change, etc.
+            if (msg["started"]) {
+              // Subscriber has started receiving media
+              console.log(`Subscriber for ${id} has started receiving media`);
+            }
+          } else if (msg["error"]) {
+            console.error(
+              `VideoCallInterface: Subscriber plugin error for ${id}:`,
+              msg["error"]
+            );
+            onError?.(msg["error"]);
+          }
+        }
+
+        if (jsep) {
+          console.log(
+            `VideoCallInterface: Handling JSEP (subscriber ${id})`,
+            jsep
+          );
+          const subscriberHandle = subscribersRef.current.get(id);
+          if (subscriberHandle) {
+            subscriberHandle.createAnswer({
+              jsep: jsep,
+              media: { audioSend: false, videoSend: false }, // We're only receiving
+              success: (jsepAnswer) => {
+                console.log(
+                  `VideoCallInterface: Got subscriber answer for ${id}!`,
+                  jsepAnswer
+                );
+                const body = { request: "start" };
+                subscriberHandle.send({ message: body, jsep: jsepAnswer });
+              },
+              error: (error) => {
+                console.error(
+                  `VideoCallInterface: WebRTC media error (subscriber ${id}):`,
+                  error
+                );
+                onError?.("Media error: " + error.message);
+              },
+            });
+          }
+        }
+      },
+      [onError]
+    );
+
+    const createSubscriber = useCallback(
+      (id, privateId) => {
+        if (!janusRef.current) {
+          console.error("Janus not initialized, cannot create subscriber");
+          return;
+        }
+
+        let subscriberHandle = null;
+
+        janusRef.current.attach({
+          plugin: VIDEOROOM_PLUGIN,
+          opaqueId: "videoroom-" + window.Janus.randomString(12),
+          success: (pluginHandle) => {
+            subscriberHandle = pluginHandle;
+            subscribersRef.current.set(id, pluginHandle);
+            console.log(
+              `VideoCallInterface: Attached subscriber plugin for ${id}`,
+              pluginHandle
+            );
+
+            const subscribeBody = {
+              request: "join",
+              room: parseInt(currentRoomId),
+              ptype: "subscriber",
+              feed: id,
+              private_id: privateId,
+            };
+            subscriberHandle.send({ message: subscribeBody });
+          },
+          error: (error) => {
+            console.error(
+              `VideoCallInterface: Error attaching subscriber plugin for ${id}:`,
+              error
+            );
+            onError?.(`Failed to subscribe to participant ${id}`);
+          },
+          onmessage: (msg, jsep) => {
+            handleSubscriberMessage(id, msg, jsep);
+          },
+          onremotestream: (stream) => {
+            console.log(
+              `VideoCallInterface: Remote stream received for ${id}`,
+              stream
+            );
+            setRemoteStreams((prev) => {
+              const newMap = new Map(prev);
+              newMap.set(id, stream);
+              return newMap;
+            });
+            remoteStreamsRef.current.set(id, stream);
+
+            if (remoteVideoRefs.current.has(id)) {
+              remoteVideoRefs.current.get(id).srcObject = stream;
+            }
+          },
+          oncleanup: () => {
+            console.log(
+              `VideoCallInterface: Subscriber plugin for ${id} cleaned up`
+            );
+            subscribersRef.current.delete(id);
+            setRemoteStreams((prev) => {
+              const newMap = new Map(prev);
+              newMap.delete(id);
+              return newMap;
+            });
+            remoteStreamsRef.current.delete(id);
+          },
+        });
+      },
+      [janusRef, currentRoomId, onError, handleSubscriberMessage]
+    );
+
+    const joinRoom = useCallback(
+      async (roomIdToJoin, streamToPublish) => {
+        if (!janusRef.current) {
+          console.error(
+            "VideoCallInterface: Janus not initialized, cannot join room"
+          );
+          return;
+        }
+        if (!publisherRef.current) {
+          console.error(
+            "VideoCallInterface: Publisher plugin not attached, cannot join room"
+          );
+          // Try attaching again if it somehow got detached or failed
+          attachVideoRoomPlugin();
+          // Return to prevent further errors, hopefully, the next call will succeed
+          return;
+        }
+
+        console.log("VideoCallInterface: Joining room: ", roomIdToJoin);
+        setCurrentRoomId(roomIdToJoin);
+
+        const joinAndPublish = () => {
+          const body = {
+            request: "join",
+            room: parseInt(roomIdToJoin),
+            ptype: "publisher",
+            display: user?.username || "Guest",
+          };
+
+          const doPublish = () => {
+            publisherRef.current.createOffer({
+              media: {
+                video: true,
+                audioSend: true,
+                videoSend: true,
+                replaceVideo: false, // This is key for screensharing later
+                replaceAudio: false,
+              },
+              simulcast: false,
+              success: (jsep) => {
+                console.log("VideoCallInterface: Got publisher SDP!", jsep);
+                publisherRef.current.send({ message: body, jsep: jsep });
+              },
+              error: (error) => {
+                console.error(
+                  "VideoCallInterface: WebRTC media error (publisher):",
+                  error
+                );
+                onError?.("Media error: " + error.message);
+                cleanup();
+              },
+            });
+          };
+
+          // This needs to be done AFTER the join request, otherwise the server will complain
+          if (streamToPublish) {
+            console.log(
+              "VideoCallInterface: Attaching local stream to publisher",
+              streamToPublish
+            );
+            publisherRef.current.createOffer({
+              media: {
+                stream: streamToPublish,
+                // video: true, // This is implicit with stream
+                // audioSend: true, // This is implicit with stream
+              },
+              simulcast: false,
+              success: (jsep) => {
+                console.log("VideoCallInterface: Got publisher SDP!", jsep);
+                publisherRef.current.send({ message: body, jsep: jsep });
+              },
+              error: (error) => {
+                console.error(
+                  "VideoCallInterface: WebRTC media error (publisher stream):",
+                  error
+                );
+                onError?.("Media error: " + error.message);
+                cleanup();
+              },
+            });
+          } else {
+            doPublish();
+          }
+        };
+
+        // Create room if it doesn't exist, then join
+        const createRoom = () => {
+          const createBody = {
+            request: "create",
+            room: parseInt(roomIdToJoin),
+            permanent: false,
+            is_private: false,
+            description: `Video Room ${roomIdToJoin}`,
+            audiocodec: "opus",
+            videocodec: "vp8",
+            publishers: 10, // Max number of publishers
+            bitrate: 128000, // 128 kbps
+            fir_freq: 10, // Force Intra Request every 10 seconds
+            // Optional: configure other settings like P-time, VP9, H264, etc.
+          };
+          publisherRef.current.send({
+            message: createBody,
+            success: (response) => {
+              console.log(
+                "VideoCallInterface: Room creation response",
+                response
+              );
+              if (response["videoroom"] === "created" || response["exists"]) {
+                console.log(
+                  "VideoCallInterface: Room exists or created, joining..."
+                );
+                joinAndPublish();
+              } else {
+                console.error(
+                  "VideoCallInterface: Failed to create room:",
+                  response
+                );
+                setConnectionError("Failed to create video room");
+                onError?.("Failed to create video room");
+                cleanup();
+              }
+            },
+            error: (error) => {
+              console.error("VideoCallInterface: Error creating room:", error);
+              setConnectionError("Failed to create video room");
+              onError?.("Failed to create video room");
+              cleanup();
+            },
+          });
+        };
+
+        // Check if room exists first
+        const existsBody = {
+          request: "exists",
+          room: parseInt(roomIdToJoin),
+        };
+        publisherRef.current.send({
+          message: existsBody,
+          success: (response) => {
+            console.log(
+              "VideoCallInterface: Room exists check response",
+              response
+            );
+            if (response["videoroom"] === "success" && response["exists"]) {
+              console.log(
+                "VideoCallInterface: Room already exists, joining..."
+              );
+              joinAndPublish();
+            } else if (
+              response["videoroom"] === "success" &&
+              !response["exists"]
+            ) {
+              console.log(
+                "VideoCallInterface: Room does not exist, creating..."
+              );
+              createRoom();
+            } else {
+              console.error(
+                "VideoCallInterface: Error checking room existence:",
+                response
+              );
+              setConnectionError("Failed to check room existence");
+              onError?.("Failed to check video room existence");
+              cleanup();
+            }
+          },
+          error: (error) => {
+            console.error(
+              "VideoCallInterface: Error checking room existence:",
+              error
+            );
+            setConnectionError("Failed to check room existence");
+            onError?.("Failed to check video room existence");
+            cleanup();
+          },
+        });
+      },
+      [
+        user,
+        onError,
+        cleanup,
+        attachVideoRoomPlugin,
+        // localStream, // Removed this as it causes issues when stream is updated
+        // publisherRef, // publisherRef.current is stable
+      ]
+    );
+
+    const leaveRoom = useCallback(() => {
+      if (!publisherRef.current) {
+        console.log("No publisher to leave room");
+        return;
+      }
+      const body = { request: "leave" };
+      publisherRef.current.send({ message: body });
+      publisherRef.current.hangup();
+      cleanup();
+    }, [cleanup]);
+
+    const endCall = useCallback(() => {
+      console.log("VideoCallInterface: Ending call via endCall()");
+      leaveRoom();
+      onCallEnd?.();
+    }, [leaveRoom, onCallEnd]);
+
+    const startCallTimer = useCallback(() => {
+      setCallDuration(0);
+      if (durationIntervalRef.current) {
+        clearInterval(durationIntervalRef.current);
+      }
+      durationIntervalRef.current = setInterval(() => {
+        setCallDuration((prev) => prev + 1);
+      }, 1000);
+    }, []);
+
+    const toggleVideo = useCallback(() => {
+      if (publisherRef.current) {
+        const newVideoState = !isVideoEnabled;
+        publisherRef.current.send({
+          message: { request: "configure", video: newVideoState },
+        });
+        setIsVideoEnabled(newVideoState);
+        if (localStream) {
+          localStream.getVideoTracks().forEach((track) => {
+            track.enabled = newVideoState;
+          });
+        }
+      }
+    }, [isVideoEnabled, localStream]);
+
+    const toggleAudio = useCallback(() => {
+      if (publisherRef.current) {
+        const newAudioState = !isAudioEnabled;
+        publisherRef.current.send({
+          message: { request: "configure", audio: newAudioState },
+        });
+        setIsAudioEnabled(newAudioState);
+        if (localStream) {
+          localStream.getAudioTracks().forEach((track) => {
+            track.enabled = newAudioState;
+          });
+        }
+      }
+    }, [isAudioEnabled, localStream]);
+
+    const startQualityMonitoring = useCallback(() => {
+      if (qualityCheckIntervalRef.current) {
+        clearInterval(qualityCheckIntervalRef.current);
+      }
+
+      qualityCheckIntervalRef.current = setInterval(() => {
+        if (publisherRef.current && publisherRef.current.getStats) {
+          publisherRef.current.getStats((stats) => {
+            let bitrate = 0;
+            let packetLoss = 0;
+            let latency = 0;
+
+            stats.forEach((report) => {
+              if (report.type === "outbound-rtp") {
+                if (report.bytesSent && report.timestamp) {
+                  // Simple bitrate calculation (bytes per second)
+                  if (lastBytesSent.current && lastTimestamp.current) {
+                    const timeDiff =
+                      (report.timestamp - lastTimestamp.current) / 1000; // seconds
+                    const bytesDiff = report.bytesSent - lastBytesSent.current;
+                    bitrate = (bytesDiff * 8) / timeDiff / 1000; // kbps
+                  }
+                  lastBytesSent.current = report.bytesSent;
+                  lastTimestamp.current = report.timestamp;
+                }
+
+                if (report.packetsSent && report.packetsLost) {
+                  packetLoss = (report.packetsLost / report.packetsSent) * 100;
+                }
+                if (report.roundTripTime) {
+                  latency = report.roundTripTime * 1000; // milliseconds
+                }
+              }
+            });
+
+            setNetworkStats({
+              bitrate: parseFloat(bitrate.toFixed(2)),
+              packetLoss: parseFloat(packetLoss.toFixed(2)),
+              latency: parseFloat(latency.toFixed(2)),
+            });
+
+            // Simple quality assessment
+            if (packetLoss > 5 || latency > 200 || bitrate < 50) {
+              setConnectionQuality("poor");
+            } else if (packetLoss > 1 || latency > 100 || bitrate < 100) {
+              setConnectionQuality("average");
+            } else {
+              setConnectionQuality("good");
+            }
+          });
+        }
+      }, 3000);
+    }, []);
+
+    const toggleFullscreen = useCallback(() => {
+      const container = containerRef.current;
+      if (!container) return;
+
+      if (!document.fullscreenElement) {
+        container.requestFullscreen().catch((err) => {
+          console.error(
+            `Error attempting to enable full-screen mode: ${err.message} (${err.name})`
+          );
+        });
+      } else {
+        document.exitFullscreen();
+      }
+    }, []);
+
+    const toggleControls = useCallback(() => {
+      setShowControls((prev) => !prev);
+      if (controlsTimeoutRef.current) {
+        clearTimeout(controlsTimeoutRef.current);
+      }
+      if (!showControls) {
+        // If controls are becoming visible, hide them after a delay
+        controlsTimeoutRef.current = setTimeout(() => {
+          setShowControls(false);
+        }, 5000);
+      }
+    }, [showControls]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const handleMouseMove = useCallback(() => {
+      setShowControls(true);
+      if (controlsTimeoutRef.current) {
+        clearTimeout(controlsTimeoutRef.current);
+      }
+      controlsTimeoutRef.current = setTimeout(() => {
+        setShowControls(false);
+      }, 3000);
+    }, []);
+
+    const handleVolumeChange = useCallback(
+      (event) => {
+        const newVolume = parseFloat(event.target.value);
+        setVolume(newVolume);
+        // Apply volume to all remote streams
+        remoteStreams.forEach((stream, id) => {
+          if (remoteVideoRefs.current.has(id)) {
+            remoteVideoRefs.current.get(id).volume = newVolume;
+          }
+        });
+      },
+      [remoteStreams]
+    );
+
+    const toggleMuteAll = useCallback(() => {
+      const newMutedState = !isMuted;
+      setIsMuted(newMutedState);
+      remoteStreams.forEach((stream, id) => {
+        if (remoteVideoRefs.current.has(id)) {
+          remoteVideoRefs.current.get(id).muted = newMutedState;
+        }
+      });
+    }, [isMuted, remoteStreams]);
+
+    const toggleScreenShare = useCallback(async () => {
+      if (IS_DEMO_MODE) {
+        console.log(
+          "VideoCallInterface: Screen sharing not available in demo mode"
+        );
+        return;
+      }
+
+      if (!publisherRef.current) {
+        onError?.("Publisher not ready for screen sharing");
+        return;
+      }
+
+      if (isScreenSharing) {
+        // Stop screen sharing
+        console.log("VideoCallInterface: Stopping screen share");
+        setIsScreenSharing(false);
+        // Re-publish original camera stream
+        if (localStream) {
+          publisherRef.current.createOffer({
+            media: { replaceVideo: true, stream: localStream },
+            success: (jsep) => {
+              publisherRef.current.send({
+                message: { request: "configure", video: true },
+                jsep: jsep,
+              });
+              console.log("VideoCallInterface: Switched back to camera stream");
+            },
+            error: (error) => {
+              console.error(
+                "VideoCallInterface: Error switching back to camera:",
+                error
+              );
+              onError?.("Failed to switch back to camera");
+            },
+          });
+        }
+      } else {
+        // Start screen sharing
+        console.log("VideoCallInterface: Starting screen share");
+        try {
+          const screenStream = await navigator.mediaDevices.getDisplayMedia({
+            video: true,
+            audio: false, // You might want to include audio from screen
+          });
+
+          // Replace current video track with screen share track
+          publisherRef.current.createOffer({
+            media: { replaceVideo: true, stream: screenStream },
+            success: (jsep) => {
+              publisherRef.current.send({
+                message: { request: "configure", video: true },
+                jsep: jsep,
+              });
+              setLocalStream(screenStream); // Update localStream to screenStream
+              if (localVideoRef.current) {
+                localVideoRef.current.srcObject = screenStream;
+              }
+              setIsScreenSharing(true);
+              // Listen for screen share end event
+              screenStream.getVideoTracks()[0].onended = () => {
+                console.log("VideoCallInterface: Screen share ended by user");
+                toggleScreenShare(); // Automatically stop screen sharing
+              };
+            },
+            error: (error) => {
+              console.error(
+                "VideoCallInterface: Error replacing video with screen share:",
+                error
+              );
+              onError?.("Failed to share screen: " + error.message);
+              screenStream.getTracks().forEach((track) => track.stop());
+            },
+          });
+        } catch (error) {
+          console.error(
+            "VideoCallInterface: Error getting display media:",
+            error
+          );
+          onError?.("Failed to get screen share: " + error.message);
+        }
+      }
+    }, [IS_DEMO_MODE, isScreenSharing, publisherRef, localStream, onError]);
+
+    const startRecording = useCallback(() => {
+      console.log("VideoCallInterface: Start Recording (placeholder)");
+      // Implement recording logic here
+    }, []);
+
+    const stopRecording = useCallback(() => {
+      console.log("VideoCallInterface: Stop Recording (placeholder)");
+      // Implement recording stopping logic here
+    }, []);
+
+    const sendChatMessage = useCallback((message) => {
+      console.log("VideoCallInterface: Send Chat Message (placeholder)");
+      // Implement chat message sending logic here
+    }, []);
+
+    const kickParticipant = useCallback((participantId) => {
+      console.log(
+        `VideoCallInterface: Kick Participant ${participantId} (placeholder)`
+      );
+      // Implement participant kicking logic here
+    }, []);
+
+    const listParticipants = useCallback(() => {
+      if (!publisherRef.current) {
+        console.log("No publisher to list participants");
+        return;
+      }
+      const body = { request: "listparticipants", room: currentRoomId };
+      publisherRef.current.send({
+        message: body,
+        success: (response) => {
+          console.log(
+            "VideoCallInterface: List participants response",
+            response
+          );
+          if (response && response.participants) {
+            setParticipants(response.participants);
+          }
+        },
+        error: (error) => {
+          console.error(
+            "VideoCallInterface: Error listing participants:",
+            error
+          );
+        },
+      });
+    }, [publisherRef, currentRoomId]);
+
+    const formatDuration = useCallback((seconds) => {
+      const minutes = Math.floor(seconds / 60);
+      const remainingSeconds = seconds % 60;
+      return `${minutes.toString().padStart(2, "0")}:${remainingSeconds
+        .toString()
+        .padStart(2, "0")}`;
+    }, []);
+
+    const getQualityIndicator = useCallback(() => {
+      switch (connectionQuality) {
+        case "good":
+          return "🟢 Good";
+        case "average":
+          return "🟠 Average";
+        case "poor":
+          return "🔴 Poor";
+        default:
+          return "⚪ Unknown";
+      }
+    }, [connectionQuality]);
+
+    const startVideoCallInternal = useCallback(async () => {
+      console.log("VideoCallInterface: startVideoCallInternal() executed");
+
+      if (IS_DEMO_MODE) {
+        console.log("VideoCallInterface: Simulating video call in demo mode");
+        setIsInCall(true);
+        setCallStatus("Demo video call active");
+        startCallTimer();
+        return;
+      }
+
+      if (isInCall) {
+        console.log("Already in a call, ignoring startVideoCall");
+        return;
+      }
+
+      if (!selectedReceiver || !selectedReceiver.userId) {
+        onError?.("Please select a user to call.");
+        return;
+      }
+
+      try {
+        setCallStatus("Requesting media...");
+        const stream = await getUserMedia();
+        setLocalStream(stream);
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = stream;
+        }
+
+        setCallStatus("Initializing call...");
+        const newRoomId = Math.floor(Math.random() * 10000000000).toString();
+        setCurrentRoomId(newRoomId);
+
+        sendCallNotification({
+          recipientId: selectedReceiver.userId,
+          callerId: user.userId,
+          callType: "video",
+          roomId: newRoomId,
+          sdpOffer: null, // SDP offer will be exchanged via Janus
+        });
+
+        await joinRoom(newRoomId, stream);
+
+        setIsInCall(true);
+        setCallStatus("Video call ringing...");
+        startCallTimer();
+        startQualityMonitoring();
+      } catch (error) {
+        console.error("VideoCallInterface: Error starting video call:", error);
+        setCallStatus("Failed to start video call");
+        setConnectionError(error.message);
+        onError?.("Failed to start video call: " + error.message);
+        cleanup();
+      }
+    }, [
+      IS_DEMO_MODE,
+      isInCall,
+      selectedReceiver,
+      user,
+      sendCallNotification,
+      onError,
+      getUserMedia,
+      joinRoom,
+      startCallTimer,
+      startQualityMonitoring,
+      cleanup,
+    ]);
 
     // Configuration
     const IS_DEMO_MODE =
@@ -119,7 +1148,7 @@ const VideoCallInterface = forwardRef(
           "🔥 VideoCallInterface: startVideoCall() called by parent - isInCall:",
           isInCall
         );
-        startVideoCall();
+        startVideoCallInternal();
       },
       endCall: () => {
         console.log("VideoCallInterface: Ending video call");
@@ -203,27 +1232,6 @@ const VideoCallInterface = forwardRef(
         return;
       }
 
-      const initializeJanus = () => {
-        if (typeof window !== "undefined" && window.Janus) {
-          console.log("VideoCallInterface: Initializing Janus...");
-          window.Janus.init({
-            debug: "all",
-            callback: () => {
-              console.log("VideoCallInterface: Janus initialized");
-              connectToJanus();
-            },
-            error: (error) => {
-              console.error("VideoCallInterface: Janus init failed:", error);
-              setConnectionError("Failed to initialize Janus");
-              onError?.("Failed to initialize video calling");
-            },
-          });
-        } else {
-          console.log("VideoCallInterface: Waiting for Janus libraries...");
-          setTimeout(initializeJanus, 1000);
-        }
-      };
-
       initializeJanus();
 
       return () => {
@@ -232,7 +1240,7 @@ const VideoCallInterface = forwardRef(
     }, [
       IS_DEMO_MODE,
       cleanup,
-      connectToJanus,
+      initializeJanus,
       onError,
       setJanusConnected,
       setCallStatus,
@@ -439,17 +1447,6 @@ const VideoCallInterface = forwardRef(
     }, [participants, remoteStreams]);
 
     // Handle mouse movement for auto-hide controls
-    const handleMouseMove = useCallback(() => {
-      setShowControls(true);
-      clearTimeout(controlsTimeoutRef.current);
-      controlsTimeoutRef.current = setTimeout(() => {
-        if (isInCall && isFullscreen) {
-          setShowControls(false);
-        }
-      }, 3000);
-    }, [isInCall, isFullscreen]);
-
-    // Handle auto-hide controls
     useEffect(() => {
       if (isInCall) {
         document.addEventListener("mousemove", handleMouseMove);
@@ -458,1096 +1455,7 @@ const VideoCallInterface = forwardRef(
           clearTimeout(controlsTimeoutRef.current);
         };
       }
-    }, [isInCall, isFullscreen, handleMouseMove]);
-
-    // Connect to Janus server
-    const connectToJanus = useCallback(() => {
-      if (janusRef.current) {
-        console.log("VideoCallInterface: Already connected to Janus");
-        return;
-      }
-
-      janusRef.current = new window.Janus({
-        server: JANUS_URL,
-        success: () => {
-          console.log("VideoCallInterface: Connected to Janus");
-          setJanusConnected(true);
-          setCallStatus("Connected to video server");
-        },
-        error: (error) => {
-          console.error("VideoCallInterface: Failed to connect:", error);
-          setConnectionError("Failed to connect to video server");
-          setJanusConnected(false);
-          onError?.("Failed to connect to video server");
-        },
-        destroyed: () => {
-          console.log("VideoCallInterface: Janus connection destroyed");
-          setJanusConnected(false);
-          cleanup();
-        },
-      });
-    }, [JANUS_URL, onError, cleanup]);
-
-    // Start video call
-    const startVideoCall = useCallback(async () => {
-      console.log(
-        "🔥 VideoCallInterface: startVideoCall() function called - isInCall:",
-        isInCall,
-        "janusConnected:",
-        janusConnected
-      );
-
-      if (isInCall) {
-        console.log("VideoCallInterface: Already in a call");
-        return;
-      }
-
-      if (IS_DEMO_MODE) {
-        console.log("VideoCallInterface: Starting demo video call");
-        setIsInCall(true);
-        setCallStatus("Demo video call active");
-        startCallTimer();
-        return;
-      }
-
-      try {
-        setCallStatus("Starting video call...");
-
-        // Get user media
-        const stream = await getUserMedia();
-        setLocalStream(stream);
-
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = stream;
-        }
-
-        // Create or join room
-        const room = roomId || (await generateRoomId());
-        await createPublisher(stream);
-        await joinRoom(room, stream);
-
-        setIsInCall(true);
-        setCallStatus("Video call active");
-        startCallTimer();
-        startQualityMonitoring();
-      } catch (error) {
-        console.error("VideoCallInterface: Failed to start video call:", error);
-        setCallStatus("Failed to start video call");
-        setConnectionError(error.message);
-        onError?.(error.message);
-        // Keep isInCall true so user can see the error and end the call
-      }
-    }, [
-      IS_DEMO_MODE,
-      roomId,
-      onError,
-      isInCall,
-      janusConnected,
-      getUserMedia,
-      generateRoomId,
-      createPublisher,
-      joinRoom,
-      startCallTimer,
-      startQualityMonitoring,
-    ]);
-
-    // Get user media
-    const getUserMedia = useCallback(async (constraints) => {
-      const videoConstraints = constraints?.video
-        ? {
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-            frameRate: { ideal: 30 },
-            facingMode: "user",
-          }
-        : false;
-      const audioConstraints = constraints?.audio
-        ? {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-            sampleRate: 48000,
-          }
-        : false;
-
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: videoConstraints,
-          audio: audioConstraints,
-        });
-        console.log("VideoCallInterface: Got user media", stream);
-        return stream;
-      } catch (error) {
-        console.error("VideoCallInterface: Failed to get user media:", error);
-        throw new Error("Failed to access camera/microphone");
-      }
-    }, []);
-
-    // Generate room ID
-    const generateRoomId = useCallback(() => {
-      const timestamp = Date.now();
-      const random = Math.floor(Math.random() * 10000);
-      return `video_${user?.id || "anonymous"}_${timestamp}_${random}`;
-    }, [user?.id]);
-
-    // Start call timer
-    const startCallTimer = useCallback(() => {
-      if (durationIntervalRef.current) {
-        clearInterval(durationIntervalRef.current);
-      }
-
-      const startTime = Date.now();
-      durationIntervalRef.current = setInterval(() => {
-        const duration = Math.floor((Date.now() - startTime) / 1000);
-        setCallDuration(duration);
-      }, 1000);
-    }, []);
-
-    // Start quality monitoring
-    const startQualityMonitoring = useCallback(() => {
-      if (qualityCheckIntervalRef.current) {
-        clearInterval(qualityCheckIntervalRef.current);
-      }
-
-      qualityCheckIntervalRef.current = setInterval(() => {
-        // Simulate quality monitoring in demo mode
-        if (IS_DEMO_MODE) {
-          setNetworkStats({
-            bitrate: Math.floor(Math.random() * 1000) + 500,
-            packetLoss: Math.random() * 2,
-            latency: Math.floor(Math.random() * 50) + 10,
-          });
-
-          const qualities = ["excellent", "good", "fair", "poor"];
-          setConnectionQuality(
-            qualities[Math.floor(Math.random() * qualities.length)]
-          );
-        } else {
-          // Real quality monitoring would go here
-          checkConnectionQuality();
-        }
-      }, 5000);
-    }, [IS_DEMO_MODE, checkConnectionQuality]);
-
-    // Check connection quality
-    const checkConnectionQuality = useCallback(() => {
-      if (!publisherRef.current) return;
-
-      // This would implement real quality checking
-      // For now, we'll use placeholder logic
-      setConnectionQuality("good");
-      setNetworkStats({
-        bitrate: 750,
-        packetLoss: 0.5,
-        latency: 25,
-      });
-    }, []);
-
-    // Toggle video
-    const toggleVideo = useCallback(() => {
-      if (!localStream) return;
-
-      const videoTrack = localStream.getVideoTracks()[0];
-      if (videoTrack) {
-        videoTrack.enabled = !isVideoEnabled;
-        setIsVideoEnabled(!isVideoEnabled);
-        console.log("VideoCallInterface: Video toggled:", !isVideoEnabled);
-      }
-    }, [localStream, isVideoEnabled]);
-
-    // Toggle audio
-    const toggleAudio = useCallback(() => {
-      if (!localStream) return;
-
-      const audioTrack = localStream.getAudioTracks()[0];
-      if (audioTrack) {
-        audioTrack.enabled = !isAudioEnabled;
-        setIsAudioEnabled(!isAudioEnabled);
-        console.log("VideoCallInterface: Audio toggled:", !isAudioEnabled);
-      }
-    }, [localStream, isAudioEnabled]);
-
-    // Toggle screen sharing
-    const toggleScreenShare = useCallback(async () => {
-      if (isScreenSharing) {
-        // Stop screen sharing
-        if (screenshareRef.current) {
-          screenshareRef.current.getTracks().forEach((track) => track.stop());
-          screenshareRef.current = null;
-        }
-
-        // Switch back to camera
-        try {
-          const stream = await getUserMedia();
-          setLocalStream(stream);
-          if (localVideoRef.current) {
-            localVideoRef.current.srcObject = stream;
-          }
-        } catch (error) {
-          console.error(
-            "VideoCallInterface: Failed to switch back to camera:",
-            error
-          );
-        }
-
-        setIsScreenSharing(false);
-      } else {
-        // Start screen sharing
-        try {
-          const screenStream = await navigator.mediaDevices.getDisplayMedia({
-            video: { cursor: "always" },
-            audio: true,
-          });
-
-          screenshareRef.current = screenStream;
-
-          // Replace video track in local stream
-          if (localStream) {
-            const videoTrack = screenStream.getVideoTracks()[0];
-            const sender = publisherRef.current?.pc
-              ?.getSenders()
-              ?.find((s) => s.track?.kind === "video");
-
-            if (sender) {
-              await sender.replaceTrack(videoTrack);
-            }
-          }
-
-          if (localVideoRef.current) {
-            localVideoRef.current.srcObject = screenStream;
-          }
-
-          setIsScreenSharing(true);
-
-          // Handle screen share end
-          screenStream.getVideoTracks()[0].onended = () => {
-            setIsScreenSharing(false);
-            toggleScreenShare(); // Switch back to camera
-          };
-        } catch (error) {
-          console.error(
-            "VideoCallInterface: Failed to start screen sharing:",
-            error
-          );
-          onError?.("Failed to start screen sharing");
-        }
-      }
-    }, [isScreenSharing, localStream, getUserMedia, onError]);
-
-    // Toggle fullscreen
-    const toggleFullscreen = useCallback(() => {
-      if (!isFullscreen) {
-        if (containerRef.current?.requestFullscreen) {
-          containerRef.current.requestFullscreen();
-        } else if (containerRef.current?.webkitRequestFullscreen) {
-          containerRef.current.webkitRequestFullscreen();
-        } else if (containerRef.current?.msRequestFullscreen) {
-          containerRef.current.msRequestFullscreen();
-        }
-      } else {
-        if (document.exitFullscreen) {
-          document.exitFullscreen();
-        } else if (document.webkitExitFullscreen) {
-          document.webkitExitFullscreen();
-        } else if (document.msExitFullscreen) {
-          document.msExitFullscreen();
-        }
-      }
-    }, [isFullscreen]);
-
-    // Handle fullscreen change
-    useEffect(() => {
-      const handleFullscreenChange = () => {
-        setIsFullscreen(!!document.fullscreenElement);
-      };
-
-      document.addEventListener("fullscreenchange", handleFullscreenChange);
-      document.addEventListener(
-        "webkitfullscreenchange",
-        handleFullscreenChange
-      );
-      document.addEventListener("msfullscreenchange", handleFullscreenChange);
-
-      return () => {
-        document.removeEventListener(
-          "fullscreenchange",
-          handleFullscreenChange
-        );
-        document.removeEventListener(
-          "webkitfullscreenchange",
-          handleFullscreenChange
-        );
-        document.removeEventListener(
-          "msfullscreenchange",
-          handleFullscreenChange
-        );
-      };
-    }, []);
-
-    // End call
-    const endCall = useCallback(() => {
-      console.log("VideoCallInterface: Ending call");
-
-      // Stop timers
-      if (durationIntervalRef.current) {
-        clearInterval(durationIntervalRef.current);
-        durationIntervalRef.current = null;
-      }
-
-      if (qualityCheckIntervalRef.current) {
-        clearInterval(qualityCheckIntervalRef.current);
-        qualityCheckIntervalRef.current = null;
-      }
-
-      // Stop local stream
-      if (localStream) {
-        localStream.getTracks().forEach((track) => track.stop());
-        setLocalStream(null);
-      }
-
-      // Stop screen share
-      if (screenshareRef.current) {
-        screenshareRef.current.getTracks().forEach((track) => track.stop());
-        screenshareRef.current = null;
-      }
-
-      // Clean up video elements
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = null;
-      }
-
-      remoteVideoRefs.current.forEach((ref) => {
-        if (ref.current) {
-          ref.current.srcObject = null;
-        }
-      });
-
-      // Reset state
-      setIsInCall(false);
-      setIsPublishing(false);
-      setCallDuration(0);
-      setParticipants([]);
-      setRemoteStreams(new Map());
-      setSubscriptions(new Map());
-      setIsScreenSharing(false);
-      setCallStatus("Call ended");
-
-      // Exit fullscreen if active
-      if (isFullscreen) {
-        toggleFullscreen();
-      }
-
-      // Notify parent
-      onCallEnd?.();
-    }, [localStream, isFullscreen, toggleFullscreen, onCallEnd]);
-
-    // Cleanup on unmount
-    const cleanup = useCallback(() => {
-      console.log("VideoCallInterface: Cleanup");
-
-      // Clean up Janus connection
-      if (publisherRef.current) {
-        publisherRef.current.detach();
-        publisherRef.current = null;
-      }
-
-      subscribersRef.current.forEach((subscriber) => {
-        subscriber.detach();
-      });
-      subscribersRef.current.clear();
-
-      if (janusRef.current) {
-        janusRef.current.destroy();
-        janusRef.current = null;
-      }
-
-      // Clean up streams and timers
-      endCall();
-    }, [endCall]);
-
-    // Janus VideoRoom operations
-    const createPublisher = useCallback(
-      async (stream) => {
-        console.log("VideoCallInterface: Creating publisher");
-
-        if (IS_DEMO_MODE) {
-          // Add demo participants for visual testing
-          setParticipants([
-            { id: "demo_1", username: "Demo User 1" },
-            { id: "demo_2", username: "Demo User 2" },
-          ]);
-          return Promise.resolve();
-        }
-
-        return new Promise((resolve, reject) => {
-          if (!janusRef.current) {
-            reject(new Error("Janus not connected"));
-            return;
-          }
-
-          janusRef.current.attach({
-            plugin: VIDEOROOM_PLUGIN,
-            success: (pluginHandle) => {
-              console.log("VideoCallInterface: Publisher plugin attached");
-              publisherRef.current = pluginHandle;
-
-              // Create room first
-              const createRoomRequest = {
-                request: "create",
-                room:
-                  parseInt(roomId.replace(/\D/g, ""), 10) ||
-                  Math.floor(Math.random() * 1000000),
-                permanent: false,
-                description: `Video call room for ${user?.username}`,
-                publishers: 10,
-                bitrate: 512000,
-                fir_freq: 10,
-                videocodec: "vp8,h264",
-                audiocodec: "opus",
-                record: false,
-                rec_dir: "",
-              };
-
-              pluginHandle.send({
-                message: createRoomRequest,
-                success: (result) => {
-                  console.log(
-                    "VideoCallInterface: Room created/exists:",
-                    result
-                  );
-                  // Join as publisher
-                  joinAsPublisher(pluginHandle, createRoomRequest.room, stream)
-                    .then(resolve)
-                    .catch(reject);
-                },
-                error: (error) => {
-                  console.log(
-                    "VideoCallInterface: Room creation failed, trying to join existing:",
-                    error
-                  );
-                  // Room might already exist, try to join
-                  joinAsPublisher(pluginHandle, createRoomRequest.room, stream)
-                    .then(resolve)
-                    .catch(reject);
-                },
-              });
-            },
-            error: (error) => {
-              console.error(
-                "VideoCallInterface: Failed to attach publisher plugin:",
-                error
-              );
-              reject(error);
-            },
-            onmessage: handlePublisherMessage,
-            onlocalstream: (stream) => {
-              console.log("VideoCallInterface: Local stream received");
-              if (localVideoRef.current) {
-                localVideoRef.current.srcObject = stream;
-              }
-            },
-            onremotestream: () => {
-              // Publishers don't receive remote streams
-            },
-            oncleanup: () => {
-              console.log("VideoCallInterface: Publisher cleanup");
-            },
-          });
-        });
-      },
-      [
-        IS_DEMO_MODE,
-        janusRef,
-        VIDEOROOM_PLUGIN,
-        roomId,
-        user,
-        joinAsPublisher,
-        handlePublisherMessage,
-        localVideoRef,
-      ]
-    );
-
-    const joinAsPublisher = useCallback(
-      async (pluginHandle, roomId, stream) => {
-        return new Promise((resolve, reject) => {
-          const register = {
-            request: "join",
-            room: roomId,
-            ptype: "publisher",
-            display: user?.username || "Anonymous",
-          };
-
-          pluginHandle.send({
-            message: register,
-            success: (result) => {
-              console.log("VideoCallInterface: Joined as publisher:", result);
-
-              // Configure media
-              const publishConfig = {
-                audioSend: true,
-                videoSend: true,
-                stream: stream,
-              };
-
-              pluginHandle.createOffer({
-                media: publishConfig,
-                success: (jsep) => {
-                  console.log("VideoCallInterface: Created offer:", jsep);
-
-                  const publish = {
-                    request: "configure",
-                    audio: true,
-                    video: true,
-                  };
-
-                  pluginHandle.send({
-                    message: publish,
-                    jsep: jsep,
-                    success: (result) => {
-                      console.log(
-                        "VideoCallInterface: Published successfully:",
-                        result
-                      );
-                      setCurrentRoomId(roomId);
-                      resolve(result);
-                    },
-                    error: (error) => {
-                      console.error(
-                        "VideoCallInterface: Failed to publish:",
-                        error
-                      );
-                      reject(error);
-                    },
-                  });
-                },
-                error: (error) => {
-                  console.error(
-                    "VideoCallInterface: Failed to create offer:",
-                    error
-                  );
-                  reject(error);
-                },
-              });
-            },
-            error: (error) => {
-              console.error(
-                "VideoCallInterface: Failed to join as publisher:",
-                error
-              );
-              reject(error);
-            },
-          });
-        });
-      },
-      [user, setCurrentRoomId]
-    );
-
-    const joinRoom = useCallback(
-      async (roomId, stream) => {
-        console.log("VideoCallInterface: Joining room:", roomId);
-
-        if (IS_DEMO_MODE) {
-          // Add demo participants for visual testing
-          setParticipants([
-            { id: "demo_1", username: "Demo User 1" },
-            { id: "demo_2", username: "Demo User 2" },
-          ]);
-          return Promise.resolve();
-        }
-
-        // First create publisher, then subscribe to existing feeds
-        await createPublisher(stream);
-
-        // Note: Existing publishers should be found automatically in handlePublisherMessage
-        // when the 'joined' event is received with msg.publishers array
-        console.log(
-          "🔥 VideoCallInterface: Joined room successfully, waiting for existing publishers in handlePublisherMessage"
-        );
-
-        return Promise.resolve();
-      },
-      [IS_DEMO_MODE, createPublisher, setParticipants]
-    );
-
-    const listParticipants = (roomId) => {
-      if (!publisherRef.current) return;
-
-      const listRequest = {
-        request: "listparticipants",
-        room: roomId,
-      };
-
-      publisherRef.current.send({
-        message: listRequest,
-        success: (result) => {
-          console.log("VideoCallInterface: Participants list:", result);
-          if (result.participants) {
-            result.participants.forEach((participant) => {
-              if (
-                participant.publisher &&
-                participant.id !== publisherRef.current.getId()
-              ) {
-                console.log(
-                  "🔥 VideoCallInterface: Found participant to subscribe to:",
-                  participant.display,
-                  "ID:",
-                  participant.id,
-                  "Room:",
-                  roomId
-                );
-                subscribeToFeed(participant.id, participant.display, roomId);
-              }
-            });
-          }
-        },
-        error: (error) => {
-          console.error(
-            "VideoCallInterface: Failed to list participants:",
-            error
-          );
-        },
-      });
-    };
-
-    const subscribeToFeed = useCallback(
-      (feedId, feedDisplay, roomId) => {
-        console.log("🔥 VideoCallInterface: === SUBSCRIBING TO FEED ===", {
-          feedId,
-          feedDisplay,
-          roomId,
-          isIncoming,
-          currentUser: user?.username,
-          janusConnected: !!janusRef.current,
-        });
-
-        janusRef.current.attach({
-          plugin: VIDEOROOM_PLUGIN,
-          success: (pluginHandle) => {
-            console.log(
-              "VideoCallInterface: Subscriber plugin attached for:",
-              feedDisplay
-            );
-
-            const subscribe = {
-              request: "join",
-              room: roomId,
-              ptype: "subscriber",
-              feed: feedId,
-            };
-
-            pluginHandle.send({
-              message: subscribe,
-              success: (result) => {
-                console.log("VideoCallInterface: Subscribed to feed:", result);
-
-                subscribersRef.current.set(feedId, pluginHandle);
-
-                // Add to participants list
-                setParticipants((prev) => {
-                  const exists = prev.some((p) => p.id === feedId);
-                  if (!exists) {
-                    console.log(
-                      "🔥 VideoCallInterface: Adding participant:",
-                      feedDisplay,
-                      "ID:",
-                      feedId
-                    );
-                    return [...prev, { id: feedId, username: feedDisplay }];
-                  }
-                  console.log(
-                    "🔥 VideoCallInterface: Participant already exists:",
-                    feedDisplay
-                  );
-                  return prev;
-                });
-              },
-              error: (error) => {
-                console.error(
-                  "VideoCallInterface: Failed to subscribe:",
-                  error
-                );
-              },
-            });
-          },
-          error: (error) => {
-            console.error(
-              "VideoCallInterface: Failed to attach subscriber:",
-              error
-            );
-          },
-          onmessage: (msg, jsep) => {
-            handleSubscriberMessage(msg, jsep, feedId);
-          },
-          onremotetrack: (track, mid, on) => {
-            console.log(
-              "🔥 VideoCallInterface: Remote track received for:",
-              feedDisplay,
-              "Track kind:",
-              track.kind,
-              "Track ID:",
-              track.id,
-              "Mid:",
-              mid,
-              "On:",
-              on
-            );
-
-            if (on) {
-              // Track is being added
-              console.log(
-                "🔥 VideoCallInterface: Track being added:",
-                track.kind,
-                "for",
-                feedDisplay
-              );
-
-              // Create or update MediaStream
-              let stream = remoteStreamsRef.current.get(feedId);
-              if (!stream) {
-                stream = new MediaStream();
-                console.log(
-                  "🔥 VideoCallInterface: Created new MediaStream for:",
-                  feedDisplay
-                );
-              }
-
-              // Add track to stream
-              stream.addTrack(track);
-
-              // Update remote streams ref and state
-              remoteStreamsRef.current.set(feedId, stream);
-              setRemoteStreams((prev) => {
-                const newMap = new Map(prev);
-                newMap.set(feedId, stream);
-                console.log(
-                  "🔥 VideoCallInterface: Updated remote streams via onremotetrack, total:",
-                  newMap.size,
-                  "Feed ID:",
-                  feedId
-                );
-                return newMap;
-              });
-
-              // Immediate video element attachment
-              setTimeout(() => {
-                const videoElement = remoteVideoRefs.current.get(feedId);
-                if (videoElement && stream) {
-                  console.log(
-                    "🔥 VideoCallInterface: ATTEMPTING IMMEDIATE track attachment for:",
-                    feedDisplay,
-                    {
-                      streamTracks: stream.getTracks().length,
-                      streamActive: stream.active,
-                      streamReadyState: stream.readyState,
-                      videoElementReadyState: videoElement.readyState,
-                      videoElementNetworkState: videoElement.networkState,
-                    }
-                  );
-
-                  videoElement.srcObject = stream;
-                  videoElement.load(); // Explicitly load the media
-
-                  videoElement.onwaiting = () =>
-                    console.log(`🔥 Video ${feedDisplay} is WAITING for data.`);
-                  videoElement.onstalled = () =>
-                    console.log(`🔥 Video ${feedDisplay} is STALLED.`);
-                  videoElement.onloadedmetadata = () =>
-                    console.log(`🔥 Video ${feedDisplay} loaded metadata.`);
-                  videoElement.onloadeddata = () =>
-                    console.log(`🔥 Video ${feedDisplay} loaded data.`);
-                  videoElement.oncanplay = () =>
-                    console.log(`🔥 Video ${feedDisplay} CAN PLAY.`);
-                  videoElement.onplaying = () =>
-                    console.log(`🔥 Video ${feedDisplay} is PLAYING.`);
-
-                  // Use oncanplaythrough for more robust playback
-                  videoElement.oncanplaythrough = function () {
-                    // Detach and re-attach srcObject to ensure fresh state if needed
-                    // This is an aggressive workaround for persistent aborts
-                    if (videoElement.srcObject !== stream) {
-                      videoElement.srcObject = null;
-                      videoElement.srcObject = stream;
-                      videoElement.load();
-                    }
-
-                    console.log(
-                      `🔥 Video ${feedDisplay} CAN PLAY THROUGH. Attempting playback.`,
-                      {
-                        videoElementPaused: videoElement.paused,
-                        videoElementEnded: videoElement.ended,
-                        videoElementAutoplay: videoElement.autoplay, // New log
-                        streamActive: stream.active,
-                        streamVideoTracksEnabled: stream
-                          .getVideoTracks()
-                          .every((track) => track.enabled),
-                        streamAudioTracksEnabled: stream
-                          .getAudioTracks()
-                          .every((track) => track.enabled),
-                      }
-                    );
-
-                    // Add another micro-delay before attempting to play after canplaythrough
-                    setTimeout(() => {
-                      videoElement
-                        .play()
-                        .then(() => {
-                          console.log(
-                            "🔥 VideoCallInterface: Video played successfully for:",
-                            feedDisplay
-                          );
-                        })
-                        .catch((e) => {
-                          console.error(
-                            "🔥 VideoCallInterface: Video play failed for:",
-                            feedDisplay,
-                            "DOMException:",
-                            e.name,
-                            e.message,
-                            e
-                          );
-                          // Provide a user prompt to unmute if necessary, as a last resort
-                          if (
-                            e.name === "NotAllowedError" ||
-                            e.name === "AbortError"
-                          ) {
-                            console.warn(
-                              "🔥 VideoCallInterface: Autoplay prevented. User interaction required to unmute."
-                            );
-                            // Here you might want to show a UI element like an "Unmute" button
-                          }
-                        });
-                    }, 10); // Very short delay
-
-                    this.oncanplaythrough = null; // Ensure it only runs once
-                  };
-                } else {
-                  console.log(
-                    "🔥 VideoCallInterface: Missing video element for track attachment:",
-                    feedDisplay,
-                    "Has element:",
-                    !!videoElement,
-                    "Has stream:",
-                    !!stream
-                  );
-                }
-              }, 100);
-            } else {
-              // Track is being removed
-              console.log(
-                "🔥 VideoCallInterface: Track being removed:",
-                track.kind,
-                "for",
-                feedDisplay
-              );
-            }
-          },
-          oncleanup: () => {
-            console.log(
-              "VideoCallInterface: Subscriber cleanup for:",
-              feedDisplay
-            );
-            subscribersRef.current.delete(feedId);
-            remoteStreamsRef.current.delete(feedId);
-            setParticipants((prev) => prev.filter((p) => p.id !== feedId));
-            setRemoteStreams((prev) => {
-              const newMap = new Map(prev);
-              newMap.delete(feedId);
-              return newMap;
-            });
-          },
-        });
-      },
-      [
-        isIncoming,
-        user,
-        janusRef,
-        VIDEOROOM_PLUGIN,
-        handleSubscriberMessage,
-        subscribersRef,
-        setParticipants,
-        remoteStreamsRef,
-        setRemoteStreams,
-        remoteVideoRefs,
-      ]
-    );
-
-    const handlePublisherMessage = useCallback(
-      (msg, jsep) => {
-        console.log("🔥 VideoCallInterface: Publisher message received:", {
-          event: msg.videoroom,
-          room: msg.room,
-          publishers: msg.publishers?.length || 0,
-          publishersData: msg.publishers,
-          isIncoming: isIncoming,
-          currentUser: user?.username,
-          selectedReceiver: selectedReceiver?.username,
-        });
-
-        const event = msg.videoroom;
-
-        if (event === "joined") {
-          console.log(
-            "🔥 VideoCallInterface: Successfully joined as publisher"
-          );
-          setIsPublishing(true);
-
-          // List existing participants
-          if (msg.publishers && msg.publishers.length > 0) {
-            console.log(
-              "🔥 VideoCallInterface: Found existing publishers:",
-              msg.publishers.length,
-              "Publishers:",
-              msg.publishers
-            );
-            msg.publishers.forEach((publisher) => {
-              console.log(
-                "🔥 VideoCallInterface: Subscribing to existing publisher:",
-                publisher.display,
-                "ID:",
-                publisher.id,
-                "Room:",
-                msg.room
-              );
-              subscribeToFeed(publisher.id, publisher.display, msg.room);
-            });
-          } else {
-            console.log(
-              "🔥 VideoCallInterface: No existing publishers found - this might be the issue!",
-              {
-                publishersExists: !!msg.publishers,
-                publishersLength: msg.publishers?.length,
-                publishersData: msg.publishers,
-                isIncoming: isIncoming,
-              }
-            );
-          }
-        } else if (event === "event") {
-          if (msg.publishers) {
-            // New publisher joined
-            console.log(
-              "🔥 VideoCallInterface: New publishers joined:",
-              msg.publishers.length
-            );
-            msg.publishers.forEach((publisher) => {
-              console.log(
-                "🔥 VideoCallInterface: Subscribing to new publisher:",
-                publisher.display,
-                "ID:",
-                publisher.id
-              );
-              subscribeToFeed(publisher.id, publisher.display, msg.room);
-            });
-          } else if (msg.leaving) {
-            // Publisher left
-            console.log("VideoCallInterface: Publisher left:", msg.leaving);
-            const subscriber = subscribersRef.current.get(msg.leaving);
-            if (subscriber) {
-              subscriber.detach();
-            }
-          } else if (msg.unpublished) {
-            // Publisher stopped publishing
-            console.log(
-              "VideoCallInterface: Publisher unpublished:",
-              msg.unpublished
-            );
-            const subscriber = subscribersRef.current.get(msg.unpublished);
-            if (subscriber) {
-              subscriber.detach();
-            }
-          }
-        }
-
-        if (jsep) {
-          console.log("VideoCallInterface: Handling remote JSEP:", jsep);
-          publisherRef.current.handleRemoteJsep({ jsep: jsep });
-        }
-      },
-      [
-        isIncoming,
-        user,
-        selectedReceiver,
-        setIsPublishing,
-        subscribeToFeed,
-        subscribersRef,
-        publisherRef,
-      ]
-    );
-
-    const handleSubscriberMessage = useCallback(
-      (msg, jsep, feedId) => {
-        console.log(
-          "VideoCallInterface: Subscriber message for feed",
-          feedId,
-          ":",
-          msg
-        );
-
-        const event = msg.videoroom;
-
-        if (event === "attached") {
-          console.log(
-            "VideoCallInterface: Subscriber attached to feed:",
-            feedId
-          );
-        }
-
-        if (jsep) {
-          console.log(
-            "VideoCallInterface: Handling subscriber JSEP for feed",
-            feedId
-          );
-          const subscriber = subscribersRef.current.get(feedId);
-          if (subscriber) {
-            subscriber.createAnswer({
-              jsep: jsep,
-              media: { audioSend: false, videoSend: false },
-              success: (ourJsep) => {
-                console.log(
-                  "VideoCallInterface: Created answer for feed",
-                  feedId
-                );
-                const body = { request: "start", room: currentRoomId };
-                subscriber.send({ message: body, jsep: ourJsep });
-              },
-              error: (error) => {
-                console.error(
-                  "VideoCallInterface: Failed to create answer for feed",
-                  feedId,
-                  ":",
-                  error
-                );
-              },
-            });
-          }
-        }
-      },
-      [subscribersRef, currentRoomId]
-    );
-
-    // Format call duration
-    const formatDuration = (seconds) => {
-      const mins = Math.floor(seconds / 60);
-      const secs = seconds % 60;
-      return `${mins.toString().padStart(2, "0")}:${secs
-        .toString()
-        .padStart(2, "0")}`;
-    };
-
-    // Get connection quality indicator
-    const getQualityIndicator = () => {
-      switch (connectionQuality) {
-        case "excellent":
-          return { icon: FaSignal, color: "text-green-500", bars: 4 };
-        case "good":
-          return { icon: FaSignal, color: "text-green-400", bars: 3 };
-        case "fair":
-          return { icon: FaSignal, color: "text-yellow-500", bars: 2 };
-        case "poor":
-          return { icon: FaSignal, color: "text-red-500", bars: 1 };
-        default:
-          return { icon: FaWifi, color: "text-gray-500", bars: 0 };
-      }
-    };
+    }, [isInCall, handleMouseMove]);
 
     // If not in call, don't render anything
     if (!isInCall && !isIncoming) {
