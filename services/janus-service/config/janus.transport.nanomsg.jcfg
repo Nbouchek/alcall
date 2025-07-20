@@ -1,0 +1,6 @@
+general: {
+    enabled = true
+    address = "ipc:///tmp/janus.ipc"
+    json = "indented"
+    # Add other Nanomsg config options as needed
+}

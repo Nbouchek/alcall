@@ -1,0 +1,9 @@
+Development Environment Verification Report
+Generated: Mon Jun 16 16:13:14 BST 2025
+----------------------------------------
+Errors:
+[2025-06-16 16:13:14] [ERROR] Python package mypy (from environment.yml) is not installed in 'alcall' environment
+\nWarnings:
+[2025-06-16 16:13:02] [WARN] Could not determine network speed. Skipping check.
+\nFull log: /Users/nacer/Dev/github/alcall/logs/dev-env/dev_env_verify_20250616_161239.log
+\nVerification completed at Mon Jun 16 16:13:14 BST 2025

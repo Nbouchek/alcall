@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: alcall-user-service
+    runtime: docker
+    region: frankfurt
+    plan: starter
+    dockerfilePath: Dockerfile
+    dockerContext: .
+
+    healthCheckPath: /health
+    autoDeploy: true
+    numInstances: 1
+    envVars:
+      - key: DATABASE_URL
+        value: "postgresql://unifiedchat:UbVLKeEU9M2yyxyrzqwwRr3TTktui37ZK@dpg-d1p7tlmr433s73d3oje0-a/ucalldb"

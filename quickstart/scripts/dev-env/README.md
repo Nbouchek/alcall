@@ -39,7 +39,7 @@ This directory contains scripts for setting up and managing development environm
 
 ### 2. `verify.sh`
 
-**Purpose**: Validates the development environment setup and configuration.
+**Purpose**: Validates the development environment setup and configuration, including IDE settings and extensions.
 
 **Usage**:
 
@@ -61,12 +61,33 @@ This directory contains scripts for setting up and managing development environm
 - Configuration validation
 - Dependency verification
 - System requirements check
+- **IDE verification:**
+  - Checks that all required VSCode/Cursor extensions are installed
+  - Checks that required IDE settings (e.g., `editor.formatOnSave`, `editor.codeActionsOnSave.source.fixAll`) are present and correct in the settings file
+  - Logs missing or incorrect extensions/settings
 
 **Example**:
 
 ```bash
 ./verify.sh -c all -t standard
 ```
+
+## Python Environment Verification
+
+The `verify.sh` script now automatically checks that all Python packages listed in `quickstart/config/environment.yml` are installed in the `alcall` conda environment. To add or update dependencies, edit `environment.yml` and re-run `verify.sh`:
+
+```bash
+# Add a new dependency to environment.yml
+# (e.g., add 'requests' under dependencies:)
+vi ../../config/environment.yml
+
+# Re-run verification
+./verify.sh
+```
+
+## Docker Desktop Verification
+
+The script now checks that Docker Desktop is installed and running (not just the docker CLI). If Docker Desktop is not running, the script will attempt to start it automatically.
 
 ### 3. `test.sh`
 

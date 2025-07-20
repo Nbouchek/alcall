@@ -1,0 +1,41 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+Follow the requirements in [IMPLEMENTATION.md](mdc:IMPLEMENTATION.md)
+Follow the requirements in [README.md](mdc:README.md)
+Make sure the logic code is clean when you modify code.
+Respect the folder structure:
+unified-chat/
+  ├── .github/
+  │   └── workflows/         # CI/CD pipelines
+  │       ├── main.yml       # Main pipeline
+  │       ├── pr.yml         # PR checks
+  │       └── release.yml    # Release pipeline
+  ├── services/
+  │   ├── auth-service/      # Authentication service
+  │   ├── message-service/   # Core messaging
+  │   ├── realtime-service/  # WebSocket handler
+  │   ├── user-service/      # User management
+  │   ├── payment-service/   # Payment processing
+  │   ├── ai-service/        # AI features
+  │   └── gateway-service/   # API Gateway
+  ├── web/
+  │   └── frontend/          # Next.js web application
+  ├── mobile/
+  │   └── flutter/          # Flutter mobile app
+  ├── desktop/
+  │   └── tauri/            # Tauri desktop app
+  ├── infrastructure/
+  │   ├── terraform/        # IaC
+  │   ├── kubernetes/       # K8s configurations
+  │   └── monitoring/       # Observability setup
+  └── docs/
+      ├── api/              # API documentation
+      ├── architecture/     # Architecture decisions
+      └── development/      # Development guides
+
+Always write code that follows the highest standards.
+YOU MUST ALWAYS keep your project well-documented.
+RUN git add, git commit and git push at the same time.

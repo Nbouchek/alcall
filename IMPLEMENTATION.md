@@ -32,35 +32,35 @@ This document outlines the detailed implementation strategy for the UnifiedChat 
 
 ### 1. Development Environment Setup
 
-- [x] **Local Development Environment**
-  - [x] Install required tools:
-    - [x] Docker Desktop 4.36.0 (Latest stable)
-    - [x] Node.js 22.x (Jod LTS, supported until April 2027)
-    - [x] Go 1.23.x (Latest stable)
-    - [x] Rust 1.84.x (Latest stable)
-    - [x] Miniconda (Python 3.12)
-      - [x] Create and use environment named 'alcall'
-      - [x] Required packages specified in environment.yml
-    - [x] kubectl 1.31.x (Latest stable)
-    - [x] Helm 3.16.x (Latest stable)
-  - [x] Configure IDE settings (Cursor recommended)
-    - [x] Install required extensions:
-      - [x] ms-kubernetes-tools.vscode-kubernetes-tools
-      - [x] golang.go
-      - [x] dbaeumer.vscode-eslint
-      - [x] esbenp.prettier-vscode
-    - [x] Configure settings:
-      - [x] editor.formatOnSave: true
-      - [x] editor.codeActionsOnSave.source.fixAll: true
-  - [x] Set up git hooks for pre-commit checks
-    - [x] Code formatting
-    - [x] Linting
-    - [x] Test execution
-    - [x] Security checks
-  - [x] Configure development SSL certificates
-    - [x] Generate self-signed certificates
-    - [x] Set up local CA
-    - [x] Configure trust stores
+- [ ] **Local Development Environment**
+  - [ ] Install required tools:
+    - [ ] Docker Desktop 4.36.0 (Latest stable)
+    - [ ] Node.js 22.x (Jod LTS, supported until April 2027)
+    - [ ] Go 1.23.x (Latest stable)
+    - [ ] Rust 1.84.x (Latest stable)
+    - [ ] Miniconda (Python 3.12)
+      - [ ] Create and use environment named 'alcall'
+      - [ ] Required packages specified in environment.yml
+    - [ ] kubectl 1.31.x (Latest stable)
+    - [ ] Helm 3.16.x (Latest stable)
+  - [ ] Configure IDE settings (Cursor recommended)
+    - [ ] Install required extensions:
+      - [ ] ms-kubernetes-tools.vscode-kubernetes-tools
+      - [ ] golang.go
+      - [ ] dbaeumer.vscode-eslint
+      - [ ] esbenp.prettier-vscode
+    - [ ] Configure settings:
+      - [ ] editor.formatOnSave: true
+      - [ ] editor.codeActionsOnSave.source.fixAll: true
+  - [ ] Set up git hooks for pre-commit checks
+    - [ ] Code formatting
+    - [ ] Linting
+    - [ ] Test execution
+    - [ ] Security checks
+  - [ ] Configure development SSL certificates
+    - [ ] Generate self-signed certificates
+    - [ ] Set up local CA
+    - [ ] Configure trust stores
 
 ### 2. Repository Setup
 
@@ -96,7 +96,6 @@ This document outlines the detailed implementation strategy for the UnifiedChat 
       └── development/      # Development guides
   ```
 - [ ] **Branch Protection Rules**
-
   - [ ] Configure main branch protection
     - [ ] Require pull request reviews
     - [ ] Require status checks to pass
@@ -108,14 +107,11 @@ This document outlines the detailed implementation strategy for the UnifiedChat 
   - [ ] Configure release branch patterns
     - [ ] Require release manager approval
     - [ ] Enforce version tag format
-
 - [ ] **Code Owners Setup**
-
   - [ ] Define service-level owners
   - [ ] Set up infrastructure owners
   - [ ] Configure security-critical paths
   - [ ] Set up documentation owners
-
 - [ ] **Templates**
   - [ ] Issue Templates:
     - [ ] Bug report template
@@ -147,8 +143,7 @@ This document outlines the detailed implementation strategy for the UnifiedChat 
       - [ ] High-performance storage
       - [ ] Backup storage
   - [ ] Production Cluster
-
-    - [ ] Set up production Kubernetes cluster
+    - [ ] Set up production Kubernetes cluster (scaffolded via Terraform)
     - [ ] Configure namespaces:
       - [ ] unified-chat-prod
       - [ ] monitoring-prod
@@ -161,14 +156,11 @@ This document outlines the detailed implementation strategy for the UnifiedChat 
       - [ ] Horizontal pod autoscaling
       - [ ] Vertical pod autoscaling
       - [ ] Cluster autoscaling
-
   - [ ] Staging Environment
-
-    - [ ] Set up staging Kubernetes cluster
+    - [ ] Set up staging Kubernetes cluster (scaffolded via Terraform)
     - [ ] Mirror production configuration
     - [ ] Configure test data management
     - [ ] Set up continuous deployment
-
   - [ ] Networking
     - [ ] Configure CNI plugin
     - [ ] Set up network policies
@@ -176,14 +168,12 @@ This document outlines the detailed implementation strategy for the UnifiedChat 
     - [ ] Set up load balancers
 
 - [ ] **Monitoring Infrastructure**
-
   - [ ] Prometheus Setup
     - [ ] Deploy Prometheus operator
     - [ ] Configure service monitors
     - [ ] Set up alerting rules
     - [ ] Configure retention policies
   - [ ] Grafana Configuration
-
     - [ ] Deploy Grafana operator
     - [ ] Set up dashboards:
       - [ ] Service health
@@ -192,9 +182,7 @@ This document outlines the detailed implementation strategy for the UnifiedChat 
       - [ ] Security metrics
     - [ ] Configure data sources
     - [ ] Set up user access
-
   - [ ] Alerting System
-
     - [ ] Configure AlertManager
     - [ ] Set up notification channels:
       - [ ] Email
@@ -205,7 +193,6 @@ This document outlines the detailed implementation strategy for the UnifiedChat 
       - [ ] Performance thresholds
       - [ ] Security incidents
       - [ ] Business metrics
-
   - [ ] Logging System
     - [ ] Deploy ELK Stack:
       - [ ] Elasticsearch
@@ -214,6 +201,12 @@ This document outlines the detailed implementation strategy for the UnifiedChat 
     - [ ] Configure log shipping
     - [ ] Set up log retention
     - [ ] Configure log analysis
+
+### 4. CI/CD Pipeline
+
+- [ ] **CI/CD pipeline**
+  - [ ] GitHub Actions workflows for build, test, deploy, PR checks, and release
+  - [ ] Linting, testing, security, and coverage automation
 
 ## Phase 1: Core Services Implementation (Weeks 5-12)
 

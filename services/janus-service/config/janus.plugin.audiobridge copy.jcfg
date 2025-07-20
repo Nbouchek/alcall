@@ -1,0 +1,15 @@
+general: {
+    enabled = true
+    sampling_rate = 48000
+    opus_fec = true
+    opus_dtx = true
+    opus_bitrate = 32000
+    opus_complexity = 10
+    opus_vbr = true
+    opus_vbr_constraint = false
+    opus_inbandfec = true
+    opus_maxplaybackrate = 48000
+    opus_maxaveragebitrate = 32000
+    opus_stereo = false
+    opus_sprop_stereo = false
+}

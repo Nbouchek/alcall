@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: unifiedchat-janus-service
+    runtime: docker
+    region: oregon
+    plan: standard  # Upgrade from starter for better resources
+    envVars:
+      - key: JANUS_LOG_LEVEL
+        value: "4"
+      - key: JANUS_LOG_TIMESTAMPS
+        value: "true"
+      - key: JANUS_HTTP_PORT
+        value: "8088"
+      - key: PORT
+        value: "8088"
+    autoDeploy: true
+    numInstances: 1
+  - type: web
+    name: alcall-realtime-service
+    runtime: docker
+    region: frankfurt
+    plan: starter
+    dockerfilePath: ./services/realtime-service/Dockerfile  # Correct path to Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: "10000"
+    autoDeploy: true
+    numInstances: 1

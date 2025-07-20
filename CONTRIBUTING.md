@@ -1,59 +1,92 @@
-# Contributing to Unified-Chat
+# Contributing Guide
 
-Thank you for your interest in contributing to the Unified-Chat project! We welcome contributions from the community to help improve and grow this project.
+Thank you for contributing to UnifiedChat! This guide explains how to use the automation, run tests, set up infrastructure, and follow best practices.
 
-## Table of Contents
+## Quick Start
 
-- [Code of Conduct](#code-of-conduct)
-- [Project Structure](#project-structure)
-- [How to Contribute](#how-to-contribute)
-- [Code Style](#code-style)
-- [Pull Requests](#pull-requests)
-- [Reporting Issues](#reporting-issues)
-- [Contact](#contact)
+- **Local Dev Cluster:**
 
-## Code of Conduct
+  ```bash
+  make dev
+  ```
 
-Please be respectful and considerate in all interactions. We follow the [Contributor Covenant](https://www.contributor-covenant.org/) code of conduct.
+  Sets up a local Kubernetes cluster (kind), Istio, monitoring (Prometheus, Grafana), and logging (ELK).
 
-## Project Structure
+- **Cloud Infra (AWS EKS):**
 
-All contributions must respect the folder and file structure defined in [IMPLEMENTATION.md](./IMPLEMENTATION.md). Do **not** create or modify directories outside the allowed structure. If you are unsure, please ask before submitting changes.
+  ```bash
+  make infra ENV=staging
+  ```
 
-## How to Contribute
+  Provisions cloud infrastructure using Terraform. See `infrastructure/terraform/README.md` for details.
 
-1. **Fork the repository** and create your branch from `develop`.
-2. **Follow the project structure** as defined in [IMPLEMENTATION.md](./IMPLEMENTATION.md).
-3. **Write clear, maintainable code** and include tests where appropriate.
-4. **Run the integration and teardown scripts** to verify your changes:
-   ```bash
-   bash quickstart/scripts/test/integration.sh
-   bash quickstart/scripts/test/teardown_integration.sh --force
-   ```
-5. **Commit your changes** with clear, descriptive messages.
-6. **Open a pull request** against the `develop` branch and fill out the PR template.
+- **Run Tests:**
 
-## Code Style
+  ```bash
+  make test
+  ```
 
-- Use consistent formatting and follow language-specific best practices.
-- Run linters and formatters before submitting code (e.g., `npm run lint`, `black`, `pylint`, etc.).
-- Write descriptive commit messages.
+- **Run Linters:**
 
-## Pull Requests
+  ```bash
+  make lint
+  ```
 
-- Ensure your PR is focused and addresses a single concern.
-- Reference related issues in your PR description.
-- Add tests for new features or bug fixes.
-- Ensure all CI checks pass before requesting review.
+- **Clean Up:**
 
-## Reporting Issues
+  ```bash
+  make clean
+  ```
 
-- Search for existing issues before opening a new one.
-- Provide a clear, descriptive title and detailed information.
-- Include steps to reproduce, expected behavior, and relevant logs or screenshots.
+- **Build/Check Docs:**
 
-## Contact
+  ```bash
+  make docs
+  ```
 
-For questions or support, open an issue or contact the maintainers via GitHub Discussions.
+- **Pre-commit Checks:**
 
-Thank you for helping make Unified-Chat better!
+  ```bash
+  make precommit
+  ```
+
+- **Code Coverage:**
+
+  ```bash
+  make coverage
+  ```
+
+- **Security Scan:**
+
+  ```bash
+  make security
+  ```
+
+- **Import Dashboards/Alerts:**
+  ```bash
+  make dashboards
+  ```
+
+## Best Practices
+
+- Follow the project structure and coding standards in `README.md` and `IMPLEMENTATION.md`.
+- All code must be tested (unit, integration, e2e, performance, security).
+- All documentation must be up-to-date.
+- Use the provided Makefile for all automation.
+- Use pre-commit hooks before pushing code.
+- Open issues and PRs using the provided templates.
+
+## CI/CD
+
+- All pushes and PRs are checked by GitHub Actions (see `.github/workflows/`).
+- Main, PR, and release pipelines are automated.
+- Code coverage and security scanning are enforced.
+
+## Support
+
+- For issues, open a GitHub issue using the appropriate template.
+- For questions, see the main README or ask in the community channels.
+
+---
+
+See `README.md` and `IMPLEMENTATION.md` for full requirements and standards.

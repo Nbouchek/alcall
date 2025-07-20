@@ -1,0 +1,5 @@
+general: {
+	enabled = true
+	admin_key = "supersecret"
+	rtp_port_range = "20000-40000"
+}

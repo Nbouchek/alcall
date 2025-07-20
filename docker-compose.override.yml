@@ -1,0 +1,72 @@
+version: "3.8"
+
+# Development overrides for local development
+# This file is automatically loaded by docker-compose
+
+services:
+  postgres:
+    # Enable PostgreSQL logging for development
+    command: postgres -c log_statement=all -c log_destination=stderr -c log_min_duration_statement=0
+    environment:
+      POSTGRES_LOG_STATEMENT: all
+      POSTGRES_LOG_MIN_DURATION_STATEMENT: 0
+
+  redis:
+    # Enable Redis logging for development
+    command: redis-server /usr/local/etc/redis/redis.conf --loglevel debug
+
+  unifiedchat-user-service:
+    # Hot reload for development
+    volumes:
+      - ./services/user-service:/app
+      - /app/vendor
+    environment:
+      GO_ENV: development
+      GIN_MODE: debug
+
+  unifiedchat-auth-service:
+    # Hot reload for development
+    volumes:
+      - ./services/auth-service:/app
+      - /app/vendor
+    environment:
+      GO_ENV: development
+      GIN_MODE: debug
+
+  unifiedchat-message-service:
+    # Hot reload for development
+    volumes:
+      - ./services/message-service:/app
+      - /app/vendor
+    environment:
+      GO_ENV: development
+      GIN_MODE: debug
+
+  unifiedchat-realtime-service:
+    # Hot reload for development
+    volumes:
+      - ./services/realtime-service:/app
+      - /app/vendor
+    environment:
+      GO_ENV: development
+      GIN_MODE: debug
+
+  unifiedchat-gateway-service:
+    # Hot reload for development
+    volumes:
+      - ./services/gateway-service:/app
+      - /app/vendor
+    environment:
+      GO_ENV: development
+      GIN_MODE: debug
+
+  unifiedchat-frontend:
+    # Hot reload for Next.js development
+    volumes:
+      - ./web/frontend:/app
+      - /app/node_modules
+      - /app/.next
+    environment:
+      NODE_ENV: development
+      NEXT_TELEMETRY_DISABLED: 1
+    command: npm run dev

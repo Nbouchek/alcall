@@ -1,0 +1,181 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: unifiedchat
+      POSTGRES_USER: unifiedchat
+      POSTGRES_PASSWORD: password123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U unifiedchat"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  user-service:
+    build: ./services/user-service
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: unifiedchat
+      DB_USER: unifiedchat
+      DB_PASSWORD: password123
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:8081/health",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  auth-service:
+    build: ./services/auth-service
+    ports:
+      - "8082:8082"
+    depends_on:
+      user-service:
+        condition: service_healthy
+    environment:
+      JWT_SECRET: your-super-secret-jwt-key-change-in-production
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:8082/health",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  message-service:
+    build: ./services/message-service
+    ports:
+      - "8083:8083"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: unifiedchat
+      DB_USER: unifiedchat
+      DB_PASSWORD: password123
+      POSTGRES_DSN: "host=postgres user=unifiedchat password=password123 dbname=unifiedchat port=5432 sslmode=disable"
+      REALTIME_SERVICE_URL: http://realtime-service:8084
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:8083/health",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  realtime-service:
+    build: ./services/realtime-service
+    ports:
+      - "8084:8084"
+    depends_on:
+      message-service:
+        condition: service_healthy
+    environment:
+      MESSAGE_SERVICE_URL: http://message-service:8083
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:8084/health",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  gateway-service:
+    build: ./services/gateway-service
+    ports:
+      - "8080:8080"
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+      message-service:
+        condition: service_healthy
+    environment:
+      AUTH_SERVICE_URL: http://auth-service:8082
+      USER_SERVICE_URL: http://user-service:8081
+      MESSAGE_SERVICE_URL: http://message-service:8083
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:8080/health",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    build:
+      context: ./web/frontend
+      args:
+        NEXT_PUBLIC_AUTH_API_URL: ${NEXT_PUBLIC_AUTH_API_URL}
+        NEXT_PUBLIC_MESSAGE_API_URL: ${NEXT_PUBLIC_MESSAGE_API_URL}
+        NEXT_PUBLIC_REALTIME_API_URL: ${NEXT_PUBLIC_REALTIME_API_URL}
+        NEXT_PUBLIC_REALTIME_HTTP_API_URL: ${NEXT_PUBLIC_REALTIME_HTTP_API_URL}
+        NEXT_PUBLIC_JANUS_URL: ${NEXT_PUBLIC_JANUS_URL}
+        NEXT_PUBLIC_JANUS_HTTP_URL: ${NEXT_PUBLIC_JANUS_HTTP_URL}
+    ports:
+      - "3000:3000"
+    depends_on:
+      gateway-service:
+        condition: service_healthy
+    env_file:
+      - .env.frontend
+    command: npm run dev
+
+volumes:
+  postgres_data:

@@ -1,0 +1,7 @@
+general: {
+    enabled = true
+    path = "/tmp/ux-janusapi"
+    type = "SOCK_SEQPACKET"
+    json = "indented"
+    # Add other PFUnix config options as needed
+}

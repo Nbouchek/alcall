@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: unifiedchat-frontend
+    runtime: node
+    region: frankfurt # Changed from oregon to frankfurt
+    plan: starter
+    buildCommand: npm install && npm run build
+    startCommand: next start
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: NEXT_PUBLIC_AUTH_API_URL
+        value: "https://alcall-auth.onrender.com/api/v1"
+      - key: NEXT_PUBLIC_MESSAGE_API_URL
+        value: "https://alcall-message-service.onrender.com"
+      - key: NEXT_PUBLIC_REALTIME_HTTP_API_URL
+        value: "https://alcall-realtime-service.onrender.com"
+      - key: NEXT_PUBLIC_USER_API_URL
+        value: "https://alcall-user-service.onrender.com/api/v1"
+      - key: NEXT_PUBLIC_JANUS_URL
+        value: "wss://alcall-janus-service.onrender.com/janus"
+      - key: NEXT_PUBLIC_JANUS_HTTP_URL
+        value: "https://alcall-janus-service.onrender.com"
+      - key: NEXT_PUBLIC_FORCE_NORMAL_MODE
+        value: "true"
+    healthCheckPath: /
+    autoDeploy: true
+    numInstances: 1

@@ -214,8 +214,8 @@ ALLOWED_DIRS=(
   "docs/development"
 )
 for dir in "${ALLOWED_DIRS[@]}"; do
-  mkdir -p "$dir"
-  log "INFO" "Created directory: $dir"
+      mkdir -p "$dir"
+      log "INFO" "Created directory: $dir"
 done
 
 # Create documentation files (if defined in config)
@@ -341,12 +341,796 @@ else
     git checkout develop || log "WARN" "Could not switch to develop branch"
 fi
 
+# Create service subdirectories (src, tests)
+SERVICES=(auth-service message-service realtime-service user-service payment-service ai-service gateway-service)
+for svc in "${SERVICES[@]}"; do
+  for sub in src tests; do
+    dir="services/$svc/$sub"
+    if [ ! -d "$dir" ]; then
+      mkdir -p "$dir"
+      log "INFO" "Created directory: $dir"
+    else
+      log "INFO" "Directory already exists: $dir"
+    fi
+  done
+done
+
+# Create key files if missing
+# LICENSE (MIT)
+if [ ! -f LICENSE ]; then
+  cat > LICENSE <<'EOF'
+MIT License
+
+Copyright (c) $(date +%Y) UnifiedChat
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+EOF
+  log "INFO" "Created LICENSE (MIT)"
+else
+  log "INFO" "LICENSE already exists"
+fi
+
+# CODE_OF_CONDUCT.md
+if [ ! -f CODE_OF_CONDUCT.md ]; then
+  cat > CODE_OF_CONDUCT.md <<'EOF'
+# Contributor Covenant Code of Conduct
+
+## Our Pledge
+
+We as members, contributors, and leaders pledge to make participation in our
+community a harassment-free experience for everyone, regardless of age, body
+size, visible or invisible disability, ethnicity, sex characteristics, gender
+identity and expression, level of experience, education, socio-economic status,
+nationality, personal appearance, race, religion, or sexual identity
+and orientation.
+
+We pledge to act and interact in ways that contribute to an open, welcoming,
+diverse, inclusive, and healthy community.
+
+## Our Standards
+
+Examples of behavior that contributes to a positive environment for our
+community include:
+
+- Demonstrating empathy and kindness toward other people
+- Being respectful of differing opinions, viewpoints, and experiences
+- Giving and gracefully accepting constructive feedback
+- Accepting responsibility and apologizing to those affected by our mistakes,
+  and learning from the experience
+- Focusing on what is best not just for us as individuals, but for the
+  overall community
+
+Examples of unacceptable behavior include:
+
+- The use of sexualized language or imagery, and sexual attention or advances
+  of any kind
+- Trolling, insulting or derogatory comments, and personal or political attacks
+- Public or private harassment
+- Publishing others' private information, such as a physical or email address,
+  without their explicit permission
+- Other conduct which could reasonably be considered inappropriate in a
+  professional setting
+
+## Enforcement Responsibilities
+
+Community leaders are responsible for clarifying and enforcing our standards of
+acceptable behavior and will take appropriate and fair corrective action in
+response to any behavior that they deem inappropriate, threatening, offensive,
+or harmful.
+
+## Scope
+
+This Code of Conduct applies within all community spaces, and also applies when
+an individual is officially representing the community in public spaces.
+
+## Enforcement
+
+Instances of abusive, harassing, or otherwise unacceptable behavior may be
+reported to the community leaders responsible for enforcement at
+[INSERT CONTACT EMAIL].
+All complaints will be reviewed and investigated promptly and fairly.
+
+All community leaders are obligated to respect the privacy and security of the
+reporter of any incident.
+
+## Attribution
+
+This Code of Conduct is adapted from the [Contributor Covenant][homepage],
+version 2.1, available at
+https://www.contributor-covenant.org/version/2/1/code_of_conduct.html.
+
+[homepage]: https://www.contributor-covenant.org
+EOF
+  log "INFO" "Created CODE_OF_CONDUCT.md"
+else
+  log "INFO" "CODE_OF_CONDUCT.md already exists"
+fi
+
+# SECURITY.md
+if [ ! -f SECURITY.md ]; then
+  cat > SECURITY.md <<'EOF'
+# Security Policy
+
+## Reporting a Vulnerability
+
+If you discover a security vulnerability, please report it by emailing [INSERT SECURITY CONTACT EMAIL].
+We will respond as quickly as possible to your report. Please do not disclose security issues publicly until they have been addressed.
+
+## Supported Versions
+
+We will address security issues in the latest release. Older versions may not be supported.
+EOF
+  log "INFO" "Created SECURITY.md"
+else
+  log "INFO" "SECURITY.md already exists"
+fi
+
+# CHANGELOG.md
+if [ ! -f CHANGELOG.md ]; then
+  cat > CHANGELOG.md <<'EOF'
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+## [Unreleased]
+- Initial project structure
+EOF
+  log "INFO" "Created CHANGELOG.md"
+else
+  log "INFO" "CHANGELOG.md already exists"
+fi
+
+# Create release/0.1.0 branch if no release/* branch exists
+if ! git branch -r | grep -q 'origin/release/'; then
+  if git show-ref --verify --quiet refs/heads/main; then
+    git checkout main
+  elif git show-ref --verify --quiet refs/heads/develop; then
+    git checkout develop
+  fi
+  git checkout -b release/0.1.0 || log "WARN" "release/0.1.0 branch already exists"
+  git push origin release/0.1.0 || log "WARN" "Could not push release/0.1.0 to origin"
+  log "INFO" "Created release/0.1.0 branch"
+else
+  log "INFO" "At least one release/* branch already exists"
+fi
+
+# Apply branch protection rules (call apply_branch_protection.sh if exists)
+if [ -f "$PROJECT_ROOT/scripts/repo/apply_branch_protection.sh" ]; then
+  bash "$PROJECT_ROOT/scripts/repo/apply_branch_protection.sh"
+  log "INFO" "Applied branch protection rules"
+else
+  log "WARN" "apply_branch_protection.sh not found, skipping branch protection setup"
+fi
+
+# --- Governance-related functions (Best Practice: define before use) ---
+
+# Function to create CODEOWNERS file
+create_codeowners() {
+    log "INFO" "Creating CODEOWNERS file..."
+    local codeowners_file="$PROJECT_ROOT/.github/CODEOWNERS"
+    mkdir -p "$(dirname "$codeowners_file")"
+    cat > "$codeowners_file" << 'EOF'
+# This is a CODEOWNERS file. It defines who is responsible for different parts of the codebase.
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Global owners
+* @nbouchek
+
+# Service-level owners
+/services/auth-service/ @nbouchek @security-team
+/services/message-service/ @nbouchek @backend-team
+/services/realtime-service/ @nbouchek @backend-team
+/services/user-service/ @nbouchek @backend-team
+/services/payment-service/ @nbouchek @security-team @finance-team
+/services/ai-service/ @nbouchek @ai-team
+/services/gateway-service/ @nbouchek @backend-team
+
+# Infrastructure owners
+/infrastructure/ @nbouchek @devops-team
+/infrastructure/terraform/ @nbouchek @devops-team
+/infrastructure/kubernetes/ @nbouchek @devops-team
+/infrastructure/monitoring/ @nbouchek @devops-team
+
+# Security-critical paths
+/.github/workflows/ @nbouchek @security-team
+/.github/CODEOWNERS @nbouchek @security-team
+/quickstart/scripts/ @nbouchek @security-team
+/services/auth-service/ @nbouchek @security-team
+/services/payment-service/ @nbouchek @security-team
+
+# Documentation owners
+/docs/ @nbouchek @docs-team
+/docs/api/ @nbouchek @backend-team
+/docs/architecture/ @nbouchek @architecture-team
+/docs/development/ @nbouchek @devops-team
+
+# Frontend owners
+/web/frontend/ @nbouchek @frontend-team
+
+# Mobile app owners
+/mobile/flutter/ @nbouchek @mobile-team
+
+# Desktop app owners
+/desktop/tauri/ @nbouchek @desktop-team
+EOF
+    log "INFO" "Created CODEOWNERS file at $codeowners_file"
+}
+
+# Function to create issue templates
+create_issue_templates() {
+    log "INFO" "Creating issue templates..."
+    local templates_dir="$PROJECT_ROOT/.github/ISSUE_TEMPLATE"
+    mkdir -p "$templates_dir"
+    # Security issue template
+    cat > "$templates_dir/security.md" << 'EOF'
+---
+name: Security Issue
+about: Report a security vulnerability
+title: '[SECURITY] '
+labels: security
+assignees: '@security-team'
+---
+
+**Security Issue Report**
+
+## Description
+[Provide a clear and concise description of the security issue]
+
+## Impact
+[Describe the potential impact of this security issue]
+
+## Steps to Reproduce
+[If applicable, provide steps to reproduce the issue]
+
+## Additional Context
+[Add any other context about the security issue here]
+
+## Security Checklist
+- [ ] I have reviewed the security policy
+- [ ] I have not disclosed this issue publicly
+- [ ] I understand that this report will be handled confidentially
+
+## Contact Information
+[Optional: Provide your contact information for follow-up]
+EOF
+    # Documentation update template
+    cat > "$templates_dir/documentation.md" << 'EOF'
+---
+name: Documentation Update
+about: Suggest improvements or report issues in the documentation
+title: '[DOCS] '
+labels: documentation
+assignees: '@docs-team'
+---
+
+**Documentation Update Request**
+
+## Current Documentation
+[Describe the current documentation that needs to be updated]
+
+## Proposed Changes
+[Describe the changes you want to make to the documentation]
+
+## Reason for Update
+[Explain why this documentation update is necessary]
+
+## Additional Context
+[Add any other context about the documentation update]
+
+## Checklist
+- [ ] I have checked that this documentation update is not already covered
+- [ ] I have reviewed the existing documentation style guide
+- [ ] I have included all necessary information
+EOF
+    log "INFO" "Created issue templates in $templates_dir"
+}
+
+# Function to create PR templates
+create_pr_templates() {
+    log "INFO" "Creating PR templates..."
+    local templates_dir="$PROJECT_ROOT/.github/PULL_REQUEST_TEMPLATE"
+    mkdir -p "$templates_dir"
+    # Feature PR template
+    cat > "$templates_dir/feature.md" << 'EOF'
+---
+name: Feature Pull Request
+about: Propose a new feature
+title: '[FEATURE] '
+labels: enhancement
+---
+
+**Feature Description**
+[Provide a clear and concise description of the feature]
+
+**Related Issue**
+[Link to the related issue, if any]
+
+**Implementation Details**
+[Describe the implementation approach and any technical decisions]
+
+**Testing**
+- [ ] Unit tests added/updated
+- [ ] Integration tests added/updated
+- [ ] Manual testing performed
+
+**Documentation**
+- [ ] API documentation updated
+- [ ] User documentation updated
+- [ ] Architecture documentation updated (if applicable)
+
+**Additional Context**
+[Add any other context about the feature]
+
+**Checklist**
+- [ ] Code follows project style guidelines
+- [ ] All tests pass
+- [ ] Documentation is updated
+- [ ] Branch is up to date with main
+EOF
+    # Bugfix PR template
+    cat > "$templates_dir/bugfix.md" << 'EOF'
+---
+name: Bug Fix Pull Request
+about: Fix a bug
+title: '[BUGFIX] '
+labels: bug
+---
+
+**Bug Description**
+[Provide a clear and concise description of the bug]
+
+**Fixes**
+[Link to the issue being fixed]
+
+**Root Cause**
+[Describe the root cause of the bug]
+
+**Solution**
+[Describe how the bug was fixed]
+
+**Testing**
+- [ ] Unit tests added/updated
+- [ ] Integration tests added/updated
+- [ ] Manual testing performed
+- [ ] Bug reproduction steps verified
+
+**Additional Context**
+[Add any other context about the bug fix]
+
+**Checklist**
+- [ ] Code follows project style guidelines
+- [ ] All tests pass
+- [ ] Documentation is updated (if applicable)
+- [ ] Branch is up to date with main
+EOF
+    # Documentation PR template
+    cat > "$templates_dir/documentation.md" << 'EOF'
+---
+name: Documentation Pull Request
+about: Update documentation
+title: '[DOCS] '
+labels: documentation
+assignees: '@docs-team'
+---
+
+**Documentation Update**
+
+**Changes**
+[Describe the documentation changes]
+
+**Reason for Update**
+[Explain why this documentation update is necessary]
+
+**Affected Documentation**
+- [ ] API documentation
+- [ ] User documentation
+- [ ] Architecture documentation
+- [ ] Development guides
+- [ ] Other (please specify)
+
+**Additional Context**
+[Add any other context about the documentation update]
+
+**Checklist**
+- [ ] Documentation follows style guide
+- [ ] All links are valid
+- [ ] Screenshots are updated (if applicable)
+- [ ] Branch is up to date with main
+EOF
+    # Security PR template
+    cat > "$templates_dir/security.md" << 'EOF'
+---
+name: Security Pull Request
+about: Security-related changes
+title: '[SECURITY] '
+labels: security
+assignees: '@security-team'
+---
+
+**Security Update**
+
+**Description**
+[Provide a clear and concise description of the security update]
+
+**Security Impact**
+[Describe the security impact and risk level]
+
+**Changes**
+[Describe the security-related changes]
+
+**Testing**
+- [ ] Security tests added/updated
+- [ ] Penetration testing performed (if applicable)
+- [ ] Vulnerability scanning performed
+- [ ] Manual security review completed
+
+**Additional Context**
+[Add any other context about the security update]
+
+**Checklist**
+- [ ] Code follows security guidelines
+- [ ] All security tests pass
+- [ ] Documentation is updated
+- [ ] Branch is up to date with main
+- [ ] Security team review requested
+EOF
+    log "INFO" "Created PR templates in $templates_dir"
+}
+
+# Function to create GitHub workflow files
+create_workflow_files() {
+    log "INFO" "Creating GitHub workflow files..."
+    local workflows_dir="$PROJECT_ROOT/.github/workflows"
+    mkdir -p "$workflows_dir"
+
+    # Main pipeline workflow
+    cat > "$workflows_dir/main.yml" << 'EOF'
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '23'
+      - name: Install dependencies
+        run: |
+          go mod download
+          pip install -r requirements.txt
+          npm ci
+      - name: Run tests
+        run: |
+          go test ./...
+          pytest
+          npm test
+      - name: Build
+        run: |
+          go build ./...
+          npm run build
+
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run security scan
+        uses: snyk/actions/golang@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      - name: Run container scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'app:latest'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+  deploy:
+    needs: [build-and-test, security-scan]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to production
+        run: |
+          echo "Deploying to production..."
+          # Add deployment steps here
+EOF
+
+    # PR checks workflow
+    cat > "$workflows_dir/pr.yml" << 'EOF'
+name: PR Checks
+
+on:
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint
+        run: make lint
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run tests
+        run: make test
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Security scan
+        run: make security-scan
+
+  code-review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check PR size
+        run: |
+          # Add PR size check logic here
+          echo "Checking PR size..."
+EOF
+
+    # Release workflow
+    cat > "$workflows_dir/release.yml" << 'EOF'
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+
+      - name: Build and Upload Assets
+        run: |
+          # Add build and upload steps here
+          echo "Building and uploading release assets..."
+EOF
+
+    log "INFO" "Created GitHub workflow files in $workflows_dir"
+}
+
+# Function to set up branch protection
+setup_branch_protection() {
+    log "INFO" "Setting up branch protection rules..."
+    local repo_name
+    repo_name=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+
+    # Function to apply protection to a branch
+    apply_protection() {
+        local branch=$1
+        local required_reviews=$2
+        local contexts=$3
+        local require_signatures=$4
+        local require_linear=$5
+        local require_release_manager=$6
+
+        log "INFO" "Applying protection to $branch branch..."
+
+        # Create protection payload
+        local protection_json
+        protection_json=$(cat <<EOF
+{
+  "required_status_checks": {
+    "strict": true,
+    "contexts": $contexts
+  },
+  "enforce_admins": true,
+  "required_pull_request_reviews": {
+    "dismiss_stale_reviews": true,
+    "require_code_owner_reviews": true,
+    "required_approving_review_count": $required_reviews
+  },
+  "restrictions": $([ "$require_release_manager" = "true" ] && echo '{"teams": ["release-managers"]}' || echo 'null'),
+  "required_linear_history": $require_linear,
+  "required_signatures": $require_signatures,
+  "required_conversation_resolution": true
+}
+EOF
+)
+
+        # Apply protection using GitHub API
+        if ! gh api --method PUT "repos/$repo_name/branches/$branch/protection" --input - <<< "$protection_json"; then
+            log "ERROR" "Failed to apply protection to $branch branch"
+            return 1
+        fi
+        log "INFO" "Successfully applied protection to $branch branch"
+    }
+
+    # Apply protection to main branch
+    apply_protection "main" 2 '["test", "lint", "security"]' true true false
+
+    # Apply protection to develop branch
+    apply_protection "develop" 1 '["test", "lint"]' true true false
+
+    # Find and protect all release branches
+    local release_branches
+    release_branches=$(git branch -r | grep 'origin/release/' | sed 's|origin/||')
+    for branch in $release_branches; do
+        apply_protection "$branch" 2 '["test", "lint", "build", "security"]' true true true
+    done
+
+    log "INFO" "Branch protection setup completed"
+}
+
+# Function to verify setup
+verify_setup() {
+    log "INFO" "Verifying repository setup..."
+
+    # Verify directory structure
+    local required_dirs=(
+        ".github/workflows"
+        "services/auth-service"
+        "services/message-service"
+        "services/realtime-service"
+        "services/user-service"
+        "services/payment-service"
+        "services/ai-service"
+        "services/gateway-service"
+        "web/frontend"
+        "mobile/flutter"
+        "desktop/tauri"
+        "infrastructure/terraform"
+        "infrastructure/kubernetes"
+        "infrastructure/monitoring"
+        "docs/api"
+        "docs/architecture"
+        "docs/development"
+    )
+
+    for dir in "${required_dirs[@]}"; do
+        if [ ! -d "$PROJECT_ROOT/$dir" ]; then
+            log "ERROR" "Required directory $dir not found"
+            return 1
+        fi
+    done
+
+    # Verify workflow files
+    local required_workflows=(
+        "main.yml"
+        "pr.yml"
+        "release.yml"
+    )
+
+    for workflow in "${required_workflows[@]}"; do
+        if [ ! -f "$PROJECT_ROOT/.github/workflows/$workflow" ]; then
+            log "ERROR" "Required workflow file $workflow not found"
+            return 1
+        fi
+    done
+
+    # Verify templates
+    local required_templates=(
+        ".github/ISSUE_TEMPLATE/bug_report.md"
+        ".github/ISSUE_TEMPLATE/feature_request.md"
+        ".github/ISSUE_TEMPLATE/security_issue.md"
+        ".github/ISSUE_TEMPLATE/documentation_update.md"
+        ".github/PULL_REQUEST_TEMPLATE/feature_pr.md"
+        ".github/PULL_REQUEST_TEMPLATE/bugfix_pr.md"
+        ".github/PULL_REQUEST_TEMPLATE/documentation_pr.md"
+        ".github/PULL_REQUEST_TEMPLATE/security_pr.md"
+    )
+
+    for template in "${required_templates[@]}"; do
+        if [ ! -f "$PROJECT_ROOT/$template" ]; then
+            log "ERROR" "Required template $template not found"
+            return 1
+        fi
+    done
+
+    # Verify CODEOWNERS
+    if [ ! -f "$PROJECT_ROOT/.github/CODEOWNERS" ]; then
+        log "ERROR" "CODEOWNERS file not found"
+        return 1
+    fi
+
+    # Verify branch protection
+    local repo_name
+    repo_name=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+
+    # Check main branch protection
+    if ! gh api "repos/$repo_name/branches/main/protection" >/dev/null 2>&1; then
+        log "ERROR" "Main branch protection not properly configured"
+        return 1
+    fi
+
+    # Check develop branch protection
+    if ! gh api "repos/$repo_name/branches/develop/protection" >/dev/null 2>&1; then
+        log "ERROR" "Develop branch protection not properly configured"
+        return 1
+    fi
+
+    # Check release branch protection
+    local release_branches
+    release_branches=$(git branch -r | grep 'origin/release/' | sed 's|origin/||')
+    for branch in $release_branches; do
+        if ! gh api "repos/$repo_name/branches/$branch/protection" >/dev/null 2>&1; then
+            log "ERROR" "Release branch $branch protection not properly configured"
+            return 1
+        fi
+    done
+
+    log "INFO" "Repository setup verification completed successfully"
+    return 0
+}
+
+# --- End governance-related functions ---
+
+# Add these function calls after create_pr_templates()
+log "INFO" "Setting up GitHub workflows..."
+create_workflow_files
+
+log "INFO" "Setting up branch protection..."
+setup_branch_protection
+
+log "INFO" "Verifying setup..."
+if ! verify_setup; then
+    handle_error "Repository setup verification failed"
+fi
+
+log "INFO" "Repository setup completed successfully!"
 echo -e "${GREEN}Repository setup completed successfully!${NC}"
-log "INFO" "Repository setup completed successfully"
 echo -e "${YELLOW}Next steps:${NC}"
 echo "1. Review the created repository structure"
 echo "2. Configure git hooks in .git/hooks/"
-echo "3. Set up branch protection rules in GitHub"
+echo "3. Review branch protection rules in GitHub"
 echo "4. Configure GitHub Actions secrets"
 echo "5. Review and customize documentation"
 echo "6. Push the repository to GitHub"

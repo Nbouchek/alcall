@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: alcall-realtime-service
+    runtime: docker
+    region: frankfurt
+    plan: starter
+    buildCommand: docker build -t realtime-service .
+    healthCheckPath: /health
+    autoDeploy: true
+    numInstances: 1
+    # Explicitly set the PORT environment variable to match the Dockerfile's EXPOSE
+    envVars:
+      - key: PORT
+        value: 10000

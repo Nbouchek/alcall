@@ -1,0 +1,13 @@
+general: {
+    enabled = false
+    # RabbitMQ transport is disabled because no RabbitMQ service is present
+    host = "localhost"
+    port = 5672
+    username = "guest"
+    password = "guest"
+    vhost = "/"
+    to_janus = "to-janus"
+    from_janus = "from-janus"
+    json = "indented"
+    # Add other RabbitMQ config options as needed
+}

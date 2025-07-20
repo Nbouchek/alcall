@@ -1,0 +1,5 @@
+general: {
+	enabled = true
+	admin_key = "supersecret"
+	string_ids = false
+}

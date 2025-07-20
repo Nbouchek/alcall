@@ -77,6 +77,8 @@ This guide provides a streamlined approach to setting up and running the Unified
    # - JWT_SECRET=your-secret-key
    ```
 
+   **Note:** The integration script now automatically creates a `.env` file with best-practice placeholders if it does not exist. You should review and update the generated `.env` file with your actual secrets and configuration values.
+
 5. **Start Development Services**
 
    ```bash
@@ -142,6 +144,28 @@ make logs
 make dev-reset
 ```
 
+## Python Environment Configuration
+
+Python dependencies are managed in `quickstart/config/environment.yml`. To add or update Python packages, edit this file and re-run the verification script.
+
+```bash
+# Edit environment.yml to add dependencies
+vi quickstart/config/environment.yml
+
+# Re-create the environment if needed
+conda env update -f quickstart/config/environment.yml --prune
+
+# Verify all dependencies are installed
+./quickstart/scripts/dev-env/verify.sh
+```
+
+## Enhanced Verification
+
+The verification script now:
+
+- Checks Docker Desktop is installed and running (not just the CLI)
+- Verifies all Python packages listed in `quickstart/config/environment.yml` are installed in the 'alcall' conda environment
+
 ## Troubleshooting
 
 ### Common Issues
@@ -205,3 +229,13 @@ For additional support:
 - Join the community chat
 - Check the documentation
 - Contact the development team
+
+### Troubleshooting
+
+If you encounter issues with missing Python packages or Docker Desktop not running, use:
+
+```bash
+./quickstart/scripts/dev-env/verify.sh
+```
+
+This will check for all required tools, Docker Desktop status, and Python dependencies as defined in `environment.yml`.

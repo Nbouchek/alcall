@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: alcall-message-service
+    runtime: docker
+    region: frankfurt
+    plan: starter
+    dockerfilePath: Dockerfile
+    dockerContext: .
+
+    healthCheckPath: /health
+    autoDeploy: true
+    numInstances: 1
+    envVars:
+      - key: DB_HOST
+        value: "dpg-d1p7tlmr433s73d3oje0-a"
+      - key: DB_PORT
+        value: "5432"
+      - key: DB_USER
+        value: "unifiedchat"
+      - key: DB_PASSWORD
+        value: "UbVLKeEU9M2yyxyrzqwwRr3TTktui37ZK"
+      - key: DB_NAME
+        value: "ucalldb"

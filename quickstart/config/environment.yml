@@ -1,0 +1,10 @@
+name: alcall
+channels:
+  - defaults
+dependencies:
+  - python=3.12
+  - black
+  - pylint
+  - pytest
+  - pytest-cov
+  - mypy

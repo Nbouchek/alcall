@@ -1,32 +1,41 @@
 ---
-name: Bug Report
-about: Create a report to help us improve
-title: '[BUG] '
-labels: bug
-assignees: ''
+name: "Bug Report"
+description: "Report a bug to help us improve."
+title: "[BUG] <short description>"
+labels: [bug]
+assignees: []
 ---
 
-**Describe the bug**
+## Description
+
 A clear and concise description of what the bug is.
 
-**To Reproduce**
-Steps to reproduce the behavior:
+## Steps to Reproduce
+
 1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
+2. Click on '...'
+3. Scroll down to '...'
 4. See error
 
-**Expected behavior**
+## Expected Behavior
+
 A clear and concise description of what you expected to happen.
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
+## Actual Behavior
 
-**Environment:**
- - OS: [e.g. macOS, Windows]
- - Version [e.g. 22]
- - Browser [e.g. chrome, safari]
- - Version [e.g. 22]
+What actually happened?
 
-**Additional context**
+## Screenshots/Logs
+
+If applicable, add screenshots or logs to help explain your problem.
+
+## Environment
+
+- OS: [e.g. macOS 14.5, Ubuntu 22.04]
+- Browser: [e.g. Chrome 120, Firefox 115]
+- App Version: [e.g. 1.0.0]
+- Cluster/Env: [dev, staging, prod]
+
+## Additional Context
+
 Add any other context about the problem here.

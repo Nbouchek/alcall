@@ -173,11 +173,11 @@ cleanup() {
     # Clean up development environment
     cleanup_dev_env
 
-    # Remove specified paths, but skip protected ones
+    # Remove specified paths, but skip protected ones and .cursor
     for path in "${REMOVE_PATHS[@]}"; do
         full_path="$PROJECT_ROOT/$path"
-        # Check if this path is protected
-        if is_protected "$full_path"; then
+        # Check if this path is protected or is .cursor
+        if is_protected "$full_path" || [[ "$full_path" == "$PROJECT_ROOT/.cursor" ]]; then
             log "INFO" "Skipping protected path: $full_path"
             continue
         fi
@@ -194,13 +194,13 @@ cleanup() {
         log "INFO" ".pytest_cache and all its contents removed."
     fi
 
-    # Remove any remaining empty directories
-    find "$PROJECT_ROOT" -type d -empty -delete 2>/dev/null || true
+    # Remove any remaining empty directories, but skip .cursor
+    find "$PROJECT_ROOT" -type d -empty -not -path "$PROJECT_ROOT/.cursor" -not -path "$PROJECT_ROOT/.cursor/*" -delete 2>/dev/null || true
 
-    # Clean up git untracked files
+    # Clean up git untracked files, always exclude .cursor
     log "INFO" "Cleaning up git untracked files..."
     if [ -d "$PROJECT_ROOT/.git" ]; then
-        git clean -fdx 2>/dev/null || true
+        git clean -fdx -e .cursor 2>/dev/null || true
         log "INFO" "Git cleanup completed"
     fi
 
@@ -275,6 +275,16 @@ echo "4. Consider running 'git clean -fdx' to remove untracked files"
 #   - CONTRIBUTING.md
 #   - quickstart/
 
-echo "[INFO] Running 'git clean -fdx' to ensure a completely clean git state..."
-git clean -fdx
-log "INFO" "Ran 'git clean -fdx' to ensure a completely clean git state."
+# Remove IDE settings
+# log "INFO" "Removing IDE settings..."
+# if [ -f ~/.cursor/settings/settings.json ]; then
+#     rm -f ~/.cursor/settings/settings.json
+#     log "INFO" "IDE settings removed"
+# fi
+
+# At the end, if running git clean, exclude .cursor
+if command -v git >/dev/null 2>&1; then
+    echo "[INFO] Running 'git clean -fdx -e .cursor' to ensure a completely clean git state, but preserving .cursor..."
+    git clean -fdx -e .cursor
+    log "INFO" "Ran 'git clean -fdx -e .cursor' to ensure a completely clean git state, but preserved .cursor."
+fi

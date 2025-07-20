@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: alcall-gateway-service
+    runtime: docker
+    region: frankfurt
+    plan: starter
+    buildCommand: docker build -t gateway-service .
+
+    healthCheckPath: /health
+    autoDeploy: true
+    numInstances: 1
