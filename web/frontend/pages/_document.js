@@ -8,7 +8,7 @@ export default function Document() {
         {/* Load WebRTC adapter and Janus library */}
         <Script src="/adapter.js" strategy="beforeInteractive" />
         <Script src="/janus.js" strategy="beforeInteractive" />
-        {/* Correct path for ringtone.js */}
+        {/* Removed unified-chat-app-janus-deps.js as it does not exist */}
         <Script src="/sounds/ringtone.js" strategy="beforeInteractive" />
       </Head>
       <body>
