@@ -265,20 +265,9 @@ services:
       retries: 3
 
   unifiedchat-frontend:
-    build:
-      context: ./web/frontend
-      dockerfile: Dockerfile
+    build: ./web/frontend
     container_name: unifiedchat-frontend
     restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      NEXT_PUBLIC_AUTH_API_URL: http://localhost:8080/api/v1
-      NEXT_PUBLIC_MESSAGE_API_URL: ${NEXT_PUBLIC_MESSAGE_API_URL}
-      NEXT_PUBLIC_REALTIME_API_URL: ${NEXT_PUBLIC_REALTIME_API_URL}
-      NEXT_PUBLIC_REALTIME_HTTP_API_URL: ${NEXT_PUBLIC_REALTIME_HTTP_API_URL}
-      NEXT_PUBLIC_JANUS_URL: ${NEXT_PUBLIC_JANUS_URL}
-      NEXT_PUBLIC_JANUS_HTTP_URL: ${NEXT_PUBLIC_JANUS_HTTP_URL}
     ports:
       - "3000:3000"
     networks:
@@ -290,6 +279,10 @@ services:
         condition: service_healthy
       unifiedchat-realtime-service:
         condition: service_healthy
+    # Environment variables are now loaded from public/env.json at runtime.
+    # No need to pass them as build args or environment variables here for the client-side.
+    environment:
+      NODE_ENV: development
 
 networks:
   backend:

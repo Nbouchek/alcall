@@ -69,7 +69,8 @@ export default function Home() {
     "🔥 FRONTEND CACHE BUSTER v2.4.0 - DIRECT HANGUP CLEANUP FIX LOADED 🔥"
   );
 
-  // --- State Declarations (All useState hooks here) ---
+  // --- State Declarations (All useState hooks here - MUST be at the top level) ---
+  const [envConfig, setEnvConfig] = useState(null);
   const [user, setUser] = useState(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [allUsers, setAllUsers] = useState([]); // All registered users
@@ -101,13 +102,13 @@ export default function Home() {
   const [forceHideModal, setForceHideModal] = useState(false);
   const [mounted, setMounted] = useState(false);
 
-  // --- Ref Declarations (All useRef hooks here) ---
+  // --- Ref Declarations (All useRef hooks here - MUST be at the top level) ---
   const audioContextRef = useRef(null);
   const isEndingCallRef = useRef(false); // To prevent multiple simultaneous cleanups
   const audioCallRef = useRef(null);
   const ringtoneTimeoutRef = useRef(null);
 
-  // --- Custom Hook Calls (All custom hooks here) ---
+  // --- Custom Hook Calls (All custom hooks here - MUST be at the top level) ---
   const {
     initializeWebSocket,
     closeWebSocket,
@@ -263,34 +264,30 @@ export default function Home() {
     closeWebSocket,
   ]);
 
-  const fetchAllUsers = useCallback(
-    async (path) => {
-      try {
-        const token = localStorage.getItem("token");
-        if (!token) {
-          console.error("No authentication token found.");
-          return;
-        }
-        const response = await axios.get(
-          `${process.env.NEXT_PUBLIC_AUTH_API_URL}${path}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
-        setAllUsers(response.data);
+  const fetchAllUsers = useCallback(async () => {
+    try {
+      // Fetch all registered users from your backend
+      const response = await axios.get(
+        `${envConfig.NEXT_PUBLIC_AUTH_API_URL}/users`
+      );
+      setAllUsers(response.data.users || []); // Assuming the API returns { users: [...] }
+      const newMap = new Map();
+      response.data.users.forEach((user) => {
+        newMap.set(user.id, user);
+      });
+      setUserMap(newMap);
+      console.log("All users fetched:", response.data.users);
+    } catch (error) {
+      console.error("Failed to fetch all users:", error);
+    }
+  }, [envConfig]);
 
-        // Create a user map for easy lookup
-        const userMap = new Map();
-        response.data.forEach((u) => userMap.set(u.id, u));
-        setUserMap(userMap);
-      } catch (error) {
-        console.error("Failed to fetch users:", error);
-        showCallNotification("error", "Failed to load users.");
-      }
+  const selectChatUser = useCallback(
+    (user) => {
+      setSelectedRecipient(user);
+      setSidebarOpen(false); // Close sidebar on user selection
     },
-    [setAllUsers, setUserMap, showCallNotification]
+    [setSelectedRecipient, setSidebarOpen]
   );
 
   const initiateCall = useCallback(
@@ -632,6 +629,23 @@ export default function Home() {
   useEffect(() => {
     setMounted(true);
 
+    const loadEnvConfig = async () => {
+      try {
+        console.log("Attempting to fetch env.json...");
+        const response = await fetch("/env.json");
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const config = await response.json();
+        setEnvConfig(config);
+        console.log("env.json loaded successfully:", config);
+      } catch (error) {
+        console.error("Failed to load env.json:", error);
+      }
+    };
+
+    loadEnvConfig();
+
     // Check for existing session in localStorage on component mount
     if (typeof window !== "undefined") {
       const storedUser = localStorage.getItem("user");
@@ -653,9 +667,13 @@ export default function Home() {
   }, []); // Effect for mounting state and initial session check
 
   useEffect(() => {
-    if (user && isLoggedIn) {
+    if (user && isLoggedIn && envConfig) {
+      // Ensure envConfig is loaded
+      console.log(
+        "User logged in and envConfig loaded. Initializing WebSocket."
+      );
       // Initialize WebSocket connection when user logs in
-      const baseWsUrl = process.env.NEXT_PUBLIC_REALTIME_API_URL;
+      const baseWsUrl = envConfig.NEXT_PUBLIC_REALTIME_API_URL; // Use envConfig here
       const socketUrl = `${baseWsUrl}?user_id=${user.id}&username=${user.username}`;
       initializeWebSocket(socketUrl);
 
@@ -798,6 +816,7 @@ export default function Home() {
   }, [
     user,
     isLoggedIn,
+    envConfig, // Add envConfig as a dependency
     initializeWebSocket,
     setOnMessage,
     setMessages,
@@ -817,18 +836,76 @@ export default function Home() {
     closeWebSocket,
   ]);
 
-  // --- Conditional Render (AFTER ALL HOOKS) ---
-  if (!mounted) {
-    return <div>Loading...</div>; // Return a simple loading state during SSR
+  // --- Conditional rendering based on envConfig (after all hooks) ---
+  useEffect(() => {
+    console.log(
+      "useEffect for envConfig is running. Attempting to fetch /env.json..."
+    ); // Debugging log
+    // Fetch environment configuration from public/env.json
+    fetch("/env.json")
+      .then((response) => {
+        console.log("env.json fetch response received:", response); // Debugging log
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+      })
+      .then((data) => {
+        setEnvConfig(data);
+        console.log("Environment Config Loaded:", data);
+      })
+      .catch((error) => {
+        console.error("Error loading env.json:", error);
+      });
+
+    // Existing console.log for process.env (for comparison during transition)
+    console.log("Environment Variables (from process.env):");
+    console.log(
+      "NEXT_PUBLIC_AUTH_API_URL:",
+      process.env.NEXT_PUBLIC_AUTH_API_URL
+    );
+    console.log(
+      "NEXT_PUBLIC_MESSAGE_API_URL:",
+      process.env.NEXT_PUBLIC_MESSAGE_API_URL
+    );
+    console.log(
+      "NEXT_PUBLIC_REALTIME_API_URL:",
+      process.env.NEXT_PUBLIC_REALTIME_API_URL
+    );
+    console.log(
+      "NEXT_PUBLIC_USER_API_URL:",
+      process.env.NEXT_PUBLIC_USER_API_URL
+    );
+    console.log(
+      "NEXT_PUBLIC_JANUS_HTTP_URL:",
+      process.env.NEXT_PUBLIC_JANUS_HTTP_URL
+    );
+    console.log("NEXT_PUBLIC_JANUS_URL:", process.env.NEXT_PUBLIC_JANUS_URL);
+    console.log(
+      "NEXT_PUBLIC_REALTIME_HTTP_API_URL:",
+      process.env.NEXT_PUBLIC_REALTIME_HTTP_API_URL
+    );
+    console.log("NODE_ENV:", process.env.NODE_ENV);
+  }, []);
+
+  // Render nothing until envConfig is loaded to prevent errors in dependent hooks/components
+  if (!envConfig) {
+    return <div>Loading configuration...</div>; // Or a more sophisticated loading spinner
   }
 
   // --- UI Components / Other Helper Functions (not hooks, can be defined after conditional return) ---
   const handleLoginOrRegister = async (e, endpoint, loginFormData) => {
     e.preventDefault();
-    setAuthError(null); // Clear previous errors
+    setAuthError(null); // Clear any previous errors
+
+    if (!loginFormData.username || !loginFormData.password) {
+      setAuthError("Please enter both username and password.");
+      return;
+    }
+
     try {
       const response = await axios.post(
-        `${process.env.NEXT_PUBLIC_AUTH_API_URL}${endpoint}`,
+        `${envConfig.NEXT_PUBLIC_AUTH_API_URL}${endpoint}`,
         loginFormData
       );
       const { token, user: userData } = response.data;
@@ -989,6 +1066,7 @@ export default function Home() {
             showCallNotification={showCallNotification}
             initiateCall={initiateCall}
             initiateVideoCall={initiateVideoCall}
+            onUserSelect={selectChatUser} // Pass selectChatUser as onUserSelect
             // Removed selectChatUser and renderSearchResults as props,
             // as search logic is now internal to Sidebar
           />
